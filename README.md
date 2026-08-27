@@ -1,36 +1,218 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# World Portal
 
-## Getting Started
+Single-page site for a travel & visa agency, built to a supplied video
+reference. Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4,
+GSAP + Three.js.
 
-First, run the development server:
+Brand colour is **#fccc2e**. Cards and buttons use a water-glass treatment —
+blurred, saturated backdrop, a specular top edge, and stacked shadows for a
+slight 3D lift.
+
+## The three services
+
+The page sells three things, each with its own section and its own CTA:
+
+| Section                 | Sells                 | Covers                      |
+| ----------------------- | --------------------- | --------------------------- |
+| **Visas**               | comfort and ease      | eVisa · Consular Visa · ETA |
+| **Flights & Hotels**    | speed and reliability | quotes in hours, held fares |
+| **Experiences & Tours** | curation and quality  | packages, guides, access    |
+
+**How It Works** sits between them and describes the one process behind all
+three. **Contact** routes on which service you pick.
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Route      | What it is                                               |
+| ---------- | -------------------------------------------------------- |
+| `/`        | Placeholder home page — replace once the UI is chosen    |
+| `/contact` | Working reference form (zod → RHF → react-query → toast) |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command          | What it does                                         |
+| ---------------- | ---------------------------------------------------- |
+| `pnpm dev`       | Dev server (Turbopack)                               |
+| `pnpm build`     | Production build                                     |
+| `pnpm start`     | Serve the production build                           |
+| `pnpm typecheck` | Regenerate route types, then `tsc --noEmit`          |
+| `pnpm lint`      | ESLint (`lint:fix` to autofix)                       |
+| `pnpm format`    | Prettier write (`format:check` to verify)            |
+| `pnpm test`      | Vitest unit tests (`test:watch`, `test:coverage`)    |
+| `pnpm test:e2e`  | Playwright end-to-end (`test:e2e:ui` for the runner) |
+| `pnpm validate`  | typecheck + lint + format check + tests              |
 
-## Learn More
+First Playwright run on a fresh machine needs browsers:
+`pnpm exec playwright install`.
 
-To learn more about Next.js, take a look at the following resources:
+## Project structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+src/
+├─ app/
+│  ├─ (site)/             # The page — shares the header/footer layout
+│  ├─ api/                # Route handlers (booking, health)
+│  ├─ layout.tsx          # Root layout: fonts, metadata, providers
+│  ├─ opengraph-image.tsx # Dynamically generated OG card
+│  ├─ error.tsx           # Error boundary
+│  ├─ not-found.tsx       # 404
+│  ├─ sitemap.ts robots.ts
+│  └─ globals.css         # Design tokens + Tailwind entry
+├─ components/
+│  ├─ ui/                 # The component kit — import from "@/components/ui"
+│  ├─ sections/           # One file per page section, in reading order
+│  ├─ layout/             # SiteHeader, SiteFooter
+│  ├─ common/             # Logo, pictograms, JsonLd, Analytics, brand icons
+│  └─ providers/          # Theme, react-query, tooltip, toaster
+├─ config/                # site.ts, navigation.ts, env.ts
+├─ content/               # landing.ts — every string and image on the page
+├─ features/              # Vertical slices: <feature>/{components,api}
+├─ hooks/                 # Reusable client hooks
+├─ lib/                   # utils, api-client, query-client, seo, fonts
+├─ types/                 # Domain types (Destination, VisaService, …)
+└─ validations/           # Zod schemas, shared between client and API routes
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Features are vertical slices.** A feature owns its components, its queries and
+its mutations. Anything two features both need moves up into `components/ui`,
+`hooks/` or `lib/`.
 
-## Deploy on Vercel
+## Design tokens
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+All colour, radius, shadow and font values live as CSS custom properties in
+`src/app/globals.css`. Components only ever reference the semantic layer
+(`bg-primary`, `text-muted-foreground`, `border-border`), never raw hex — so
+rebranding means editing the `--brand-*` ramp in one file and everything
+follows.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The site renders light-only, matching the reference. Dark tokens are defined
+and `next-themes` is wired up, so enabling a toggle is a one-line change.
+
+### Type
+
+| Role    | Family            | Where                                             |
+| ------- | ----------------- | ------------------------------------------------- |
+| Sans    | Plus Jakarta Sans | Everything by default                             |
+| Display | Playfair Display  | Italic only — heading accents, numerals, DISCOVER |
+
+Every section heading is two-tone: a sans lead plus a serif-italic accent
+(`Places You'll` + _`Visit`_). `SectionHeading` encapsulates that pattern —
+pass `lead` and `accent` rather than styling spans by hand.
+
+## Water glass
+
+Four CSS classes in `globals.css`, each pairing with `.glass-3d` for the
+hover-lift and press:
+
+| Class            | Use                                              |
+| ---------------- | ------------------------------------------------ |
+| `.glass`         | Light glass — cards, the booking form, the offer |
+| `.glass-dark`    | Dark-tinted glass over bright photography        |
+| `.glass-primary` | The yellow action button                         |
+| `.glass-ink`     | The near-black action button                     |
+
+Each layers a blurred + saturated backdrop, a vertical fill gradient, a
+specular top edge (`inset 0 1px 0`), and stacked outer shadows. The `::after`
+adds the diagonal light streak. Keep the sheen low-contrast — anything
+stronger bands visibly across a large surface.
+
+`.glass-3d` also carries the hover state: the surface lifts and brightens
+while a specular band sweeps across it (`::before`), as though the light
+source moved. It is disabled under `prefers-reduced-motion`.
+
+## Motion
+
+Two libraries, each doing the job it is actually good at.
+
+**GSAP + ScrollTrigger** drives everything tied to scroll position:
+
+| Where            | What                                                      |
+| ---------------- | --------------------------------------------------------- |
+| Every image      | `ParallaxImage` — drifts against the scroll               |
+| Section content  | `Reveal` — slides up on entry, optionally staggered       |
+| Hero             | Intro timeline, then the wordmark drifts                  |
+| How It Works     | Per-step arrival + a rail that fills with scroll progress |
+| Flights & Hotels | Two rows sliding opposite ways, scrubbed to scroll        |
+| FAQ              | Height, word cascade and the brand rule wipe              |
+| Logo             | The plane's departure and return loop                     |
+
+**Three.js** renders one scroll- and pointer-reactive displacement shader over
+the hero photograph (`hero-webgl.tsx`). It is dynamically imported, mounted on
+idle, paused when off-screen, and skipped entirely without WebGL — the real
+`next/image` underneath stays the LCP element either way.
+
+Images deliberately stay real `<img>` tags rather than WebGL planes: parallax
+via transforms is GPU-cheap and keeps LCP, SEO and alt text intact, which
+textured quads would all cost.
+
+### The rule that matters
+
+These animations hide content before revealing it, so `useGsap` enforces two
+guarantees:
+
+1. Nothing runs under `prefers-reduced-motion` — every component must already
+   be correct in its final state.
+2. Nothing is built while the tab is hidden. Background tabs throttle
+   `requestAnimationFrame` to a stop, so a `from({ autoAlpha: 0 })` would paint
+   its hidden state and never tick out of it. Setup waits for
+   `visibilitychange`.
+
+Break either and you ship a blank section to somebody.
+
+## The component kit
+
+`src/components/ui` — built on Radix primitives with `class-variance-authority`
+for variants and `cn()` (clsx + tailwind-merge) for class composition, so a
+caller's `className` always wins over a component default.
+
+Buttons, badges, cards, alerts, inputs, textarea, select, checkbox, radio,
+switch, label, form, dialog, drawer, dropdown menu, popover, tooltip, tabs,
+accordion, avatar, separator, scroll area, progress, skeleton (+ text/card/list
+variants), spinner, empty state, container, section, toaster.
+
+## Forms
+
+`zod` schema in `src/validations` → `@hookform/resolvers/zod` → `react-hook-form`
+→ a `react-query` mutation. The same schema validates the API route, so client
+and server can never drift. `src/features/booking` is the live implementation,
+including honeypot spam protection and mapping server-side field errors back
+onto inputs.
+
+## Data fetching
+
+`@tanstack/react-query` with a server-safe client factory (`lib/query-client.ts`),
+and an axios instance (`lib/api-client.ts`) that normalises every failure into an
+`ApiError` with `status`, `code` and per-field `errors`. 4xx responses are not
+retried.
+
+Point `NEXT_PUBLIC_API_URL` at a real backend, or leave it unset to use the
+built-in `/api` routes. `POST /api/booking` currently logs and returns a
+reference — swap its body for a real mail/CRM call.
+
+## Imagery
+
+`public/images/` holds every photograph, referenced from
+`src/content/landing.ts`. The four full-bleed backgrounds (hero, Why Bali,
+Packages, Contact) are CC-licensed photographs from Wikimedia Commons; check
+their attribution requirements before going live, or swap in the agency's own
+photography — one edit per entry in the content file.
+
+## Environment variables
+
+Validated at startup by `src/config/env.ts` — a missing or malformed variable
+fails loudly instead of surfacing as a runtime bug. See `.env.example`.
+
+## Conventions
+
+- Server Components by default; `"use client"` only where interactivity needs it.
+- Imports are auto-sorted: `react`/`next` → packages → `@/` → relative.
+- Conventional Commits, enforced by commitlint on `commit-msg`.
+- Husky runs lint-staged pre-commit and typecheck + tests pre-push.
+- CI (`.github/workflows/ci.yml`) runs typecheck, lint, format, unit tests,
+  build, then Playwright.
