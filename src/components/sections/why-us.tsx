@@ -27,7 +27,7 @@ export function WhyUs() {
           />
           <div
             aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-[linear-gradient(105deg,rgba(10,14,20,0.58)_0%,rgba(10,14,20,0.28)_45%,rgba(10,14,20,0.10)_100%)]"
+            className="absolute inset-0 -z-10 bg-[linear-gradient(105deg,rgba(10,14,20,0.62)_0%,rgba(10,14,20,0.34)_45%,rgba(10,14,20,0.18)_100%)]"
           />
 
           <div className="grid gap-10 p-6 sm:p-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-12 lg:p-14">
@@ -51,26 +51,26 @@ export function WhyUs() {
                 return (
                   <li key={card.title} className="h-full">
                     <Card
-                      variant="glass"
+                      variant="ghost"
                       radius="xl"
                       padding="none"
                       interactive
-                      className="glass-frost h-full p-6"
+                      className="glass-frost-dark h-full p-6"
                     >
-                      <span className="grid size-11 place-items-center rounded-xl bg-primary/30 text-ink-900 ring-1 ring-primary/50 ring-inset">
+                      <span className="grid size-11 place-items-center rounded-xl bg-primary/25 text-primary ring-1 ring-primary/40 ring-inset">
                         <Icon />
                       </span>
 
-                      <h3 className="mt-5 text-[17px] font-semibold tracking-tight text-ink-900">
+                      <h3 className="mt-5 text-[17px] font-semibold tracking-tight text-white">
                         {card.title}
                       </h3>
-                      <p className="mt-2 text-[13.5px] leading-relaxed text-ink-800">
+                      <p className="mt-2 text-[13.5px] leading-relaxed text-white/75">
                         {card.body}
                       </p>
 
                       <a
                         href={card.href}
-                        className="group/link mt-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-900 underline decoration-current underline-offset-[5px] transition-opacity hover:opacity-70"
+                        className="group/link mt-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-white underline decoration-current underline-offset-[5px] transition-opacity hover:opacity-70"
                       >
                         {card.cta}
                         <ArrowUpRight className="size-3.5 transition-transform duration-300 group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5" />

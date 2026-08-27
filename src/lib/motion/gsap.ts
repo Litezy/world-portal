@@ -11,6 +11,28 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
  */
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
+
+  /**
+   * ScrollTrigger measures the page when each trigger is created. Two things
+   * routinely invalidate those measurements straight afterwards:
+   *
+   *  - Anchor navigation (landing on `/#contact`) jumps the scroll position
+   *    after layout effects have already run.
+   *  - Images finishing decode, which changes every offset below them.
+   *
+   * Without a refresh, a `once: true` reveal below the fold can be left holding
+   * its `autoAlpha: 0` start state — content the visitor never sees. Refreshing
+   * on load re-evaluates every trigger and fires any already scrolled past.
+   */
+  const refresh = () => ScrollTrigger.refresh();
+
+  if (document.readyState === "complete") {
+    requestAnimationFrame(refresh);
+  } else {
+    window.addEventListener("load", () => requestAnimationFrame(refresh), {
+      once: true,
+    });
+  }
 }
 
 /** Matches the `--ease-glass` curve used by the CSS transitions. */

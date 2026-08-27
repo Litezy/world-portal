@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 
-import { ArrowRight } from "lucide-react";
+import { BellRing } from "lucide-react";
 
 import { ParallaxImage } from "@/components/motion/parallax-image";
 import { Reveal } from "@/components/motion/reveal";
+import { ComingSoonNotice, waitlistHref } from "@/components/sections/coming-soon";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
@@ -56,6 +57,9 @@ export function FlightsHotels() {
   return (
     <Section id="flights-hotels" spacing="md" className="overflow-hidden">
       <Container>
+        <Badge variant="muted" size="sm" className="mb-4 sm:hidden">
+          Coming soon
+        </Badge>
         <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeading
             eyebrow={flightsHotels.eyebrow}
@@ -64,17 +68,19 @@ export function FlightsHotels() {
             body={flightsHotels.body}
             size="md"
             className="max-w-xl"
-          />
+          >
+            <ComingSoonNotice notice={flightsHotels.notice} />
+          </SectionHeading>
           <Button
             asChild
-            variant="primary"
+            variant="outline"
             size="md"
             className="shrink-0 self-start sm:self-end"
           >
-            <Link href={flightsHotels.cta.href}>
+            <a href={waitlistHref(flightsHotels.cta.subject)}>
+              <BellRing />
               {flightsHotels.cta.label}
-              <ArrowRight />
-            </Link>
+            </a>
           </Button>
         </div>
       </Container>

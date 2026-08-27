@@ -15,16 +15,16 @@ import { gsap } from "@/lib/motion/gsap";
 import { cn } from "@/lib/utils";
 
 /**
- * The shared process, on a panel that runs from a light brand tint at the top
- * through the brand yellow and down into near-black.
+ * The shared process, on a panel that opens near-black, passes through the
+ * brand yellow as a lit band, and closes near-black again.
  *
  * Each step lifts into place on its own trigger rather than as one batch, so
  * the four arrive in sequence as you scroll. The rail between them fills to
  * track how far through the process you have read.
  *
- * The first two steps sit on yellow and take ink type; the last two sit on the
- * dark end and take white — `onDark` below is derived from the index, so
- * adding a fifth step keeps the contrast correct automatically.
+ * The first two steps sit on the yellow band and take ink type; the last two
+ * sit on the dark end and take white — `onDark` below is derived from the
+ * index, so adding a fifth step keeps the contrast correct automatically.
  */
 export function Journey() {
   const railRef = React.useRef<HTMLSpanElement>(null);
@@ -78,12 +78,12 @@ export function Journey() {
       <Container size="panel" gutter="sm">
         <div
           ref={scopeRef as React.Ref<HTMLDivElement>}
-          className="relative isolate overflow-hidden rounded-[2rem] bg-[linear-gradient(180deg,#fff6d4_0%,#fde063_15%,#fccc2e_32%,#e9a10f_48%,#a85f08_64%,#4a2606_80%,#160d05_92%,#0a0705_100%)] px-5 py-16 sm:px-10 lg:rounded-[2.5rem] lg:px-14 lg:py-24"
+          className="relative isolate overflow-hidden rounded-[2rem] bg-[linear-gradient(180deg,#0a0705_0%,#fde063_15%,#fccc2e_32%,#e9a10f_48%,#a85f08_64%,#4a2606_80%,#160d05_92%,#0a0705_100%)] px-5 py-16 sm:px-10 lg:rounded-[2.5rem] lg:px-14 lg:py-24"
         >
           {/* Warms the yellow at the top and deepens the black at the base. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_55%_at_50%_0%,rgba(255,255,255,0.55),transparent_62%),radial-gradient(90%_45%_at_50%_100%,rgba(0,0,0,0.45),transparent_70%)]"
+            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_45%_at_50%_0%,rgba(0,0,0,0.55),transparent_66%),radial-gradient(90%_45%_at_50%_100%,rgba(0,0,0,0.5),transparent_70%)]"
           />
 
           <SectionHeading
@@ -92,19 +92,20 @@ export function Journey() {
             accent={journey.headingAccent}
             body={journey.body}
             align="center"
+            onDark
             size="md"
-            className="mx-auto max-w-xl [&_h2]:text-ink-950 [&_p]:text-ink-800"
+            className="mx-auto max-w-xl"
           />
 
           <ol className="relative mx-auto mt-16 max-w-4xl">
             {/* Rail track, plus the fill that tracks scroll progress. */}
             <span
               aria-hidden="true"
-              className="absolute inset-y-2 left-[11px] w-px bg-ink-950/20 lg:left-1/2 lg:-translate-x-1/2"
+              className="absolute inset-y-2 left-[11px] w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.30)_0%,rgba(10,7,5,0.22)_14%,rgba(10,7,5,0.22)_66%,rgba(255,255,255,0.22)_86%,rgba(255,255,255,0.30)_100%)] lg:left-1/2 lg:-translate-x-1/2"
             >
               <span
                 ref={railRef}
-                className="absolute inset-0 origin-top bg-ink-950/45"
+                className="absolute inset-0 origin-top bg-[linear-gradient(180deg,rgba(255,255,255,0.70)_0%,rgba(10,7,5,0.50)_14%,rgba(10,7,5,0.50)_66%,rgba(255,255,255,0.55)_86%,rgba(255,255,255,0.70)_100%)]"
               />
             </span>
 

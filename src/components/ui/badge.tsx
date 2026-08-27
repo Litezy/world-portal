@@ -19,6 +19,8 @@ const badgeVariants = cva(
         solid: "bg-primary text-primary-foreground",
         outline: "border border-border text-foreground",
         muted: "bg-secondary text-secondary-foreground",
+        destructive: "bg-destructive text-destructive-foreground",
+        success: "bg-success text-success-foreground",
       },
       size: {
         sm: "h-6 px-2.5 text-[11px]",

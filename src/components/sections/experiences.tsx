@@ -1,9 +1,8 @@
-import Link from "next/link";
-
-import { ArrowRight, Check } from "lucide-react";
+import { BellRing, Check } from "lucide-react";
 
 import { ParallaxImage } from "@/components/motion/parallax-image";
 import { Reveal } from "@/components/motion/reveal";
+import { ComingSoonNotice, waitlistHref } from "@/components/sections/coming-soon";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
@@ -24,7 +23,9 @@ export function Experiences() {
           body={experiences.body}
           align="center"
           size="md"
-        />
+        >
+          <ComingSoonNotice notice={experiences.notice} />
+        </SectionHeading>
 
         <Reveal
           stagger={0.08}
@@ -64,11 +65,11 @@ export function Experiences() {
         </div>
 
         <div className="mt-12 flex justify-center">
-          <Button asChild variant="primary" size="lg">
-            <Link href={experiences.cta.href}>
+          <Button asChild variant="outline" size="lg">
+            <a href={waitlistHref(experiences.cta.subject)}>
+              <BellRing />
               {experiences.cta.label}
-              <ArrowRight />
-            </Link>
+            </a>
           </Button>
         </div>
       </Container>

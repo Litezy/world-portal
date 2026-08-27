@@ -142,10 +142,19 @@ Two libraries, each doing the job it is actually good at.
 | FAQ              | Height, word cascade and the brand rule wipe              |
 | Logo             | The plane's departure and return loop                     |
 
-**Three.js** renders one scroll- and pointer-reactive displacement shader over
-the hero photograph (`hero-webgl.tsx`). It is dynamically imported, mounted on
-idle, paused when off-screen, and skipped entirely without WebGL — the real
-`next/image` underneath stays the LCP element either way.
+**Three.js** does two things, both in the hero:
+
+- `hero-webgl.tsx` — a scroll- and pointer-reactive displacement shader over
+  the hero photograph.
+- `webgl-wordmark.tsx` — the oversized DISCOVER. The word is rasterised into a
+  2D canvas using the real Playfair webfont, then revealed through a shader:
+  a bottom-up wipe, liquid displacement that is violent at the wipe front and
+  settles to an idle drift, and a chromatic split that scales with it.
+
+Both are dynamically imported, mounted on idle, paused off-screen, and skipped
+without WebGL. The wordmark renders twice on purpose — a real text node that is
+always correct, plus the WebGL plate that fades over it once its texture is
+ready — so no-WebGL, reduced motion and pre-hydration all show real type.
 
 Images deliberately stay real `<img>` tags rather than WebGL planes: parallax
 via transforms is GPU-cheap and keeps LCP, SEO and alt text intact, which
@@ -194,6 +203,43 @@ retried.
 Point `NEXT_PUBLIC_API_URL` at a real backend, or leave it unset to use the
 built-in `/api` routes. `POST /api/booking` currently logs and returns a
 reference — swap its body for a real mail/CRM call.
+
+## The World Portal API
+
+The visa flow talks to a NestJS backend. Set the base URL — **including the
+`/api` prefix** — in `.env.local`:
+
+```
+NEXT_PUBLIC_API_URL=https://<host>/api
+```
+
+Today that host is a Cloudflare Quick Tunnel, which **changes every time the
+tunnel restarts**. It is never hardcoded; without it the client falls back to a
+relative `/api` and warns loudly in the console.
+
+Everything the applicant flow touches is public — no auth header anywhere:
+
+| Call                          | Used by                                     |
+| ----------------------------- | ------------------------------------------- |
+| `POST /upload`                | One call per document, before submitting    |
+| `POST /visa-documentation`    | Submit — returns the `applicationNo`        |
+| `GET /visa-documentation/:id` | Track by reference (UUID or application no) |
+
+### Three contract quirks the client absorbs
+
+1. **Validation errors are a flat string array on a 400**, not a 422 with an
+   `errors` object. `parseValidationMessages()` reconstructs per-field errors
+   from class-validator's property-prefixed messages, so the form highlights the
+   right inputs and jumps back to the step that owns them — instead of rendering
+   `"email must be an email,firstName should not be empty"` as one sentence.
+2. **Decimals serialise as strings** (`"500.00"`). Run them through
+   `toAmount()` before any maths or formatting; it returns `null` for unset.
+3. **`forbidNonWhitelisted: true`** — an unknown key is a 400, and `""` fails
+   every `@IsUrl()` / `@IsDateString()` field. `toApiPayload()` strips blanks
+   and empty arrays rather than sending them.
+
+All three are covered by tests, so a regression fails the suite rather than
+surfacing as a garbled toast.
 
 ## Imagery
 

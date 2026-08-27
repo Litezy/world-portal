@@ -1,0 +1,584 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ArrowLeft, ArrowRight, Check, Copy } from "lucide-react";
+import { useForm, type UseFormReturn } from "react-hook-form";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toaster";
+import { useSubmitVisaApplication } from "@/features/visa/api/visa-documentation";
+import { DocumentField } from "@/features/visa/components/document-field";
+import { GENDERS, VISA_CATEGORIES } from "@/features/visa/types";
+import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import {
+  applicationSteps,
+  toApiPayload,
+  type VisaApplicationInput,
+  visaApplicationSchema,
+} from "@/validations/visa-application";
+
+const categoryLabels: Record<(typeof VISA_CATEGORIES)[number], string> = {
+  TOURIST: "Tourism / visiting",
+  BUSINESS: "Business",
+  STUDENT: "Study",
+  WORK: "Work",
+  TRANSIT: "Transit",
+};
+
+const genderLabels: Record<(typeof GENDERS)[number], string> = {
+  MALE: "Male",
+  FEMALE: "Female",
+  OTHER: "Other",
+};
+
+export function ApplicationForm() {
+  const [step, setStep] = React.useState(0);
+  const [reference, setReference] = React.useState<string | null>(null);
+
+  const form = useForm<VisaApplicationInput>({
+    resolver: zodResolver(visaApplicationSchema),
+    mode: "onTouched",
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      dateOfBirth: "",
+      gender: "",
+      nationality: "",
+      residenceAddress: "",
+      passportNumber: "",
+      passportIssueDate: "",
+      passportExpiryDate: "",
+      passportIssuingAuthority: "",
+      targetCountry: "",
+      visaCategory: "TOURIST",
+      intendedArrivalDate: "",
+      intendedDepartureDate: "",
+      purposeOfVisit: "",
+      passportDataPageUrl: "",
+      passportPhotoWhiteBgUrl: "",
+      proofOfFunds6MonthsUrl: "",
+      businessRegistrationCertUrl: "",
+      taxCertificateUrl: "",
+      marriageCertificateUrl: "",
+    },
+  });
+
+  const { mutateAsync, isPending } = useSubmitVisaApplication();
+  const isLast = step === applicationSteps.length - 1;
+
+  /** Only advance once this step's own fields are clean. */
+  async function next() {
+    const fields = applicationSteps[step].fields as (keyof VisaApplicationInput)[];
+    const ok = await form.trigger(fields, { shouldFocus: true });
+    if (ok) setStep((s) => Math.min(s + 1, applicationSteps.length - 1));
+  }
+
+  async function onSubmit(values: VisaApplicationInput) {
+    try {
+      const record = await mutateAsync(toApiPayload(values));
+      setReference(record.applicationNo);
+    } catch (error) {
+      if (error instanceof ApiError && error.errors) {
+        // Map the API's per-field messages back onto the inputs, then jump to
+        // the earliest step that actually has a problem.
+        let earliest = applicationSteps.length - 1;
+        for (const [field, messages] of Object.entries(error.errors)) {
+          form.setError(field as keyof VisaApplicationInput, { message: messages[0] });
+          const owner = applicationSteps.findIndex((s) =>
+            (s.fields as readonly string[]).includes(field),
+          );
+          if (owner >= 0) earliest = Math.min(earliest, owner);
+        }
+        setStep(earliest);
+        toast.error("Please check the highlighted fields");
+        return;
+      }
+      toast.error("Could not submit your application", {
+        description:
+          error instanceof Error ? error.message : "Please try again shortly.",
+      });
+    }
+  }
+
+  if (reference) return <SubmittedPanel reference={reference} />;
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14">
+      <Stepper current={step} onSelect={setStep} />
+
+      <Card variant="glass" radius="2xl" padding="none" className="p-6 sm:p-8">
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="grid gap-6"
+            noValidate
+          >
+            <header>
+              <h2 className="text-xl font-semibold tracking-tight text-ink-900">
+                {applicationSteps[step].title}
+              </h2>
+              <p className="mt-1 text-[13.5px] text-muted-foreground">
+                {applicationSteps[step].description}
+              </p>
+            </header>
+
+            {step === 0 ? <ApplicantStep form={form} /> : null}
+            {step === 1 ? <PassportStep form={form} /> : null}
+            {step === 2 ? <TripStep form={form} /> : null}
+            {step === 3 ? <DocumentsStep form={form} /> : null}
+
+            <div className="mt-2 flex items-center justify-between gap-3 border-t border-border pt-6">
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                onClick={() => setStep((s) => Math.max(s - 1, 0))}
+                disabled={step === 0}
+                leftIcon={<ArrowLeft />}
+              >
+                Back
+              </Button>
+
+              {isLast ? (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  isLoading={isPending}
+                  loadingText="Submitting…"
+                >
+                  Submit application
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={next}
+                  rightIcon={<ArrowRight />}
+                >
+                  Continue
+                </Button>
+              )}
+            </div>
+          </form>
+        </Form>
+      </Card>
+    </div>
+  );
+}
+
+function Stepper({
+  current,
+  onSelect,
+}: {
+  current: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <ol className="flex gap-2 overflow-x-auto lg:sticky lg:top-28 lg:h-fit lg:flex-col lg:gap-1 lg:overflow-visible">
+      {applicationSteps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={s.id} className="shrink-0">
+            <button
+              type="button"
+              // Going back is always safe; going forward has to pass validation.
+              onClick={() => i < current && onSelect(i)}
+              disabled={i > current}
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                active && "bg-primary/18",
+                done && "cursor-pointer hover:bg-secondary",
+                i > current && "cursor-default opacity-45",
+              )}
+            >
+              <span
+                className={cn(
+                  "grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
+                  active && "bg-primary text-primary-foreground",
+                  done && "bg-success text-success-foreground",
+                  !active && !done && "bg-secondary text-muted-foreground",
+                )}
+              >
+                {done ? <Check className="size-3.5" strokeWidth={3} /> : i + 1}
+              </span>
+              <span
+                className={cn(
+                  "text-[13px] font-medium whitespace-nowrap",
+                  active ? "text-ink-900" : "text-muted-foreground",
+                )}
+              >
+                {s.title}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+type StepProps = { form: UseFormReturn<VisaApplicationInput> };
+
+function Text({
+  form,
+  name,
+  label,
+  placeholder,
+  type = "text",
+  required,
+  autoComplete,
+}: StepProps & {
+  name: keyof VisaApplicationInput;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+  autoComplete?: string;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel required={required}>{label}</FormLabel>
+          <FormControl>
+            <Input
+              type={type}
+              placeholder={placeholder}
+              autoComplete={autoComplete}
+              {...field}
+              value={typeof field.value === "string" ? field.value : ""}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
+function ApplicantStep({ form }: StepProps) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <Text
+        form={form}
+        name="firstName"
+        label="First name"
+        required
+        placeholder="John"
+        autoComplete="given-name"
+      />
+      <Text
+        form={form}
+        name="lastName"
+        label="Last name"
+        required
+        placeholder="Doe"
+        autoComplete="family-name"
+      />
+      <Text
+        form={form}
+        name="email"
+        label="Email address"
+        required
+        type="email"
+        placeholder="you@example.com"
+        autoComplete="email"
+      />
+      <Text
+        form={form}
+        name="phone"
+        label="Phone"
+        type="tel"
+        placeholder="+234 801 234 5678"
+        autoComplete="tel"
+      />
+      <Text form={form} name="dateOfBirth" label="Date of birth" type="date" />
+      <FormField
+        control={form.control}
+        name="gender"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Gender</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value || undefined}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {GENDERS.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {genderLabels[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <Text
+        form={form}
+        name="nationality"
+        label="Nationality"
+        required
+        placeholder="Nigerian"
+      />
+      <div className="sm:col-span-2">
+        <Text
+          form={form}
+          name="residenceAddress"
+          label="Residential address"
+          placeholder="123 Example Street, Lagos"
+          autoComplete="street-address"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PassportStep({ form }: StepProps) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <Text
+        form={form}
+        name="passportNumber"
+        label="Passport number"
+        placeholder="A12345678"
+      />
+      <Text
+        form={form}
+        name="passportIssuingAuthority"
+        label="Issuing authority"
+        placeholder="Nigeria Immigration Service"
+      />
+      <Text form={form} name="passportIssueDate" label="Issue date" type="date" />
+      <Text form={form} name="passportExpiryDate" label="Expiry date" type="date" />
+    </div>
+  );
+}
+
+function TripStep({ form }: StepProps) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2">
+      <Text
+        form={form}
+        name="targetCountry"
+        label="Destination country"
+        required
+        placeholder="Canada"
+      />
+      <FormField
+        control={form.control}
+        name="visaCategory"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel required>Visa category</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {VISA_CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {categoryLabels[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <Text
+        form={form}
+        name="intendedArrivalDate"
+        label="Intended arrival"
+        type="date"
+      />
+      <Text
+        form={form}
+        name="intendedDepartureDate"
+        label="Intended departure"
+        type="date"
+      />
+      <div className="sm:col-span-2">
+        <FormField
+          control={form.control}
+          name="purposeOfVisit"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Purpose of visit</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={3}
+                  placeholder="Annual vacation, conference, family visit…"
+                  {...field}
+                  value={field.value ?? ""}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DocumentsStep({ form }: StepProps) {
+  const errors = form.formState.errors;
+
+  const slot = (
+    name: keyof VisaApplicationInput,
+    label: string,
+    hint: string,
+    required = false,
+  ) => (
+    <DocumentField
+      key={name}
+      label={label}
+      hint={hint}
+      required={required}
+      value={(form.watch(name) as string) ?? ""}
+      onChange={(url) =>
+        form.setValue(name, url, { shouldValidate: true, shouldDirty: true })
+      }
+      error={errors[name]?.message as string | undefined}
+    />
+  );
+
+  return (
+    <div className="grid gap-5">
+      {slot(
+        "passportDataPageUrl",
+        "Passport data page",
+        "A clear scan of the photo page.",
+        true,
+      )}
+      {slot(
+        "passportPhotoWhiteBgUrl",
+        "Passport photograph",
+        "Recent, white background.",
+        true,
+      )}
+      {slot(
+        "proofOfFunds6MonthsUrl",
+        "Proof of funds",
+        "Six months of bank statements.",
+      )}
+      {slot(
+        "businessRegistrationCertUrl",
+        "Business registration",
+        "If you are self-employed or a business owner.",
+      )}
+      {slot(
+        "taxCertificateUrl",
+        "Tax certificate",
+        "Optional, but it strengthens most applications.",
+      )}
+      {slot(
+        "marriageCertificateUrl",
+        "Marriage certificate",
+        "Only if travelling with a spouse.",
+      )}
+    </div>
+  );
+}
+
+function SubmittedPanel({ reference }: { reference: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  return (
+    <Card
+      variant="glass"
+      radius="2xl"
+      padding="none"
+      className="mx-auto max-w-xl p-8 text-center sm:p-10"
+    >
+      <span className="mx-auto grid size-14 place-items-center rounded-full bg-success/15 text-success">
+        <Check className="size-7" strokeWidth={2.5} />
+      </span>
+
+      <h2 className="mt-6 text-2xl font-semibold tracking-tight text-ink-900">
+        Application submitted
+      </h2>
+      <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-muted-foreground">
+        A consultant is reviewing your file now. Keep this reference — it is how you
+        check progress, and you will not need an account.
+      </p>
+
+      <div className="mt-7 flex items-center justify-between gap-4 rounded-xl border border-primary/40 bg-primary/12 px-4 py-3.5">
+        <span className="text-left">
+          <span className="block text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            Your reference
+          </span>
+          <span className="font-mono text-[17px] font-semibold text-ink-900">
+            {reference}
+          </span>
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          leftIcon={copied ? <Check /> : <Copy />}
+          onClick={() => {
+            void navigator.clipboard?.writeText(reference);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+        >
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <Button asChild variant="primary" size="md">
+          <Link href={`/track?ref=${encodeURIComponent(reference)}`}>
+            Track this application
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="md">
+          <Link href="/">Back to home</Link>
+        </Button>
+      </div>
+
+      <Badge variant="muted" size="sm" className="mx-auto mt-6">
+        We have emailed a copy of this reference to you
+      </Badge>
+    </Card>
+  );
+}

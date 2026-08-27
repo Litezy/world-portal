@@ -10,11 +10,17 @@ import { Button } from "@/components/ui/button";
 import { hero } from "@/content/landing";
 import { useGsap } from "@/hooks/use-gsap";
 import { EASE_GLASS, gsap } from "@/lib/motion/gsap";
+import { cn } from "@/lib/utils";
 
 // WebGL is an enhancement layered over the real <Image>, so it must never
 // block first paint or run on the server.
 const HeroWebgl = dynamic(
   () => import("@/components/motion/hero-webgl").then((m) => m.HeroWebgl),
+  { ssr: false },
+);
+
+const WebglWordmark = dynamic(
+  () => import("@/components/motion/webgl-wordmark").then((m) => m.WebglWordmark),
   { ssr: false },
 );
 
@@ -27,6 +33,7 @@ const HeroWebgl = dynamic(
  */
 export function Hero() {
   const [webglReady, setWebglReady] = React.useState(false);
+  const [wordmarkReady, setWordmarkReady] = React.useState(false);
 
   // Only mount the shader once the browser is idle — it is decoration.
   React.useEffect(() => {
@@ -51,9 +58,10 @@ export function Hero() {
       stagger: 0.12,
       ease: EASE_GLASS,
     }).from(
-      "[data-hero-wordmark] span",
+      "[data-hero-fallback]",
       {
-        // Rises out from behind the section's bottom edge.
+        // Only ever seen if WebGL is unavailable — the shader owns the reveal
+        // otherwise, and hides this the moment its texture is ready.
         yPercent: 108,
         duration: 1.5,
         ease: "expo.out",
@@ -125,14 +133,35 @@ export function Hero() {
         </div>
       </div>
 
-      {/* Clipped so the wordmark can rise out from behind the bottom edge. */}
-      <div data-hero-wordmark className="overflow-hidden">
+      {/*
+        The wordmark is rendered twice on purpose: a real text node that is
+        always correct, and a WebGL plate that replaces it once its texture is
+        ready. Without WebGL, reduced motion, or before hydration, what you see
+        is the text — the shader is never load-bearing.
+      */}
+      <div
+        data-hero-wordmark
+        className="relative overflow-hidden"
+        style={{ height: "16vw" }}
+      >
         <span
+          data-hero-fallback
           aria-hidden="true"
-          className="heading-serif block w-full text-center text-[19.9vw] leading-[0.8] font-normal tracking-[-0.012em] text-white select-none"
+          className={cn(
+            "heading-serif absolute inset-x-0 bottom-0 block text-center text-[19.9vw] leading-[0.8] font-normal tracking-[-0.012em] text-white transition-opacity duration-500 select-none",
+            wordmarkReady && "opacity-0",
+          )}
         >
           {hero.wordmark}
         </span>
+
+        {webglReady ? (
+          <WebglWordmark
+            text={hero.wordmark}
+            onReady={() => setWordmarkReady(true)}
+            className="absolute inset-0 size-full"
+          />
+        ) : null}
       </div>
       <span className="sr-only">{hero.wordmark}</span>
     </section>

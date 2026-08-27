@@ -109,7 +109,7 @@ export const visas = {
       },
     },
     {
-      name: "Consular Visa",
+      name: "T.Visa (Traditional Visa)",
       tag: "2–4 weeks",
       body: "Full embassy filing, handled end to end: document preparation, sponsorship letters, appointment booking and interview coaching before you walk in.",
       image: {
@@ -182,7 +182,10 @@ export const flightsHotels = {
   headingLead: "Booked in hours,",
   headingAccent: "not days.",
   body: "Live fares, held seats and stays we have actually vetted. We quote fast, hold faster, and never leave you refreshing a booking page at midnight.",
-  cta: { label: "Get a quote today", href: "#contact" },
+  /** Not live yet — the section renders in full but its CTA is a waitlist. */
+  comingSoon: true,
+  notice: "Launching soon. Visa applications are open today.",
+  cta: { label: "Notify me when it's live", subject: "Notify me — Flights & Hotels" },
   stats: [
     { value: "4 hrs", label: "Average quote turnaround" },
     { value: "24/7", label: "Rebooking support in transit" },
@@ -229,7 +232,13 @@ export const experiences = {
   headingLead: "Journeys worth",
   headingAccent: "retelling.",
   body: "Curated holiday packages, private guides and timed access to the places everyone else queues for. We build the days, you just turn up for them.",
-  cta: { label: "Browse experiences", href: "#contact" },
+  /** Not live yet — the section renders in full but its CTA is a waitlist. */
+  comingSoon: true,
+  notice: "Launching soon. Visa applications are open today.",
+  cta: {
+    label: "Notify me when it's live",
+    subject: "Notify me — Experiences & Tours",
+  },
   highlights: [
     "Private guides & drivers",
     "Timed & after-hours access",
@@ -267,24 +276,30 @@ export const experiences = {
 
 export const contact = {
   eyebrow: "Start here",
-  headingLead: "Which part can we",
-  headingAccent: "take off your hands?",
-  body: "Pick a service, tell us the details, and a consultant replies within 24 hours with the next steps and a fixed quote. No obligation, no call centre.",
+  headingLead: "Ready to start your",
+  headingAccent: "application?",
+  body: "Visa applications run on their own secure form — upload your documents, submit, and track the decision with the reference we give you. It takes about ten minutes.",
   getInTouch: "Or reach us directly",
   background: {
     src: "/images/contact.jpg",
     alt: "A coastline silhouetted against a golden sunset",
   },
-  submitLabel: "Send my request",
   whatsappLabel: "Chat with us on WhatsApp",
-  /** Drives the chips at the top of the form and the `service` field. */
-  services: [
-    { value: "visa", label: "Visa application", hint: "eVisa, Consular or ETA" },
-    { value: "booking", label: "Flights & hotels", hint: "Quote in about 4 hours" },
+  /** The two live entry points. Flights and experiences are not open yet. */
+  actions: [
     {
-      value: "experience",
-      label: "Experiences & tours",
-      hint: "Curated or fully bespoke",
+      title: "Start a visa application",
+      body: "eVisa, T.Visa or ETA. Upload your documents and submit in one sitting.",
+      cta: "Begin application",
+      href: "/apply",
+      primary: true,
+    },
+    {
+      title: "Track an existing one",
+      body: "Enter the reference we sent you to see exactly where your file stands.",
+      cta: "Track my application",
+      href: "/track",
+      primary: false,
     },
   ],
   assurances: [
@@ -303,7 +318,7 @@ export const faq = {
     {
       question: "Which visa do I actually need?",
       answer:
-        "That depends on your passport, your destination and why you are going — and it changes more often than most people expect. Send us those three things and we will confirm whether you need an eVisa, a consular visa or just an ETA, usually the same working day and before you pay us anything.",
+        "That depends on your passport, your destination and why you are going — and it changes more often than most people expect. Send us those three things and we will confirm whether you need an eVisa, a T.Visa or just an ETA, usually the same working day and before you pay us anything.",
     },
     {
       question: "How fast can you book flights and hotels?",

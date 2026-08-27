@@ -9,14 +9,53 @@ Single-page site for a travel & visa agency, built to a video reference. Read
 
 Three services, each with its own section and its own CTA:
 
-1. **Visas** (`#visas`) — eVisa, Consular, ETA. Sold on comfort and ease.
-2. **Flights & Hotels** (`#flights-hotels`) — sold on speed and reliability.
-3. **Experiences & Tours** (`#experiences`) — sold on curation and quality.
+1. **Visas** (`#visas`) — eVisa, **T.Visa (Traditional Visa)**, ETA. **The only
+   live service.** Sold on comfort and ease.
+2. **Flights & Hotels** (`#flights-hotels`) — _coming soon._ Speed and reliability.
+3. **Experiences & Tours** (`#experiences`) — _coming soon._ Curation and quality.
 
-`#journey` ("How it works") is the one process behind all three. `#contact`
-routes on which service the visitor picks. **Packages** and **Testimonials**
-are parked — components and content still exist, JSX commented out in
-`app/(site)/page.tsx`.
+The two coming-soon sections keep their full layout; only the CTA changes, via
+`sections/coming-soon.tsx` (a "Launching soon" notice plus a waitlist mailto).
+Do not link them into flows that do not exist.
+
+`#journey` ("How it works") is the one process behind all three. `#contact` has
+**no form** — it routes to `/apply` and `/track`. **Packages** and
+**Testimonials** are parked: components and content still exist, JSX commented
+out in `app/(site)/page.tsx`.
+
+## Routes and layouts
+
+| Route    | Layout   | Header                          |
+| -------- | -------- | ------------------------------- |
+| `/`      | `(site)` | overlay, scrolls away with hero |
+| `/apply` | `(app)`  | solid sticky ink bar            |
+| `/track` | `(app)`  | solid sticky ink bar            |
+
+`SiteHeader` takes `variant="overlay" | "solid"`. The overlay variant's type is
+white for photography — never pin it over a light page.
+
+## The API contract — read before touching the visa flow
+
+Base URL lives in `NEXT_PUBLIC_API_URL` and **includes the `/api` prefix**. It
+is a Cloudflare Quick Tunnel whose host changes on every restart, so it is never
+hardcoded anywhere but `.env.local`.
+
+Three quirks the client already absorbs. Do not "simplify" them away:
+
+1. **Validation errors are a 400 with `message` as a string array** — no
+   `errors` object, never a 422. `parseValidationMessages()` rebuilds per-field
+   errors from class-validator's property-prefixed text. Without it the form
+   cannot highlight fields and a toast reads as one comma-joined sentence.
+2. **Decimals are strings** (`"500.00"`). Always `toAmount()` before maths or
+   formatting.
+3. **`forbidNonWhitelisted: true`** — unknown keys are a 400, and `""` fails
+   every `@IsUrl()`/`@IsDateString()` field. `toApiPayload()` strips blanks and
+   empty arrays. Never add a key the DTO does not declare.
+
+Documents upload one at a time to `POST /upload` (field name `file`, 10MB,
+PDF/JPG/PNG/WEBP) _before_ submission; the returned `url` goes into the matching
+`*Url` field. `GET /visa-documentation/:id` is deliberately public — never add
+an auth header to it.
 
 ## Non-negotiables
 
@@ -56,6 +95,12 @@ are parked — components and content still exist, JSX commented out in
 
 If you add a reveal, add it through `Reveal`/`useGsap` so it inherits both.
 `e2e/smoke.spec.ts` has a regression test that hero copy is visible.
+
+**Do not remove `HashScroll`** (`components/motion/hash-scroll.tsx`).
+`html { scroll-behavior: smooth }` cancels the browser's _initial_ anchor jump
+during load, so `/#visas` would silently open at the hero. It redoes the jump
+after layout settles and refreshes ScrollTrigger, since everything below the
+anchor has just moved.
 
 ## Where things go
 
@@ -97,7 +142,13 @@ pattern rather than disabling the rule.
 - `ParallaxImage` always uses `fill`; passing `width`/`height` makes next/image
   size to its intrinsic box inside the absolutely-positioned inner wrapper and
   the tiles come out ragged.
-- The oversized DISCOVER wordmarks rely on `leading-[0.8]`, which puts a
-  Playfair cap baseline exactly on the line-box bottom edge.
+- The hero DISCOVER is WebGL (`webgl-wordmark.tsx`) layered over a real text
+  node that stays correct without it. The footer's still uses `leading-[0.8]`,
+  which puts a Playfair cap baseline exactly on the line-box bottom edge.
+- `Button` with `asChild` forwards a _single_ child, so `leftIcon`/`rightIcon`
+  are dropped — put the icon inside the child element instead.
+- `buildMetadata()` omits `title` entirely when a page has none, so the root
+  layout's `title.default` applies. Returning a pre-suffixed string double-
+  applies the `%s | World Portal` template.
 - `next typegen` runs as part of `pnpm typecheck`, so a clean checkout
   typechecks without a build. Next 16 removed `next lint`.

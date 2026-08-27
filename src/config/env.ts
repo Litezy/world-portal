@@ -9,15 +9,9 @@ import { z } from "zod";
  */
 const clientSchema = z.object({
   NEXT_PUBLIC_SITE_URL: z.url().default("http://localhost:3000"),
+  /** World Portal API origin, including its `/api` prefix. */
   NEXT_PUBLIC_API_URL: z.url().optional(),
   NEXT_PUBLIC_GA_ID: z.string().optional(),
-});
-
-const serverSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  API_SECRET: z.string().optional(),
-  RESEND_API_KEY: z.string().optional(),
-  CONTACT_INBOX: z.email().optional(),
 });
 
 const clientEnv = clientSchema.safeParse({
@@ -35,19 +29,6 @@ if (!clientEnv.success) {
 }
 
 export const env = clientEnv.data;
-
-/** Server-only. Importing this from a client component is a build error. */
-export function serverEnv() {
-  const parsed = serverSchema.safeParse(process.env);
-  if (!parsed.success) {
-    console.error(
-      "Invalid server environment variables:",
-      z.treeifyError(parsed.error),
-    );
-    throw new Error("Invalid server environment variables");
-  }
-  return parsed.data;
-}
 
 export const isProduction = process.env.NODE_ENV === "production";
 export const isDevelopment = process.env.NODE_ENV === "development";

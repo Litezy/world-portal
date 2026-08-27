@@ -66,9 +66,11 @@ export function Logo({
     <Link
       href={href}
       aria-label={siteConfig.name}
+      // Brand yellow in both placements — it reads on the hero photograph and
+      // on the black footer, so `tone` only shifts how much lift it needs.
       className={cn(
-        "group inline-flex items-center gap-2.5 rounded-md focus-visible:outline-none",
-        tone === "light" ? "text-white" : "text-ink-900",
+        "group inline-flex items-center gap-2.5 rounded-md text-primary focus-visible:outline-none",
+        tone === "light" && "[text-shadow:0_1px_10px_rgba(8,10,14,0.45)]",
         className,
       )}
     >
@@ -90,7 +92,7 @@ export function Logo({
           />
           <g ref={planeRef}>
             <path
-              d="M21.4 3.2 13.1 9.6l-4.4-1.4a1 1 0 0 0-.95.24L5.9 10.3a.6.6 0 0 0 .2 1l3.9 1.35 1.35 3.9a.6.6 0 0 0 1 .2l1.86-1.86a1 1 0 0 0 .24-.95l-1.4-4.4 6.4-8.3a.55.55 0 0 0-.05-.04Z"
+              d="M22.2 10.35 14.9 9.1l-3.62-6.3a.92.92 0 0 0-.8-.46h-1.2c-.4 0-.68.36-.6.74l1.2 5.62-3.6-.62-1.28-2.1a.6.6 0 0 0-.52-.29h-.7c-.36 0-.62.32-.56.66l.62 3.3-1.06.6a.62.62 0 0 0 0 1.1l1.06.6-.62 3.3c-.06.34.2.66.56.66h.7a.6.6 0 0 0 .52-.29l1.28-2.1 3.6-.62-1.2 5.62c-.08.38.2.74.6.74h1.2c.33 0 .64-.18.8-.46l3.62-6.3 7.3-1.25a.66.66 0 0 0 0-1.3Z"
               fill="currentColor"
             />
           </g>

@@ -22,13 +22,25 @@ test.describe("landing page", () => {
     await page.goto("/");
     for (const [id, label] of [
       ["visas", /check my visa options/i],
-      ["flights-hotels", /get a quote today/i],
-      ["experiences", /browse experiences/i],
       ["journey", /free consultation/i],
+      // Flights and experiences are not live yet, so their CTA is a waitlist.
+      ["flights-hotels", /notify me when it's live/i],
+      ["experiences", /notify me when it's live/i],
     ] as const) {
       await expect(
         page.locator(`#${id}`).getByRole("link", { name: label }),
       ).toBeAttached();
+    }
+  });
+
+  test("the coming-soon services do not dead-end", async ({ page }) => {
+    await page.goto("/");
+    for (const id of ["flights-hotels", "experiences"]) {
+      await expect(page.locator(`#${id}`).getByText(/launching soon/i)).toBeVisible();
+      // A waitlist mailto rather than a link into a flow that does not exist.
+      await expect(
+        page.locator(`#${id}`).getByRole("link", { name: /notify me/i }),
+      ).toHaveAttribute("href", /^mailto:/);
     }
   });
 
@@ -66,20 +78,20 @@ test.describe("landing page", () => {
     await expect(first).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("booking form validates before it submits", async ({ page }) => {
+  test("the closing CTA routes into the application pages", async ({ page }) => {
     await page.goto("/#contact");
-    await page.getByRole("button", { name: /send my request/i }).click();
-    await expect(page.getByText(/enter your full name/i)).toBeVisible();
-  });
 
-  test("booking form submits with the chosen service", async ({ page }) => {
-    await page.goto("/#contact");
-    await page.getByRole("radio", { name: /flights & hotels/i }).click();
-    await page.getByLabel(/full name/i).fill("Ada Lovelace");
-    await page.getByLabel(/email address/i).fill("ada@example.com");
-    await page.getByLabel(/destination/i).fill("Lisbon");
-    await page.getByRole("button", { name: /send my request/i }).click();
-    await expect(page.getByText(/request received/i)).toBeVisible();
+    const contact = page.locator("#contact");
+    await expect(
+      contact.getByRole("link", { name: /begin application/i }),
+    ).toHaveAttribute("href", "/apply");
+    await expect(
+      contact.getByRole("link", { name: /track my application/i }),
+    ).toHaveAttribute("href", "/track");
+
+    await contact.getByRole("link", { name: /begin application/i }).click();
+    await expect(page).toHaveURL(/\/apply$/);
+    await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
   });
 
   test("unknown routes render the 404 page", async ({ page }) => {

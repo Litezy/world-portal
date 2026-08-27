@@ -22,6 +22,9 @@ export function buildMetadata({
   keywords,
 }: SeoInput = {}): Metadata {
   const url = absoluteUrl(path);
+  // The root layout declares `title.template = "%s | World Portal"`, so a page
+  // returns its bare title and lets the template add the suffix exactly once.
+  // The social cards get the fully-resolved string, since no template runs there.
   const resolvedTitle = title ? `${title} | ${siteConfig.name}` : siteConfig.name;
   // Omitted -> Next falls back to app/opengraph-image.tsx.
   const images = image
@@ -29,7 +32,9 @@ export function buildMetadata({
     : undefined;
 
   return {
-    title: resolvedTitle,
+    // Omitted entirely when a page has no title of its own, so the root
+    // layout's `title.default` applies rather than being overwritten.
+    ...(title ? { title } : {}),
     description,
     keywords,
     alternates: { canonical: url },

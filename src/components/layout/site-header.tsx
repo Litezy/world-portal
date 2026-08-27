@@ -9,18 +9,33 @@ import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
 import { hero } from "@/content/landing";
+import { cn } from "@/lib/utils";
 
-/**
- * Sits over the hero image — logo left, glass nav pill centred, CTA right —
- * and scrolls away with it. Absolute rather than fixed: its type is white for
- * photography, so pinning it would leave it illegible over the light sections
- * below (and the reference design scrolls it away too).
- */
-export function SiteHeader() {
+export type SiteHeaderProps = {
+  /**
+   * "overlay" sits over the hero and scrolls away with it — absolute rather
+   * than fixed, because its type is white for photography and pinning it would
+   * leave it illegible over the light sections below.
+   *
+   * "solid" is for pages with no hero (apply, track): a sticky ink bar that
+   * keeps the same nav legible against a light page.
+   */
+  variant?: "overlay" | "solid";
+};
+
+export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
   const [open, setOpen] = React.useState(false);
+  const solid = variant === "solid";
 
   return (
-    <header className="absolute inset-x-0 top-0 z-50">
+    <header
+      className={cn(
+        "inset-x-0 top-0 z-50",
+        solid
+          ? "sticky bg-ink-950 shadow-[0_1px_0_rgba(255,255,255,0.08)]"
+          : "absolute",
+      )}
+    >
       <div className="mx-auto flex h-[72px] max-w-[1420px] items-center justify-between gap-4 px-5 sm:px-8 lg:h-20 lg:px-12">
         <Logo />
 
