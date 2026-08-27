@@ -67,3 +67,18 @@ export function initials(name: string, max = 2) {
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/** "3 hours ago", "2 days ago" — for activity columns. */
+export function formatRelative(date: Date | string | number) {
+  const diff = Date.now() - new Date(date).getTime();
+  const abs = Math.abs(diff);
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const sign = diff > 0 ? -1 : 1;
+  if (abs < hour) return rtf.format(sign * Math.round(abs / minute), "minute");
+  if (abs < day) return rtf.format(sign * Math.round(abs / hour), "hour");
+  if (abs < 30 * day) return rtf.format(sign * Math.round(abs / day), "day");
+  return formatDate(date, { day: "numeric", month: "short" });
+}

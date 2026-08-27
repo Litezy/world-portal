@@ -45,9 +45,7 @@ export function buildMetadata({
       title: resolvedTitle,
       description,
       url,
-      images: [
-        { url: absoluteUrl(image), width: 1200, height: 630, alt: resolvedTitle },
-      ],
+      images,
     },
     twitter: {
       card: "summary_large_image",

@@ -65,6 +65,18 @@
   --input: var(--ink-200);
   --ring: var(--brand-500);
 
+  /* Form field surface. A field's fill has to move with `--foreground`, or the
+   * text sits on a background of its own brightness. */
+  --field: var(--ink-50);
+  --field-focus: #ffffff;
+
+  /* Chart series. Validated for CVD separation and lightness on both surfaces;
+   * slot 1 is the brand ramp. Assign in order, never cycle. */
+  --chart-1: var(--brand-600);
+  --chart-2: #2a78d6;
+  --chart-3: #e87ba4;
+  --chart-grid: var(--ink-200);
+
   /* Glass system — tuned once, consumed by every glass surface */
   --glass-blur: 32px;
   --glass-saturate: 180%;
@@ -94,9 +106,17 @@
   --input: rgb(255 255 255 / 16%);
   --ring: var(--brand-400);
 
+  --field: var(--ink-800);
+  --field-focus: var(--ink-900);
+
   --glass-tint: 30 33 38;
   --glass-edge: 255 255 255;
   --glass-shadow: 0 0 0;
+
+  --chart-1: #c98500;
+  --chart-2: #3987e5;
+  --chart-3: #d55181;
+  --chart-grid: rgb(255 255 255 / 12%);
 }
 
 @theme inline {
@@ -125,6 +145,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-field: var(--field);
+  --color-field-focus: var(--field-focus);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-grid: var(--chart-grid);
 
   --color-brand-50: var(--brand-50);
   --color-brand-100: var(--brand-100);
