@@ -4,11 +4,12 @@ import { createSessionToken, verifySessionToken } from "@/server/auth/session";
 import type { AdminUser } from "@/types";
 
 const SECRET = "test-secret-value-1234";
-const USER: AdminUser = {
+const USER: AdminUser & { token: string } = {
   id: "usr_test",
   name: "Test User",
   email: "test@worldportal.travel",
-  role: "admin",
+  role: "MANAGER",
+  token: "backend-access-token",
 };
 
 describe("session tokens", () => {
@@ -26,7 +27,7 @@ describe("session tokens", () => {
     const { token } = createSessionToken(USER, SECRET);
     const [, signature] = token.split(".");
     const forged = Buffer.from(
-      JSON.stringify({ ...USER, role: "admin", exp: 99999999999 }),
+      JSON.stringify({ ...USER, role: "MANAGER", exp: 99999999999 }),
     ).toString("base64url");
 
     expect(verifySessionToken(`${forged}.${signature}`, SECRET)).toBeNull();

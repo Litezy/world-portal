@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { internalApi } from "@/lib/api-client";
-import type { ApiResponse, DashboardStats, Enquiry } from "@/types";
+import type { ApiResponse, DashboardStats, VisaApplication } from "@/types";
 
-type Overview = { stats: DashboardStats; recent: Enquiry[] };
+type Overview = { stats: DashboardStats; recent: VisaApplication[] };
 
 export const dashboardKeys = { overview: ["admin", "dashboard"] as const };
 

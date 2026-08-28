@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { BackendError } from "@/server/api/backend";
 import { listParamsSchema } from "@/validations/admin";
 
 export function listParamsFrom(request: Request) {
@@ -33,5 +34,25 @@ export async function parseBody<T extends z.ZodType>(request: Request, schema: T
   return { data: parsed.data as z.infer<T>, response: null };
 }
 
-export const notFound = (what: string) =>
-  NextResponse.json({ message: `${what} not found` }, { status: 404 });
+/** Surface the API's own status and field errors rather than a blanket 500. */
+export function backendErrorResponse(error: unknown) {
+  if (error instanceof BackendError) {
+    return NextResponse.json(
+      { message: error.message, ...(error.errors ? { errors: error.errors } : {}) },
+      { status: error.status },
+    );
+  }
+  throw error;
+}
+
+/** The API returns whole collections, so the console pages them itself. */
+export function paginate<T>(items: T[], page = 1, perPage = 10) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * perPage;
+  return {
+    data: items.slice(start, start + perPage),
+    meta: { page: safePage, perPage, total, totalPages },
+  };
+}

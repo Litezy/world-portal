@@ -3,9 +3,19 @@ import { expect, type Page, test } from "@playwright/test";
 /**
  * The live API is a Cloudflare Quick Tunnel whose host changes on every
  * restart, so these stub it at the network layer using the exact response
- * shapes the integration guide documents — including the awkward ones (string
- * array validation messages on a 400, decimals as strings).
+ * shapes the backend serves — every 2xx wrapped as `{ success, data }` by its
+ * TransformInterceptor, a 422 field map on validation failure, and decimals as
+ * strings. Verified against the running service, not from memory.
  */
+/** Mirrors the backend's TransformInterceptor. */
+const wrap = (data: unknown) => JSON.stringify({ success: true, data });
+/**
+ * Matched by path, not host: the API's origin moves between a tunnel, a local
+ * server and staging, and a host-pinned glob silently stops intercepting —
+ * the tests then hit whatever is really there and fail for the wrong reason.
+ */
+const API = "**";
+
 /**
  * /apply now opens on the route check — which visa this origin/destination pair
  * needs — because everything after it depends on the answer.
@@ -28,8 +38,6 @@ async function enterApplication(page: Page, to = "Turkey") {
   await page.getByRole("button", { name: /continue my|start my embassy/i }).click();
   await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
 }
-
-const API = "**/*trycloudflare.com/api";
 
 const APPLICATION = {
   id: "8f1c6e40-0000-4000-8000-000000000000",
@@ -60,7 +68,7 @@ async function stubUpload(page: Page) {
     route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({
+      body: wrap({
         url: "https://cdn.example.com/documents/passport.pdf",
         key: "documents/passport.pdf",
         originalName: "passport.pdf",
@@ -114,7 +122,7 @@ test.describe("visa application", () => {
       route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(APPLICATION),
+        body: wrap(APPLICATION),
       }),
     );
 
@@ -126,20 +134,18 @@ test.describe("visa application", () => {
     await expect(page.getByText("VISA-2026-8941")).toBeVisible();
   });
 
-  test("maps the API's flat validation array back onto the fields", async ({
-    page,
-  }) => {
+  test("maps the API's validation errors back onto the fields", async ({ page }) => {
     await stubUpload(page);
     await page.route(`${API}/visa-documentation`, (route) =>
       route.fulfill({
-        status: 400,
+        status: 422,
         contentType: "application/json",
-        // The documented quirk: `message` is a string[], there is no `errors`
-        // object, and the status is 400 rather than 422.
+        // What the service actually returns: a 422 carrying a field map.
         body: JSON.stringify({
-          statusCode: 400,
-          message: ["email must be an email"],
-          error: "Bad Request",
+          success: false,
+          statusCode: 422,
+          message: "Validation failed",
+          errors: { email: ["email must be an email"] },
         }),
       }),
     );
@@ -174,7 +180,7 @@ test.describe("application tracking", () => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(APPLICATION),
+        body: wrap(APPLICATION),
       }),
     );
 
@@ -196,9 +202,9 @@ test.describe("application tracking", () => {
         status: 404,
         contentType: "application/json",
         body: JSON.stringify({
+          success: false,
           statusCode: 404,
           message: "Visa application record with identifier 'NOPE' not found.",
-          error: "Not Found",
         }),
       }),
     );

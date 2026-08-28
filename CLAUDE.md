@@ -61,15 +61,20 @@ Base URL lives in `NEXT_PUBLIC_API_URL` and **includes the `/api` prefix**. It
 is a Cloudflare Quick Tunnel whose host changes on every restart, so it is never
 hardcoded anywhere but `.env.local`.
 
-Three quirks the client already absorbs. Do not "simplify" them away:
+Four things the client absorbs. Do not "simplify" them away — each was
+verified against the running service, not assumed:
 
-1. **Validation errors are a 400 with `message` as a string array** — no
-   `errors` object, never a 422. `parseValidationMessages()` rebuilds per-field
-   errors from class-validator's property-prefixed text. Without it the form
-   cannot highlight fields and a toast reads as one comma-joined sentence.
-2. **Decimals are strings** (`"500.00"`). Always `toAmount()` before maths or
+1. **Every 2xx body is wrapped**: `{ success: true, data }`, from the service's
+   `TransformInterceptor`. `unwrap()` in `api-client.ts` strips it once so no
+   hook ever sees the envelope. Reading `response.data` as the record itself is
+   what crashed `/track` before this was fixed.
+2. **Validation errors are a 422 carrying a field map** — `{ success: false,
+statusCode: 422, message: "Validation failed", errors: { field: [...] } }`.
+   The client prefers that map. `parseValidationMessages()` remains only as a
+   fallback for the older 400-with-string-array shape.
+3. **Decimals are strings** (`"500.00"`). Always `toAmount()` before maths or
    formatting.
-3. **`forbidNonWhitelisted: true`** — unknown keys are a 400, and `""` fails
+4. **`forbidNonWhitelisted: true`** — unknown keys are a 400, and `""` fails
    every `@IsUrl()`/`@IsDateString()` field. `toApiPayload()` strips blanks and
    empty arrays. Never add a key the DTO does not declare.
 
@@ -84,35 +89,41 @@ an auth header to it.
 site collects are worked. It reuses the same tokens, the same UI kit and the
 same two-tone headings — a console, not a second design language.
 
-| Route                 | What it is                                    |
-| --------------------- | --------------------------------------------- |
-| `/admin/login`        | Split photo/form sign-in                      |
-| `/admin`              | KPI row, 7-day chart, service split, pipeline |
-| `/admin/enquiries`    | Incoming requests from the site, + detail     |
-| `/admin/applications` | Visa files, stage timeline, + detail          |
-| `/admin/customers`    | Everyone who has applied or travelled         |
-| `/admin/settings`     | Profile, notification prefs, sign out         |
+| Route                 | Backed by                                        |
+| --------------------- | ------------------------------------------------ |
+| `/admin/login`        | `POST /auth/test-token` + `GET /profiles/me`     |
+| `/admin`              | Derived from the collections below               |
+| `/admin/applications` | `/visa-documentation` (+ `/status`, `/evaluate`) |
+| `/admin/passports`    | `/passport-application` (+ `/status`)            |
+| `/admin/customers`    | Grouped from both application collections        |
+| `/admin/settings`     | `/profiles` for the team list                    |
 
-- **The console calls this app, not the backend.** Its hooks use `internalApi`
-  (fixed `/api` base), never `api` — which points at `NEXT_PUBLIC_API_URL` and
-  would 404 every console screen once the tunnel URL is set.
+- **The console is a BFF, not a second API client.** Its hooks call
+  `internalApi` (fixed same-origin `/api`); the route handlers under
+  `src/app/api/admin` are what talk to the World Portal service, via
+  `src/server/api/backend.ts`. The access token therefore never reaches the
+  browser. Never point a console hook at `api` — that is the public client.
+- **The service has no enquiry, customer or stats resource.** Applicants are
+  grouped from their applications, and the dashboard figures are derived in
+  `/api/admin/stats`. Swap that for a real summary endpoint when one exists.
+- **List endpoints return whole collections.** Search and status are the
+  service's filters; paging is ours (`paginate()` in `src/server/http.ts`).
+- **The visa timeline is reconstructed** from `createdAt` / `evaluatedAt` /
+  `updatedAt`. The service keeps no review log, and the UI says so.
 - **`src/proxy.ts` is the gate.** It matches `/admin/:path*`, verifies the
   signed cookie and redirects to the login with a `next` param. The console
   layout re-checks the session as defence in depth (it redirects without
   `next` — only reachable if the proxy did not run).
 - **The session is an HMAC-signed cookie** (`src/server/auth/session.ts`),
-  `httpOnly` + `sameSite=lax`, verified with `timingSafeEqual`. There is no
-  user table yet; `authenticate()` checks one set of env credentials.
+  `httpOnly` + `sameSite=lax`, verified with `timingSafeEqual`. It also carries
+  the service's access token. `authenticate()` exchanges the email for a token
+  and then proves the account exists and is active via `/profiles/me`.
 - **`ADMIN_PASSWORD` and `SESSION_SECRET` have dev defaults that
   `src/config/env.ts` refuses in production.** Deploying without setting them
   fails the build rather than shipping a public password.
-- **`src/server/data/store.ts` is an in-memory stub.** Every function mirrors a
-  call the real backend will expose — swap the bodies, keep the signatures. It
-  resets when the server restarts, and does not survive across serverless
-  instances.
-- **Anything time-sensitive is computed server-side.** `overdue` ships as a
-  field on the application rather than being derived in a component, because
-  `Date.now()` during render breaks the React Compiler purity rule.
+- **Roles are the service's, not ours.** `AdminRole` mirrors its `UserRole`
+  (`MANAGER` / `STAFF` / `PARTNER`); `RolesGuard` decides what each may read, so
+  a 403 from `/admin/team` is a correct answer for a non-manager, not a bug.
 - **List state lives in the URL** (`useListParams`) so a filtered view can be
   shared and survives a refresh.
 

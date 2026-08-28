@@ -21,30 +21,30 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
-import { applications as copy, visaStatusLabels } from "@/content/admin";
-import { useUpdateApplication } from "@/features/applications/api/use-update-application";
+import { passports as copy, passportStatusLabels } from "@/content/admin";
+import { useUpdatePassport } from "@/features/passports/api/use-update-passport";
 import { ApiError } from "@/lib/api-client";
-import { type VisaStatus, visaStatusValues } from "@/server/data/backend-types";
+import { type PassportStatus, passportStatusValues } from "@/server/data/backend-types";
 import {
-  type UpdateVisaStatusInput,
-  updateVisaStatusSchema,
+  type UpdatePassportStatusInput,
+  updatePassportStatusSchema,
 } from "@/validations/admin";
 
-export function AdvanceApplicationForm({
+export function AdvancePassportForm({
   id,
   status,
 }: {
   id: string;
-  status: VisaStatus;
+  status: PassportStatus;
 }) {
-  const update = useUpdateApplication(id);
-  const form = useForm<UpdateVisaStatusInput>({
-    resolver: zodResolver(updateVisaStatusSchema),
+  const update = useUpdatePassport(id);
+  const form = useForm<UpdatePassportStatusInput>({
+    resolver: zodResolver(updatePassportStatusSchema),
     defaultValues: { status, verificationNotes: "", rejectionReason: "" },
   });
   const selected = useWatch({ control: form.control, name: "status" });
 
-  async function onSubmit(values: UpdateVisaStatusInput) {
+  async function onSubmit(values: UpdatePassportStatusInput) {
     try {
       await update.mutateAsync(values);
       form.reset({ ...values, verificationNotes: "", rejectionReason: "" });
@@ -52,7 +52,7 @@ export function AdvanceApplicationForm({
     } catch (error) {
       if (error instanceof ApiError && error.errors) {
         for (const [field, messages] of Object.entries(error.errors)) {
-          form.setError(field as keyof UpdateVisaStatusInput, {
+          form.setError(field as keyof UpdatePassportStatusInput, {
             message: messages[0],
           });
         }
@@ -81,9 +81,9 @@ export function AdvanceApplicationForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {visaStatusValues.map((value) => (
+                  {passportStatusValues.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {visaStatusLabels[value]}
+                      {passportStatusLabels[value]}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Inbox } from "lucide-react";
+import { BookUser } from "lucide-react";
 
 import {
   DataTablePagination,
   DataTableToolbar,
-  EnquiryStatusBadge,
+  PassportStatusBadge,
   TableEmptyRow,
   TableSkeletonRows,
 } from "@/components/admin";
@@ -23,18 +23,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { enquiries as copy, enquiryStatusLabels, serviceLabels } from "@/content/admin";
-import { useEnquiries } from "@/features/enquiries/api/use-enquiries";
+import { humanise, passports as copy, passportStatusLabels } from "@/content/admin";
+import { usePassports } from "@/features/passports/api/use-passports";
 import { useListParams } from "@/hooks/use-list-params";
 import { formatRelative } from "@/lib/utils";
-import { enquiryStatusValues } from "@/validations/admin";
+import { passportStatusValues } from "@/server/data/backend-types";
 
-const COLUMNS = 6;
+const COLUMNS = 5;
 
-export function EnquiriesTable() {
+export function PassportsTable() {
   const router = useRouter();
   const { params, set } = useListParams();
-  const { data, isPending, isError, isPlaceholderData } = useEnquiries(params);
+  const { data, isPending, isError, isPlaceholderData } = usePassports(params);
 
   return (
     <Card variant="solid" radius="lg" padding="none" className="gap-0 overflow-hidden">
@@ -45,10 +45,10 @@ export function EnquiriesTable() {
         filter={{
           value: params.status,
           onChange: (status) => set({ status }),
-          label: "All statuses",
-          options: enquiryStatusValues.map((value) => ({
+          label: "All stages",
+          options: passportStatusValues.map((value) => ({
             value,
-            label: enquiryStatusLabels[value],
+            label: passportStatusLabels[value],
           })),
         }}
       />
@@ -60,12 +60,11 @@ export function EnquiriesTable() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Traveller</TableHead>
-              <TableHead>Service</TableHead>
-              <TableHead>Destination</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Received</TableHead>
+              <TableHead>Applicant</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Booklet</TableHead>
+              <TableHead>Stage</TableHead>
+              <TableHead className="text-right">Submitted</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -74,7 +73,7 @@ export function EnquiriesTable() {
             {isError ? (
               <TableEmptyRow cols={COLUMNS}>
                 <Alert variant="destructive">
-                  <AlertTitle>Could not load enquiries</AlertTitle>
+                  <AlertTitle>Could not load passport applications</AlertTitle>
                   <AlertDescription>Refresh the page to try again.</AlertDescription>
                 </Alert>
               </TableEmptyRow>
@@ -83,7 +82,7 @@ export function EnquiriesTable() {
             {data?.data.length === 0 ? (
               <TableEmptyRow cols={COLUMNS}>
                 <EmptyState
-                  icon={Inbox}
+                  icon={BookUser}
                   title={copy.empty.title}
                   description={copy.empty.body}
                   className="border-0"
@@ -91,35 +90,34 @@ export function EnquiriesTable() {
               </TableEmptyRow>
             ) : null}
 
-            {data?.data.map((enquiry) => (
+            {data?.data.map((record) => (
               <TableRow
-                key={enquiry.id}
+                key={record.id}
                 data-interactive="true"
-                onClick={() => router.push(`/admin/enquiries/${enquiry.id}`)}
+                onClick={() => router.push(`/admin/passports/${record.id}`)}
               >
                 <TableCell className="font-medium">
                   <Link
-                    href={`/admin/enquiries/${enquiry.id}`}
+                    href={`/admin/passports/${record.id}`}
                     className="rounded-sm underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:outline-none"
                   >
-                    {enquiry.fullName}
+                    {record.applicant.name}
                   </Link>
-                  <span className="block text-[12px] font-normal text-muted-foreground">
-                    {enquiry.email}
+                  <span className="block font-mono text-[11.5px] font-normal text-muted-foreground">
+                    {record.reference}
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {serviceLabels[enquiry.service]}
+                  {humanise(record.category)}
                 </TableCell>
-                <TableCell>{enquiry.destination}</TableCell>
-                <TableCell className="font-mono text-[12px] text-muted-foreground">
-                  {enquiry.reference}
+                <TableCell className="text-muted-foreground">
+                  {humanise(record.bookletType)} · {humanise(record.validity)}
                 </TableCell>
                 <TableCell>
-                  <EnquiryStatusBadge status={enquiry.status} />
+                  <PassportStatusBadge status={record.status} />
                 </TableCell>
                 <TableCell className="text-right text-[12.5px] whitespace-nowrap text-muted-foreground">
-                  {formatRelative(enquiry.createdAt)}
+                  {formatRelative(record.createdAt)}
                 </TableCell>
               </TableRow>
             ))}
@@ -131,7 +129,7 @@ export function EnquiriesTable() {
         <DataTablePagination
           meta={data.meta}
           onPage={(page) => set({ page })}
-          noun="enquiries"
+          noun="applications"
         />
       ) : null}
     </Card>

@@ -1,34 +1,56 @@
 import { NextResponse } from "next/server";
 
+import { backend } from "@/server/api/backend";
 import { requireSession } from "@/server/auth";
-import { advanceApplication, getApplication } from "@/server/data";
-import { notFound, parseBody } from "@/server/http";
-import { updateApplicationSchema } from "@/validations/admin";
+import type { BackendVisaApplication } from "@/server/data/backend-types";
+import { toVisaApplication } from "@/server/data/mappers";
+import { backendErrorResponse, parseBody } from "@/server/http";
+import { updateVisaStatusSchema } from "@/validations/admin";
 
 export async function GET(
   _: Request,
   ctx: RouteContext<"/api/admin/applications/[id]">,
 ) {
-  const { response } = await requireSession();
+  const { session, response } = await requireSession();
   if (response) return response;
   const { id } = await ctx.params;
-  const application = getApplication(id);
-  return application
-    ? NextResponse.json({ data: application })
-    : notFound("Application");
+
+  try {
+    const record = await backend<BackendVisaApplication>(
+      `/visa-documentation/${encodeURIComponent(id)}`,
+      { token: session.token },
+    );
+    return NextResponse.json({ data: toVisaApplication(record) });
+  } catch (error) {
+    return backendErrorResponse(error);
+  }
 }
 
 export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/admin/applications/[id]">,
 ) {
-  const { response } = await requireSession();
+  const { session, response } = await requireSession();
   if (response) return response;
-  const body = await parseBody(request, updateApplicationSchema);
+
+  const body = await parseBody(request, updateVisaStatusSchema);
   if (body.response) return body.response;
   const { id } = await ctx.params;
-  const updated = advanceApplication(id, body.data.status, body.data.note || undefined);
-  return updated
-    ? NextResponse.json({ data: updated, message: "Application updated" })
-    : notFound("Application");
+
+  try {
+    const record = await backend<BackendVisaApplication>(
+      `/visa-documentation/${encodeURIComponent(id)}/status`,
+      {
+        method: "PATCH",
+        token: session.token,
+        body: JSON.stringify(body.data),
+      },
+    );
+    return NextResponse.json({
+      data: toVisaApplication(record),
+      message: "Application updated",
+    });
+  } catch (error) {
+    return backendErrorResponse(error);
+  }
 }

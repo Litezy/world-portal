@@ -1,10 +1,10 @@
 import type {
-  ApplicationStatus,
-  EnquiryStatus,
-  ServiceKind,
-  VisaCategory,
-  VisaRoute,
-} from "@/types";
+  BackendPaymentStatus,
+  BackendUserRole,
+  BackendVisaCategory,
+  PassportStatus,
+  VisaStatus,
+} from "@/server/data/backend-types";
 
 export const login = {
   eyebrow: "Console",
@@ -23,68 +23,88 @@ export const overview = {
   headingLead: "Good to see you,",
   body: "Here is what moved across the desk this week.",
   stats: {
-    enquiries: "Open enquiries",
-    applications: "Active applications",
-    customers: "Customers",
-    revenue: "Revenue this month",
+    visas: "Visa applications",
+    passports: "Passport applications",
+    customers: "Applicants",
+    revenue: "Collected",
   },
-  recent: { title: "Latest enquiries", cta: "View all" },
+  recent: { title: "Latest visa applications", cta: "View all" },
   pipeline: { title: "Visa pipeline", body: "Applications by stage" },
-  services: { title: "Enquiries by service" },
+  services: { title: "Visas by category" },
   weekly: { title: "Last seven days" },
 } as const;
 
-export const enquiries = {
-  headingLead: "Every",
-  headingAccent: "enquiry.",
-  body: "Every request that arrives from the site, routed by service.",
-  searchPlaceholder: "Search by name, email, reference or destination",
+export const passports = {
+  headingLead: "Passport",
+  headingAccent: "applications.",
+  body: "Every booklet request, with its category, validity and stage.",
+  searchPlaceholder: "Search by applicant, reference or email",
   empty: {
-    title: "No enquiries match",
-    body: "Try a different search or clear the status filter.",
+    title: "No passport applications match",
+    body: "Try a different search or clear the stage filter.",
   },
   detail: {
-    eyebrow: "Enquiry",
-    message: "Message",
-    noMessage: "The visitor did not leave any details.",
-    traveller: "Traveller",
-    assign: "Assigned consultant",
-    unassigned: "Unassigned",
-    status: "Status",
-    reply: "Reply by email",
+    eyebrow: "Passport application",
+    applicant: "Applicant",
+    category: "Category",
+    validity: "Validity",
+    booklet: "Booklet",
+    origin: "State of origin",
+    notes: "Verification notes",
+    noNotes: "Nothing has been recorded against this file yet.",
+    advance: "Move to stage",
+    noteLabel: "Note for the file",
+    notePlaceholder: "What changed, or what the applicant needs to do next",
+    rejectionLabel: "Reason for rejection",
+    updateLabel: "Update application",
+    reply: "Email the applicant",
   },
 } as const;
 
 export const applications = {
   headingLead: "Visa",
   headingAccent: "applications.",
-  body: "Every file in progress, with its stage, consultant and deadline.",
-  searchPlaceholder: "Search by applicant, reference or destination",
+  body: "Every file in progress, with its stage, cost and payment position.",
+  searchPlaceholder: "Search by name, email, passport number or reference",
   empty: {
     title: "No applications match",
     body: "Try a different search or clear the stage filter.",
   },
   detail: {
-    eyebrow: "Application",
-    timeline: "Timeline",
+    eyebrow: "Visa application",
+    timeline: "Progress",
+    timelineNote:
+      "Reconstructed from the record's own stamps — the service keeps no separate review log.",
     advance: "Move to stage",
-    noteLabel: "Note for the file",
+    noteLabel: "Verification notes",
     notePlaceholder: "What changed, or what the applicant needs to do next",
+    rejectionLabel: "Reason for rejection",
     applicant: "Applicant",
-    consultant: "Consultant",
-    due: "Decision due",
-    fee: "Service fee",
+    travel: "Intended travel",
+    purpose: "Purpose of visit",
+    nationality: "Nationality",
+    passport: "Passport number",
+    fee: "Total cost",
+    paid: "Paid",
+    outstanding: "Outstanding",
     updateLabel: "Update application",
+    evaluate: "Set the cost",
+    evaluateHint:
+      "Evaluating sets the total, moves the file to Evaluated and emails the applicant.",
+    amountLabel: "Total processing cost",
+    installmentLabel: "Allow a 50% instalment",
+    evaluateAction: "Save evaluation",
+    reply: "Email the applicant",
   },
 } as const;
 
 export const customers = {
   headingLead: "Your",
-  headingAccent: "customers.",
-  body: "Everyone who has travelled or applied with World Portal.",
-  searchPlaceholder: "Search by name, email or country",
+  headingAccent: "applicants.",
+  body: "Everyone who has applied, gathered from their applications.",
+  searchPlaceholder: "Search by name or email",
   empty: {
-    title: "No customers match",
+    title: "No applicants match",
     body: "Try a different search.",
   },
 } as const;
@@ -115,46 +135,55 @@ export const settings = {
       },
     ],
   },
+  team: {
+    title: "Team",
+    body: "Everyone with access to this console, from the service.",
+  },
   danger: { title: "Session", body: "Sign out of this device.", action: "Sign out" },
 } as const;
 
-export const serviceLabels: Record<ServiceKind, string> = {
-  visa: "Visa",
-  booking: "Flights & hotels",
-  experience: "Experiences",
+export const visaStatusLabels: Record<VisaStatus, string> = {
+  SUBMITTED: "Submitted",
+  EVALUATED: "Evaluated",
+  UNDER_REVIEW: "Under review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
 };
 
-export const enquiryStatusLabels: Record<EnquiryStatus, string> = {
-  new: "New",
-  contacted: "Contacted",
-  quoted: "Quoted",
-  won: "Won",
-  lost: "Lost",
+export const passportStatusLabels: Record<PassportStatus, string> = {
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
 };
 
-export const applicationStatusLabels: Record<ApplicationStatus, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  in_review: "In review",
-  documents_required: "Documents required",
-  biometrics_scheduled: "Biometrics scheduled",
-  decision_pending: "Decision pending",
-  approved: "Approved",
-  rejected: "Rejected",
+export const paymentStatusLabels: Record<BackendPaymentStatus, string> = {
+  PENDING_EVALUATION: "Awaiting evaluation",
+  AWAITING_PAYMENT: "Awaiting payment",
+  PARTIALLY_PAID: "Part paid",
+  FULLY_PAID: "Paid",
+  REFUNDED: "Refunded",
 };
 
-export const visaRouteLabels: Record<VisaRoute, string> = {
-  evisa: "eVisa",
-  consular: "Consular",
-  eta: "ETA",
+export const visaCategoryLabels: Record<BackendVisaCategory, string> = {
+  TOURIST: "Tourist",
+  BUSINESS: "Business",
+  STUDENT: "Student",
+  WORK: "Work",
+  TRANSIT: "Transit",
 };
 
-export const visaCategoryLabels: Record<VisaCategory, string> = {
-  tourist: "Tourist",
-  business: "Business",
-  study: "Study",
-  work: "Work",
-  family: "Family",
-  transit: "Transit",
-  residency: "Residency",
+export const roleLabels: Record<BackendUserRole, string> = {
+  MANAGER: "Manager",
+  PARTNER: "Partner",
+  STAFF: "Staff",
 };
+
+/** `FIVE_YEARS` / `THIRTY_TWO_PAGES` and friends read badly untouched. */
+export function humanise(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part, i) => (i === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}

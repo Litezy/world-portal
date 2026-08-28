@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 
-import { ArrowRight, FileCheck2, Inbox, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, BookUser, FileCheck2, TrendingUp, Users } from "lucide-react";
 
-import { EnquiryStatusBadge } from "@/components/admin";
+import { VisaStatusBadge } from "@/components/admin";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
-import { applicationStatusLabels, overview, serviceLabels } from "@/content/admin";
+import { overview, visaCategoryLabels, visaStatusLabels } from "@/content/admin";
 import { useDashboard } from "@/features/dashboard/api/use-dashboard";
 import { BarList } from "@/features/dashboard/components/bar-list";
 import { ShareBar } from "@/features/dashboard/components/share-bar";
@@ -43,30 +43,27 @@ export function DashboardOverview() {
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          icon={Inbox}
-          label={overview.stats.enquiries}
-          value={String(stats.enquiries.open)}
-          hint={`of ${stats.enquiries.total} total`}
-          change={stats.enquiries.change}
+          icon={FileCheck2}
+          label={overview.stats.visas}
+          value={String(stats.visas.active)}
+          hint={`${stats.visas.total} in total · ${stats.visas.approved} approved`}
         />
         <StatCard
-          icon={FileCheck2}
-          label={overview.stats.applications}
-          value={String(stats.applications.active)}
-          hint={`of ${stats.applications.total} total`}
-          change={stats.applications.change}
+          icon={BookUser}
+          label={overview.stats.passports}
+          value={String(stats.passports.active)}
+          hint={`${stats.passports.total} in total`}
         />
         <StatCard
           icon={Users}
           label={overview.stats.customers}
           value={String(stats.customers.total)}
-          change={stats.customers.change}
         />
         <StatCard
           icon={TrendingUp}
           label={overview.stats.revenue}
-          value={formatCurrency(stats.revenue.amount, stats.revenue.currency)}
-          change={stats.revenue.change}
+          value={formatCurrency(stats.revenue.collected, stats.revenue.currency)}
+          hint={`${formatCurrency(stats.revenue.outstanding, stats.revenue.currency)} outstanding`}
         />
       </div>
 
@@ -80,10 +77,9 @@ export function DashboardOverview() {
           <CardTitle className="text-base">{overview.services.title}</CardTitle>
           <ShareBar
             className="mt-5"
-            segments={stats.enquiriesByService.map((s) => ({
-              label: serviceLabels[s.service],
-              value: s.count,
-            }))}
+            segments={stats.visasByCategory
+              .filter((c) => c.count > 0)
+              .map((c) => ({ label: visaCategoryLabels[c.category], value: c.count }))}
           />
         </Card>
       </div>
@@ -96,8 +92,8 @@ export function DashboardOverview() {
           </CardDescription>
           <BarList
             className="mt-5"
-            items={stats.pipeline.map((p) => ({
-              label: applicationStatusLabels[p.status],
+            items={stats.visaPipeline.map((p) => ({
+              label: visaStatusLabels[p.status],
               value: p.count,
             }))}
           />
@@ -112,7 +108,7 @@ export function DashboardOverview() {
           <div className="flex items-center justify-between gap-4">
             <CardTitle className="text-base">{overview.recent.title}</CardTitle>
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-              <Link href="/admin/enquiries">
+              <Link href="/admin/applications">
                 {overview.recent.cta}
                 <ArrowRight className="size-3.5" />
               </Link>
@@ -121,30 +117,31 @@ export function DashboardOverview() {
 
           {recent.length === 0 ? (
             <EmptyState
-              icon={Inbox}
-              title="No enquiries yet"
-              description="New submissions from the site land here."
+              icon={FileCheck2}
+              title="No applications yet"
+              description="Submissions from the site land here."
               className="mt-5"
             />
           ) : (
             <ul className="mt-2 divide-y divide-border/60">
-              {recent.map((enquiry) => (
-                <li key={enquiry.id}>
+              {recent.map((application) => (
+                <li key={application.id}>
                   <Link
-                    href={`/admin/enquiries/${enquiry.id}`}
+                    href={`/admin/applications/${application.id}`}
                     className="-mx-2 flex items-center gap-4 rounded-xl px-2 py-3 transition-colors hover:bg-ink-50"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13.5px] font-medium text-foreground">
-                        {enquiry.fullName}
+                        {application.applicant.name}
                       </p>
                       <p className="truncate text-[12.5px] text-muted-foreground">
-                        {serviceLabels[enquiry.service]} · {enquiry.destination}
+                        {visaCategoryLabels[application.category]} ·{" "}
+                        {application.destination}
                       </p>
                     </div>
-                    <EnquiryStatusBadge status={enquiry.status} />
+                    <VisaStatusBadge status={application.status} />
                     <span className="hidden w-24 shrink-0 text-right text-[12px] text-muted-foreground sm:block">
-                      {formatRelative(enquiry.createdAt)}
+                      {formatRelative(application.createdAt)}
                     </span>
                   </Link>
                 </li>

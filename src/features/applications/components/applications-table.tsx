@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { AlertTriangle, FileCheck2 } from "lucide-react";
+import { FileCheck2 } from "lucide-react";
 
 import {
-  ApplicationStatusBadge,
   DataTablePagination,
   DataTableToolbar,
+  PaymentStatusBadge,
   TableEmptyRow,
   TableSkeletonRows,
+  VisaStatusBadge,
 } from "@/components/admin";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -25,13 +26,13 @@ import {
 } from "@/components/ui/table";
 import {
   applications as copy,
-  applicationStatusLabels,
-  visaRouteLabels,
+  visaCategoryLabels,
+  visaStatusLabels,
 } from "@/content/admin";
 import { useApplications } from "@/features/applications/api/use-applications";
 import { useListParams } from "@/hooks/use-list-params";
-import { cn, formatDate } from "@/lib/utils";
-import { applicationStatusValues } from "@/validations/admin";
+import { formatCurrency, formatRelative } from "@/lib/utils";
+import { visaStatusValues } from "@/server/data/backend-types";
 
 const COLUMNS = 6;
 
@@ -50,9 +51,9 @@ export function ApplicationsTable() {
           value: params.status,
           onChange: (status) => set({ status }),
           label: "All stages",
-          options: applicationStatusValues.map((value) => ({
+          options: visaStatusValues.map((value) => ({
             value,
-            label: applicationStatusLabels[value],
+            label: visaStatusLabels[value],
           })),
         }}
       />
@@ -66,10 +67,10 @@ export function ApplicationsTable() {
             <TableRow className="hover:bg-transparent">
               <TableHead>Applicant</TableHead>
               <TableHead>Destination</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Reference</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>Stage</TableHead>
-              <TableHead className="text-right">Decision due</TableHead>
+              <TableHead>Payment</TableHead>
+              <TableHead className="text-right">Submitted</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -108,37 +109,28 @@ export function ApplicationsTable() {
                   >
                     {application.applicant.name}
                   </Link>
-                  <span className="block text-[12px] font-normal text-muted-foreground">
-                    {application.applicant.email}
+                  <span className="block font-mono text-[11.5px] font-normal text-muted-foreground">
+                    {application.reference}
                   </span>
                 </TableCell>
                 <TableCell>{application.destination}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {visaRouteLabels[application.route]}
-                </TableCell>
-                <TableCell className="font-mono text-[12px] text-muted-foreground">
-                  {application.reference}
+                  {visaCategoryLabels[application.category]}
                 </TableCell>
                 <TableCell>
-                  <ApplicationStatusBadge status={application.status} />
+                  <VisaStatusBadge status={application.status} />
                 </TableCell>
-                <TableCell
-                  className={cn(
-                    "text-right text-[12.5px] whitespace-nowrap",
-                    application.overdue
-                      ? "font-medium text-destructive"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  <span className="inline-flex items-center justify-end gap-1.5">
-                    {application.overdue ? (
-                      <AlertTriangle className="size-3.5" aria-hidden="true" />
-                    ) : null}
-                    {formatDate(application.dueAt, { day: "numeric", month: "short" })}
-                    {application.overdue ? (
-                      <span className="sr-only">— overdue</span>
-                    ) : null}
-                  </span>
+                <TableCell>
+                  <PaymentStatusBadge status={application.paymentStatus} />
+                  {application.totalAmount > 0 ? (
+                    <span className="mt-1 block text-[11.5px] text-muted-foreground tabular-nums">
+                      {formatCurrency(application.amountPaid)} of{" "}
+                      {formatCurrency(application.totalAmount)}
+                    </span>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-right text-[12.5px] whitespace-nowrap text-muted-foreground">
+                  {formatRelative(application.createdAt)}
                 </TableCell>
               </TableRow>
             ))}

@@ -25,7 +25,7 @@ import { useCustomers } from "@/features/customers/api/use-customers";
 import { useListParams } from "@/hooks/use-list-params";
 import { formatCurrency, formatRelative } from "@/lib/utils";
 
-const COLUMNS = 6;
+const COLUMNS = 5;
 
 export function CustomersTable() {
   const { params, set } = useListParams();
@@ -47,10 +47,9 @@ export function CustomersTable() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Customer</TableHead>
-              <TableHead>Country</TableHead>
+              <TableHead>Nationality</TableHead>
               <TableHead className="text-right">Applications</TableHead>
-              <TableHead className="text-right">Trips</TableHead>
-              <TableHead className="text-right">Lifetime value</TableHead>
+              <TableHead className="text-right">Paid to date</TableHead>
               <TableHead className="text-right">Last active</TableHead>
             </TableRow>
           </TableHeader>
@@ -100,9 +99,6 @@ export function CustomersTable() {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {customer.applications}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {customer.trips}
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
                   {formatCurrency(customer.lifetimeValue, customer.currency)}

@@ -2,39 +2,34 @@
 
 import Link from "next/link";
 
-import { AlertTriangle, ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail } from "lucide-react";
 
 import {
-  ApplicationStatusBadge,
   DetailItem,
   DetailList,
-  UserAvatar,
+  PaymentStatusBadge,
+  VisaStatusBadge,
 } from "@/components/admin";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
-import {
-  applications as copy,
-  visaCategoryLabels,
-  visaRouteLabels,
-} from "@/content/admin";
-import { useConsultants } from "@/features/admin/api/use-consultants";
+import { applications as copy, visaCategoryLabels } from "@/content/admin";
 import { useApplication } from "@/features/applications/api/use-application";
 import { AdvanceApplicationForm } from "@/features/applications/components/advance-application-form";
 import { ApplicationTimeline } from "@/features/applications/components/application-timeline";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { EvaluateCostForm } from "@/features/applications/components/evaluate-cost-form";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 export function ApplicationDetail({ id }: { id: string }) {
-  const { data: application, isPending, isError } = useApplication(id);
-  const { data: consultants } = useConsultants();
+  const { data: application, isPending, isError, error } = useApplication(id);
 
   if (isError) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Application not found</AlertTitle>
+        <AlertTitle>Could not load this application</AlertTitle>
         <AlertDescription className="flex flex-col items-start gap-3">
-          It may have been removed.
+          {error instanceof Error ? error.message : "It may have been removed."}
           <Button asChild variant="outline" size="sm">
             <Link href="/admin/applications">Back to applications</Link>
           </Button>
@@ -44,8 +39,6 @@ export function ApplicationDetail({ id }: { id: string }) {
   }
 
   if (isPending) return <DetailSkeleton />;
-
-  const consultant = consultants?.find((c) => c.id === application.consultantId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -72,11 +65,13 @@ export function ApplicationDetail({ id }: { id: string }) {
                 {application.applicant.name}
               </h1>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                {application.destination} · {visaRouteLabels[application.route]} ·{" "}
-                {visaCategoryLabels[application.category]}
+                {application.destination} · {visaCategoryLabels[application.category]}
               </p>
             </div>
-            <ApplicationStatusBadge status={application.status} size="md" />
+            <div className="flex flex-col items-end gap-2">
+              <VisaStatusBadge status={application.status} size="md" />
+              <PaymentStatusBadge status={application.paymentStatus} />
+            </div>
           </div>
 
           <DetailList className="mt-8 sm:grid-cols-3">
@@ -89,31 +84,53 @@ export function ApplicationDetail({ id }: { id: string }) {
                 {application.applicant.email}
               </a>
             </DetailItem>
-            <DetailItem label={copy.detail.due}>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5",
-                  application.overdue && "font-medium text-destructive",
-                )}
-              >
-                {application.overdue ? (
-                  <AlertTriangle className="size-3.5" aria-hidden="true" />
-                ) : null}
-                {formatDate(application.dueAt)}
-                {application.overdue ? (
-                  <span className="sr-only">— overdue</span>
-                ) : null}
+            <DetailItem label={copy.detail.nationality}>
+              {application.nationality}
+            </DetailItem>
+            <DetailItem label={copy.detail.passport}>
+              <span className="font-mono text-[12.5px]">
+                {application.passportNumber}
               </span>
             </DetailItem>
+            <DetailItem label={copy.detail.travel}>
+              {formatDate(application.travelDate, { day: "numeric", month: "short" })}
+              {" – "}
+              {formatDate(application.returnDate)}
+            </DetailItem>
             <DetailItem label={copy.detail.fee}>
-              {formatCurrency(application.fee, application.currency)}
+              {application.totalAmount > 0
+                ? formatCurrency(application.totalAmount)
+                : "Not evaluated"}
+            </DetailItem>
+            <DetailItem label={copy.detail.outstanding}>
+              {formatCurrency(application.balanceDue)}
+              <span className="ml-2 text-[12px] text-muted-foreground">
+                {formatCurrency(application.amountPaid)}{" "}
+                {copy.detail.paid.toLowerCase()}
+              </span>
             </DetailItem>
           </DetailList>
 
           <div className="mt-8">
+            <DetailItem label={copy.detail.purpose}>{application.purpose}</DetailItem>
+          </div>
+
+          <div className="mt-8">
             <CardTitle className="text-base">{copy.detail.timeline}</CardTitle>
+            <CardDescription className="text-[12.5px]">
+              {copy.detail.timelineNote}
+            </CardDescription>
             <ApplicationTimeline events={application.timeline} />
           </div>
+
+          <Button asChild variant="primary" size="md" className="mt-8 w-fit">
+            <a
+              href={`mailto:${application.applicant.email}?subject=Your application ${application.reference}`}
+            >
+              <Mail />
+              {copy.detail.reply}
+            </a>
+          </Button>
         </Card>
 
         <div className="flex flex-col gap-4">
@@ -121,22 +138,14 @@ export function ApplicationDetail({ id }: { id: string }) {
             <AdvanceApplicationForm id={id} status={application.status} />
           </Card>
 
-          {consultant ? (
-            <Card variant="solid" radius="lg" padding="none" className="gap-3 p-6">
-              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                {copy.detail.consultant}
-              </p>
-              <div className="flex items-center gap-3">
-                <UserAvatar user={consultant} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium">{consultant.name}</p>
-                  <p className="truncate text-[12px] text-muted-foreground">
-                    {consultant.email}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          ) : null}
+          <Card variant="solid" radius="lg" padding="none" className="gap-4 p-6">
+            <CardTitle className="text-base">{copy.detail.evaluate}</CardTitle>
+            <EvaluateCostForm
+              id={id}
+              totalAmount={application.totalAmount}
+              allowInstallment={application.allowInstallment}
+            />
+          </Card>
         </div>
       </div>
     </div>

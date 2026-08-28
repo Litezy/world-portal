@@ -1,32 +1,63 @@
 import { z } from "zod";
 
-export const enquiryStatusValues = [
-  "new",
-  "contacted",
-  "quoted",
-  "won",
-  "lost",
-] as const;
+import { passportStatusValues, visaStatusValues } from "@/server/data/backend-types";
 
-export const applicationStatusValues = [
-  "draft",
-  "submitted",
-  "in_review",
-  "documents_required",
-  "biometrics_scheduled",
-  "decision_pending",
-  "approved",
-  "rejected",
-] as const;
+export const updateVisaStatusSchema = z
+  .object({
+    status: z.enum(visaStatusValues),
+    verificationNotes: z
+      .string()
+      .trim()
+      .max(500, "Keep the note under 500 characters")
+      .optional(),
+    rejectionReason: z
+      .string()
+      .trim()
+      .max(500, "Keep the reason under 500 characters")
+      .optional(),
+  })
+  .refine((v) => v.status !== "REJECTED" || Boolean(v.rejectionReason), {
+    error: "Give a reason when rejecting an application",
+    path: ["rejectionReason"],
+  });
 
-export const updateEnquirySchema = z.object({
-  status: z.enum(enquiryStatusValues).optional(),
-  assigneeId: z.string().nullable().optional(),
+export const updatePassportStatusSchema = z
+  .object({
+    status: z.enum(passportStatusValues),
+    verificationNotes: z
+      .string()
+      .trim()
+      .max(500, "Keep the note under 500 characters")
+      .optional(),
+    rejectionReason: z
+      .string()
+      .trim()
+      .max(500, "Keep the reason under 500 characters")
+      .optional(),
+  })
+  .refine((v) => v.status !== "REJECTED" || Boolean(v.rejectionReason), {
+    error: "Give a reason when rejecting an application",
+    path: ["rejectionReason"],
+  });
+
+/**
+ * Two shapes on purpose: the form holds a real number so `zodResolver` keeps a
+ * single generic, while the route coerces whatever arrives over the wire.
+ */
+export const evaluateVisaFormSchema = z.object({
+  totalAmount: z
+    .number({ error: "Enter the total cost" })
+    .min(0, "Enter the total cost")
+    .max(1_000_000, "That figure looks wrong"),
+  allowInstallment: z.boolean().optional(),
 });
 
-export const updateApplicationSchema = z.object({
-  status: z.enum(applicationStatusValues),
-  note: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
+export const evaluateVisaSchema = z.object({
+  totalAmount: z.coerce
+    .number()
+    .min(0, "Enter the total cost")
+    .max(1_000_000, "That figure looks wrong"),
+  allowInstallment: z.boolean().optional(),
 });
 
 export const listParamsSchema = z.object({
@@ -36,5 +67,6 @@ export const listParamsSchema = z.object({
   perPage: z.coerce.number().int().min(1).max(100).default(10),
 });
 
-export type UpdateEnquiryInput = z.infer<typeof updateEnquirySchema>;
-export type UpdateApplicationInput = z.infer<typeof updateApplicationSchema>;
+export type UpdateVisaStatusInput = z.infer<typeof updateVisaStatusSchema>;
+export type UpdatePassportStatusInput = z.infer<typeof updatePassportStatusSchema>;
+export type EvaluateVisaInput = z.infer<typeof evaluateVisaFormSchema>;

@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
-export type WeeklyPoint = { label: string; enquiries: number; applications: number };
+export type WeeklyPoint = { label: string; visas: number; passports: number };
 
 const SERIES = [
-  { key: "enquiries", label: "Enquiries", fill: "bg-chart-1" },
-  { key: "applications", label: "Applications", fill: "bg-chart-2" },
+  { key: "visas", label: "Visa", fill: "bg-chart-1" },
+  { key: "passports", label: "Passport", fill: "bg-chart-2" },
 ] as const;
 
 /**
@@ -18,7 +18,7 @@ export function WeeklyChart({
   data: WeeklyPoint[];
   className?: string;
 }) {
-  const max = Math.max(1, ...data.flatMap((d) => [d.enquiries, d.applications]));
+  const max = Math.max(1, ...data.flatMap((d) => [d.visas, d.passports]));
 
   return (
     <div className={cn("flex flex-col gap-5", className)}>
