@@ -35,6 +35,26 @@ out in `app/(site)/page.tsx`.
 `SiteHeader` takes `variant="overlay" | "solid"`. The overlay variant's type is
 white for photography — never pin it over a light page.
 
+## The visa flow starts with a question, not a form
+
+`/apply` opens on `RouteCheck`: origin + destination decide whether this is an
+**eVisa**, an **ETA**, a **T.Visa** or **no visa at all**, and everything
+downstream branches on that:
+
+- eVisa / ETA — completed online, four steps, document uploads.
+- T.Visa — the embassy needs the applicant in person, so the documents step is
+  **removed** (not disabled) and the success screen explains the appointment.
+- Visa-free — say so and send them to `/start`; do not sell an application.
+
+The ruleset lives in `src/features/visa/requirement.ts` and is deliberately
+local: this is the first screen a visitor touches and it must work with the API
+down. The backend exposes `/visa-requirement/check` — prefer it when it is up
+and keep this as the fallback.
+
+`src/lib/countries.ts` carries search aliases because `Intl.DisplayNames`
+returns "Türkiye" and "Czechia" while people type "Turkey" and "Czech
+Republic". Someone who cannot find their own country abandons the form.
+
 ## The API contract — read before touching the visa flow
 
 Base URL lives in `NEXT_PUBLIC_API_URL` and **includes the `/api` prefix**. It
@@ -152,6 +172,14 @@ alone: the badges pair a tone with a word, and an overdue date carries an icon.
    content. Reach for a bespoke ScrollTrigger only when a section genuinely
    needs one (journey, flights-hotels, hero).
 
+## Never hand-write a `-webkit-` prefix in globals.css
+
+Writing `backdrop-filter` followed by `-webkit-backdrop-filter` makes Lightning
+CSS emit **only** the legacy alias, which Chrome ignores — every glass surface
+then silently stops blurring and looks merely translucent. Declare the standard
+property alone and let the build add prefixes from browserslist. This was live
+and unnoticed for several rounds.
+
 ## Motion safety — read before touching an animation
 
 `useGsap` refuses to build in two cases, and both exist for a reason:
@@ -162,6 +190,14 @@ alone: the badges pair a tone with a word, and an overdue date carries an icon.
   A `from({ autoAlpha: 0 })` built there paints its hidden state and never
   ticks out of it, leaving a blank section for anyone who opens the page in a
   background tab. Setup is deferred until `visibilitychange`.
+
+Same rule for the WebGL layers: they mount through `useIdleMount`, which waits
+for `requestIdleCallback` **and** for the tab to be visible, because rIC never
+fires in a background tab. Anything behind it must be pure decoration.
+
+Journey steps are **scrubbed, not fired once** — `once: true` leaves a section
+frozen when you scroll back up. `e2e/motion.spec.ts` asserts a step goes
+0 → 1 → 0 as you scroll down and back.
 
 If you add a reveal, add it through `Reveal`/`useGsap` so it inherits both.
 `e2e/smoke.spec.ts` has a regression test that hero copy is visible.
@@ -222,5 +258,14 @@ pattern rather than disabling the rule.
 - `buildMetadata()` omits `title` entirely when a page has none, so the root
   layout's `title.default` applies. Returning a pre-suffixed string double-
   applies the `%s | World Portal` template.
+- There is **no passport endpoint** on the World Portal API. `/passport` posts
+  to this app's own `app/api/passport-enquiry/route.ts`, which validates with
+  the same schema and returns a `WPP-` reference. When a real endpoint lands,
+  repoint the mutation and delete that file.
+- `/services/[slug]` sets `dynamicParams = false`, so an unknown slug 404s
+  rather than being rendered on demand.
+- Anything that toggles a list in state (the planner's extras) must use a
+  functional `setState` — two clicks inside one React batch otherwise both read
+  the same stale array and the second discards the first.
 - `next typegen` runs as part of `pnpm typecheck`, so a clean checkout
   typechecks without a build. Next 16 removed `next lint`.

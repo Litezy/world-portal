@@ -56,6 +56,11 @@ export const passportStepSchema = z.object({
   passportIssuingAuthority: optionalText,
 });
 
+export const routeStepSchema = z.object({
+  originCountry: z.string().trim().min(2, "Where are you travelling from?"),
+  destinationCountry: z.string().trim().min(2, "Where are you travelling to?"),
+});
+
 export const tripStepSchema = z.object({
   targetCountry: z.string().trim().min(2, "Where are you travelling to?").max(60),
   visaCategory: z.enum(VISA_CATEGORIES),
@@ -72,6 +77,21 @@ export const tripStepSchema = z.object({
 export const documentsStepSchema = z.object({
   passportDataPageUrl: z.url("Upload your passport data page"),
   passportPhotoWhiteBgUrl: z.url("Upload a passport photo"),
+  proofOfFunds6MonthsUrl: documentUrl,
+  businessRegistrationCertUrl: documentUrl,
+  taxCertificateUrl: documentUrl,
+  marriageCertificateUrl: documentUrl,
+  supportingDocUrls: z.array(z.url()).optional(),
+});
+
+/**
+ * Documents are only collected on the online routes. A T.Visa is filed in
+ * person at the embassy, so asking for uploads there would be asking for work
+ * the applicant does not need to do yet.
+ */
+export const offlineDocumentsSchema = z.object({
+  passportDataPageUrl: z.string().optional(),
+  passportPhotoWhiteBgUrl: z.string().optional(),
   proofOfFunds6MonthsUrl: documentUrl,
   businessRegistrationCertUrl: documentUrl,
   taxCertificateUrl: documentUrl,
@@ -99,6 +119,12 @@ export const visaApplicationSchema = applicantStepSchema
   );
 
 export type VisaApplicationInput = z.infer<typeof visaApplicationSchema>;
+
+/** Same shape, minus the mandatory uploads — used for the T.Visa route. */
+export const offlineVisaApplicationSchema = applicantStepSchema
+  .extend(passportStepSchema.shape)
+  .extend(tripStepSchema.shape)
+  .extend(offlineDocumentsSchema.shape);
 
 /** The four steps, in order, with the fields each one validates. */
 export const applicationSteps = [

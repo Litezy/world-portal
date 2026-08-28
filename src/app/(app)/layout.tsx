@@ -9,7 +9,8 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <SiteHeader variant="solid" />
-      <main id="main" className="flex-1">
+      {/* The bar is fixed, so pages have to clear it themselves. */}
+      <main id="main" className="flex-1 pt-[72px] lg:pt-20">
         {children}
       </main>
       <SiteFooter />

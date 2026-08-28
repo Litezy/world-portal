@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight, Check, Copy } from "lucide-react";
-import { useForm, type UseFormReturn } from "react-hook-form";
+import { type Resolver, useForm, type UseFormReturn } from "react-hook-form";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { useSubmitVisaApplication } from "@/features/visa/api/visa-documentation";
 import { DocumentField } from "@/features/visa/components/document-field";
+import { RouteCheck } from "@/features/visa/components/route-check";
+import { routeToApiNote, type VisaVerdict } from "@/features/visa/requirement";
 import { GENDERS, VISA_CATEGORIES } from "@/features/visa/types";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   applicationSteps,
+  offlineVisaApplicationSchema,
   toApiPayload,
   type VisaApplicationInput,
   visaApplicationSchema,
@@ -57,9 +60,24 @@ const genderLabels: Record<(typeof GENDERS)[number], string> = {
 export function ApplicationForm() {
   const [step, setStep] = React.useState(0);
   const [reference, setReference] = React.useState<string | null>(null);
+  /** Set by the route check; decides which schema and which steps apply. */
+  const [verdict, setVerdict] = React.useState<VisaVerdict | null>(null);
+
+  const online = verdict?.online ?? true;
+  // A T.Visa is filed in person, so the document step is dropped entirely
+  // rather than shown and skipped — there is nothing useful to upload yet.
+  const steps = React.useMemo(
+    () => (online ? applicationSteps : applicationSteps.slice(0, 3)),
+    [online],
+  );
 
   const form = useForm<VisaApplicationInput>({
-    resolver: zodResolver(visaApplicationSchema),
+    // Both schemas cover the same fields; only the document uploads change from
+    // required to optional, so the form's value type is identical either way.
+    // The cast is needed because zod infers two distinct output types.
+    resolver: zodResolver(
+      online ? visaApplicationSchema : offlineVisaApplicationSchema,
+    ) as Resolver<VisaApplicationInput>,
     mode: "onTouched",
     defaultValues: {
       firstName: "",
@@ -89,27 +107,38 @@ export function ApplicationForm() {
   });
 
   const { mutateAsync, isPending } = useSubmitVisaApplication();
-  const isLast = step === applicationSteps.length - 1;
+  const isLast = step === steps.length - 1;
 
   /** Only advance once this step's own fields are clean. */
   async function next() {
-    const fields = applicationSteps[step].fields as (keyof VisaApplicationInput)[];
+    const fields = steps[step].fields as (keyof VisaApplicationInput)[];
     const ok = await form.trigger(fields, { shouldFocus: true });
-    if (ok) setStep((s) => Math.min(s + 1, applicationSteps.length - 1));
+    if (ok) setStep((s) => Math.min(s + 1, steps.length - 1));
   }
 
   async function onSubmit(values: VisaApplicationInput) {
     try {
-      const record = await mutateAsync(toApiPayload(values));
+      const record = await mutateAsync(
+        toApiPayload({
+          ...values,
+          // Tell the consultant which route this came through; the API has no
+          // field for it, so it rides along in the free-text purpose.
+          purposeOfVisit: verdict
+            ? [values.purposeOfVisit, `[${routeToApiNote[verdict.route]}]`]
+                .filter(Boolean)
+                .join(" ")
+            : values.purposeOfVisit,
+        }),
+      );
       setReference(record.applicationNo);
     } catch (error) {
       if (error instanceof ApiError && error.errors) {
         // Map the API's per-field messages back onto the inputs, then jump to
         // the earliest step that actually has a problem.
-        let earliest = applicationSteps.length - 1;
+        let earliest = steps.length - 1;
         for (const [field, messages] of Object.entries(error.errors)) {
           form.setError(field as keyof VisaApplicationInput, { message: messages[0] });
-          const owner = applicationSteps.findIndex((s) =>
+          const owner = steps.findIndex((s) =>
             (s.fields as readonly string[]).includes(field),
           );
           if (owner >= 0) earliest = Math.min(earliest, owner);
@@ -125,11 +154,26 @@ export function ApplicationForm() {
     }
   }
 
-  if (reference) return <SubmittedPanel reference={reference} />;
+  if (reference) {
+    return <SubmittedPanel reference={reference} verdict={verdict} />;
+  }
+
+  // Nothing can be filled in until we know which of the three routes applies.
+  if (!verdict) {
+    return (
+      <RouteCheck
+        onConfirm={(v) => {
+          setVerdict(v);
+          form.setValue("targetCountry", v.destination?.name ?? "");
+          setStep(0);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14">
-      <Stepper current={step} onSelect={setStep} />
+      <Stepper current={step} steps={steps} onSelect={setStep} />
 
       <Card variant="glass" radius="2xl" padding="none" className="p-6 sm:p-8">
         <Form {...form}>
@@ -172,7 +216,7 @@ export function ApplicationForm() {
                   isLoading={isPending}
                   loadingText="Submitting…"
                 >
-                  Submit application
+                  {online ? "Submit application" : "Send my details"}
                 </Button>
               ) : (
                 <Button
@@ -195,14 +239,16 @@ export function ApplicationForm() {
 
 function Stepper({
   current,
+  steps,
   onSelect,
 }: {
   current: number;
+  steps: typeof applicationSteps | (typeof applicationSteps)[number][];
   onSelect: (index: number) => void;
 }) {
   return (
     <ol className="flex gap-2 overflow-x-auto lg:sticky lg:top-28 lg:h-fit lg:flex-col lg:gap-1 lg:overflow-visible">
-      {applicationSteps.map((s, i) => {
+      {steps.map((s, i) => {
         const done = i < current;
         const active = i === current;
         return (
@@ -519,8 +565,15 @@ function DocumentsStep({ form }: StepProps) {
   );
 }
 
-function SubmittedPanel({ reference }: { reference: string }) {
+function SubmittedPanel({
+  reference,
+  verdict,
+}: {
+  reference: string;
+  verdict: VisaVerdict | null;
+}) {
   const [copied, setCopied] = React.useState(false);
+  const embassy = verdict ? !verdict.online : false;
 
   return (
     <Card
@@ -534,12 +587,26 @@ function SubmittedPanel({ reference }: { reference: string }) {
       </span>
 
       <h2 className="mt-6 text-2xl font-semibold tracking-tight text-ink-900">
-        Application submitted
+        {embassy ? "We have your details" : "Application submitted"}
       </h2>
       <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed text-muted-foreground">
-        A consultant is reviewing your file now. Keep this reference — it is how you
-        check progress, and you will not need an account.
+        {embassy
+          ? "A consultant will call you within one working day to confirm what to bring, prepare your file, and book your embassy appointment. Keep this reference."
+          : "A consultant is reviewing your file now. Keep this reference — it is how you check progress, and you will not need an account."}
       </p>
+
+      {embassy && verdict ? (
+        <ol className="mt-6 grid gap-2.5 text-left">
+          {verdict.next.map((step, i) => (
+            <li key={step} className="flex items-start gap-2.5">
+              <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-ink-800">
+                {i + 1}
+              </span>
+              <span className="text-[13px] leading-relaxed text-ink-800">{step}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
 
       <div className="mt-7 flex items-center justify-between gap-4 rounded-xl border border-primary/40 bg-primary/12 px-4 py-3.5">
         <span className="text-left">

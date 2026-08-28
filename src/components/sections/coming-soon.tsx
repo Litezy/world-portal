@@ -1,12 +1,11 @@
 import { Sparkles } from "lucide-react";
 
-import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
 /**
- * Shared treatment for the two services that are not open yet. The sections
- * keep their full layout — only the call to action changes, so the page never
- * dead-ends a visitor on something they cannot actually do.
+ * Shared treatment for services that are not open yet. The sections keep their
+ * full layout — only the call to action changes, and it still leads somewhere
+ * real (the service's own page) rather than dead-ending the visitor.
  */
 export function ComingSoonNotice({
   notice,
@@ -26,13 +25,4 @@ export function ComingSoonNotice({
       {notice}
     </p>
   );
-}
-
-/** A waitlist mailto rather than a live CTA, so the button still does something. */
-export function waitlistHref(subject: string) {
-  const body =
-    "Please let me know when this service goes live. Thanks!\n\n— Sent from worldportal.travel";
-  return `mailto:${siteConfig.contact.email}?subject=${encodeURIComponent(
-    subject,
-  )}&body=${encodeURIComponent(body)}`;
 }

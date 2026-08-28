@@ -5,6 +5,7 @@ import { FlightsHotels } from "@/components/sections/flights-hotels";
 import { Hero } from "@/components/sections/hero";
 import { Intro } from "@/components/sections/intro";
 import { Journey } from "@/components/sections/journey";
+import { Passports } from "@/components/sections/passports";
 import { Visas } from "@/components/sections/visas";
 import { WhyUs } from "@/components/sections/why-us";
 import { buildMetadata } from "@/lib/seo";
@@ -22,19 +23,17 @@ export default function HomePage() {
       <Intro />
       <WhyUs />
 
-      {/* Service 1 — visas */}
+      {/* Live services, in the order they have to happen. */}
+      <Passports />
       <Visas />
 
-      {/* The process behind all three services */}
+      {/* The process behind all of them */}
       <Journey />
 
-      {/* Service 2 — flights & hotels */}
+      {/* Not open yet — full sections, waitlist CTAs */}
       <FlightsHotels />
-
       {/* <Packages /> */}
       {/* <Testimonials /> */}
-
-      {/* Service 3 — experiences & tours */}
       <Experiences />
 
       <Contact />

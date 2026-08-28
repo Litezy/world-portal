@@ -5,6 +5,8 @@ export * from "./flights-hotels";
 export * from "./hero";
 export * from "./intro";
 export * from "./journey";
+export * from "./passports";
+export * from "./service-cards";
 export * from "./visas";
 export * from "./why-us";
 

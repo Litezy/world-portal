@@ -9,31 +9,32 @@ import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
 import { hero } from "@/content/landing";
+import { useScroll } from "@/hooks/use-scroll";
 import { cn } from "@/lib/utils";
 
 export type SiteHeaderProps = {
   /**
-   * "overlay" sits over the hero and scrolls away with it — absolute rather
-   * than fixed, because its type is white for photography and pinning it would
-   * leave it illegible over the light sections below.
+   * "overlay" starts transparent over the hero photograph and picks up a dark
+   * glass bar once you scroll past it — the nav is white type, so it needs
+   * something behind it before it reaches the light sections below.
    *
-   * "solid" is for pages with no hero (apply, track): a sticky ink bar that
-   * keeps the same nav legible against a light page.
+   * "solid" is for pages with no hero (apply, track, start): the same bar,
+   * opaque from the first pixel.
    */
   variant?: "overlay" | "solid";
 };
 
 export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
   const [open, setOpen] = React.useState(false);
-  const solid = variant === "solid";
+  const scrolled = useScroll(24);
+  const filled = variant === "solid" || scrolled;
 
   return (
     <header
       className={cn(
-        "inset-x-0 top-0 z-50",
-        solid
-          ? "sticky bg-ink-950 shadow-[0_1px_0_rgba(255,255,255,0.08)]"
-          : "absolute",
+        "fixed inset-x-0 top-0 z-50 transition-[background-color,box-shadow,backdrop-filter] duration-500",
+        filled &&
+          "bg-ink-950/85 shadow-[0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl backdrop-saturate-150",
       )}
     >
       <div className="mx-auto flex h-[72px] max-w-[1420px] items-center justify-between gap-4 px-5 sm:px-8 lg:h-20 lg:px-12">
@@ -41,7 +42,10 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
 
         <nav
           aria-label="Main"
-          className="glass-dark absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 lg:flex"
+          className={cn(
+            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 lg:flex",
+            filled ? "bg-white/8" : "glass-dark",
+          )}
         >
           <ul className="flex items-center">
             {mainNav.map((item) => (

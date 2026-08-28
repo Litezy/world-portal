@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "World Portal",
-  wordmark: "DISCOVER",
+  wordmark: "EXPLORE",
   tagline: "Visas, flights and journeys worth the trip",
   description:
     "Licensed visa consultants, flights and hotels booked in hours, and curated travel experiences — handled end to end by one team.",

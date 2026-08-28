@@ -2,11 +2,12 @@ import { expect, test } from "@playwright/test";
 
 const SECTIONS = [
   "why-us",
+  "passports",
   "visas",
   "journey",
   "flights-hotels",
   "experiences",
-  "contact",
+  "start-here",
   "faq",
 ];
 
@@ -21,11 +22,12 @@ test.describe("landing page", () => {
   test("each service section carries its own CTA", async ({ page }) => {
     await page.goto("/");
     for (const [id, label] of [
-      ["visas", /check my visa options/i],
-      ["journey", /free consultation/i],
-      // Flights and experiences are not live yet, so their CTA is a waitlist.
-      ["flights-hotels", /notify me when it's live/i],
-      ["experiences", /notify me when it's live/i],
+      ["passports", /start a passport application/i],
+      ["visas", /start a visa application/i],
+      ["journey", /start my trip/i],
+      // Not live yet — these lead to a page that explains what is coming.
+      ["flights-hotels", /see how it will work/i],
+      ["experiences", /see how it will work/i],
     ] as const) {
       await expect(
         page.locator(`#${id}`).getByRole("link", { name: label }),
@@ -33,14 +35,31 @@ test.describe("landing page", () => {
     }
   });
 
-  test("the coming-soon services do not dead-end", async ({ page }) => {
+  test("the coming-soon services lead to a real page", async ({ page }) => {
     await page.goto("/");
-    for (const id of ["flights-hotels", "experiences"]) {
-      await expect(page.locator(`#${id}`).getByText(/launching soon/i)).toBeVisible();
-      // A waitlist mailto rather than a link into a flow that does not exist.
+    for (const [id, href] of [
+      ["flights-hotels", "/services/flights"],
+      ["experiences", "/services/experiences"],
+    ] as const) {
+      await expect(page.locator(`#${id}`).getByText(/not open yet/i)).toBeVisible();
       await expect(
-        page.locator(`#${id}`).getByRole("link", { name: /notify me/i }),
-      ).toHaveAttribute("href", /^mailto:/);
+        page.locator(`#${id}`).getByRole("link", { name: /see how it will work/i }),
+      ).toHaveAttribute("href", href);
+    }
+  });
+
+  test("every internal link on the page resolves", async ({ page, request }) => {
+    await page.goto("/");
+    const hrefs = await page
+      .locator('a[href^="/"]')
+      .evaluateAll((links) =>
+        [...new Set(links.map((l) => l.getAttribute("href")!))].filter(Boolean),
+      );
+
+    expect(hrefs.length).toBeGreaterThan(3);
+    for (const href of hrefs) {
+      const response = await request.get(href);
+      expect(response.status(), `${href} should not 404`).toBeLessThan(400);
     }
   });
 
@@ -54,8 +73,10 @@ test.describe("landing page", () => {
     await page.goto("/");
     // The reveal starts from autoAlpha:0 — this is the regression guard that it
     // always finishes, whatever the ticker does.
-    await expect(page.getByText(/one team handling every part/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: /plan my trip/i })).toBeVisible();
+    await expect(page.getByText(/we sort out the passport/i)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /start my trip/i }).first(),
+    ).toBeVisible();
   });
 
   test("header nav jumps to the visas section", async ({ page }) => {
@@ -63,14 +84,16 @@ test.describe("landing page", () => {
     await page.getByRole("link", { name: "Visas", exact: true }).first().click();
     await expect(page).toHaveURL(/#visas$/);
     await expect(
-      page.getByRole("heading", { name: /Visas, without the/i }),
+      page.getByRole("heading", { name: /The visa part/i }),
     ).toBeInViewport();
   });
 
   test("faq opens one answer at a time", async ({ page }) => {
     await page.goto("/#faq");
-    const first = page.getByRole("button", { name: /which visa do i actually need/i });
-    const second = page.getByRole("button", { name: /how fast can you book/i });
+    const first = page.getByRole("button", {
+      name: /difference between a passport and a visa/i,
+    });
+    const second = page.getByRole("button", { name: /which visa do i actually need/i });
 
     await expect(first).toHaveAttribute("aria-expanded", "true");
     await second.click();
@@ -78,20 +101,26 @@ test.describe("landing page", () => {
     await expect(first).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("the closing CTA routes into the application pages", async ({ page }) => {
-    await page.goto("/#contact");
+  test("the closing CTA covers every service", async ({ page }) => {
+    await page.goto("/#start-here");
+    const cta = page.locator("#start-here");
 
-    const contact = page.locator("#contact");
-    await expect(
-      contact.getByRole("link", { name: /begin application/i }),
-    ).toHaveAttribute("href", "/apply");
-    await expect(
-      contact.getByRole("link", { name: /track my application/i }),
-    ).toHaveAttribute("href", "/track");
+    for (const [name, href] of [
+      [/passport application/i, "/passport"],
+      [/visa application/i, "/apply"],
+      [/flight booking/i, "/services/flights"],
+      [/hotel booking/i, "/services/hotels"],
+      [/tours & experiences/i, "/services/experiences"],
+      [/track an application/i, "/track"],
+    ] as const) {
+      await expect(cta.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
 
-    await contact.getByRole("link", { name: /begin application/i }).click();
-    await expect(page).toHaveURL(/\/apply$/);
-    await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+    await cta.getByRole("link", { name: /^start my trip$/i }).click();
+    await expect(page).toHaveURL(/\/start$/);
+    await expect(
+      page.getByRole("heading", { name: /where are you travelling/i }),
+    ).toBeVisible();
   });
 
   test("unknown routes render the 404 page", async ({ page }) => {

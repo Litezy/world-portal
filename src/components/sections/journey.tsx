@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 
 import { ArrowRight } from "lucide-react";
@@ -11,8 +12,15 @@ import { Container } from "@/components/ui/container";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { journey } from "@/content/landing";
 import { useGsap } from "@/hooks/use-gsap";
+import { useIdleMount } from "@/hooks/use-idle-mount";
 import { gsap } from "@/lib/motion/gsap";
 import { cn } from "@/lib/utils";
+
+// Decoration only — never let it block first paint.
+const JourneyWebgl = dynamic(
+  () => import("@/components/motion/journey-webgl").then((m) => m.JourneyWebgl),
+  { ssr: false },
+);
 
 /**
  * The shared process, on a panel that opens near-black, passes through the
@@ -28,11 +36,16 @@ import { cn } from "@/lib/utils";
  */
 export function Journey() {
   const railRef = React.useRef<HTMLSpanElement>(null);
+  const webglReady = useIdleMount();
+  // Written by ScrollTrigger, read by the WebGL trail every frame, so both
+  // directions stay on one clock.
+  const progressRef = React.useRef(0);
 
   const scopeRef = useGsap(({ scope }) => {
     if (!scope) return;
 
-    // The rail fills as the list scrolls through the viewport.
+    // One scrubbed trigger drives both the rail and the WebGL trail, so
+    // scrolling back up rewinds them rather than leaving them filled.
     if (railRef.current) {
       gsap.fromTo(
         railRef.current,
@@ -45,31 +58,50 @@ export function Journey() {
             start: "top 72%",
             end: "bottom 72%",
             scrub: 0.5,
+            onUpdate: (self) => {
+              progressRef.current = self.progress;
+            },
           },
         },
       );
     }
 
-    // One trigger per step so they arrive one after another, not together.
+    /**
+     * Each step is scrubbed across a short window rather than fired once, so
+     * the whole section plays in reverse on the way back up — the steps drop
+     * away in the order they arrived instead of staying frozen in place.
+     */
     gsap.utils.toArray<HTMLElement>("[data-step]").forEach((step) => {
       const dir = step.dataset.flipped === "true" ? -1 : 1;
 
-      gsap.from(step.querySelectorAll("[data-step-part]"), {
-        y: 46,
-        x: 14 * dir,
-        autoAlpha: 0,
-        duration: 1,
-        stagger: 0.12,
-        ease: "expo.out",
-        scrollTrigger: { trigger: step, start: "top 82%", once: true },
-      });
-
-      gsap.from(step.querySelector("[data-step-node]"), {
-        scale: 0,
-        duration: 0.7,
-        ease: "back.out(2.4)",
-        scrollTrigger: { trigger: step, start: "top 82%", once: true },
-      });
+      gsap
+        .timeline({
+          scrollTrigger: {
+            trigger: step,
+            start: "top 88%",
+            end: "top 52%",
+            scrub: 0.6,
+          },
+        })
+        .fromTo(
+          step.querySelector("[data-step-node]"),
+          { scale: 0.2, autoAlpha: 0 },
+          { scale: 1, autoAlpha: 1, ease: "back.out(2.2)", duration: 0.5 },
+          0,
+        )
+        .fromTo(
+          step.querySelectorAll("[data-step-part]"),
+          { y: 52, x: 18 * dir, autoAlpha: 0 },
+          {
+            y: 0,
+            x: 0,
+            autoAlpha: 1,
+            ease: "power3.out",
+            duration: 1,
+            stagger: 0.14,
+          },
+          0.05,
+        );
     });
   }, []);
 
@@ -85,6 +117,13 @@ export function Journey() {
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_45%_at_50%_0%,rgba(0,0,0,0.55),transparent_66%),radial-gradient(90%_45%_at_50%_100%,rgba(0,0,0,0.5),transparent_70%)]"
           />
+
+          {webglReady ? (
+            <JourneyWebgl
+              progressRef={progressRef}
+              className="pointer-events-none absolute inset-0 -z-10 size-full opacity-70 mix-blend-screen"
+            />
+          ) : null}
 
           <SectionHeading
             eyebrow={journey.eyebrow}
