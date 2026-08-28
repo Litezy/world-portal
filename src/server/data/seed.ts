@@ -1,8 +1,26 @@
 import type { ApplicationStatus, Customer, Enquiry, VisaApplication } from "@/types";
 
 const DAY = 86_400_000;
+/** The latest hour any record below is stamped at. */
+const LATEST_SEED_HOUR = 19;
+
+/**
+ * One anchor for the whole seed, so relative order is stable.
+ *
+ * `setHours` can land ahead of the clock — `daysAgo(0, 9)` is still the future
+ * at 00:54 — which seeds records that claim to have arrived hours from now and
+ * makes `updatedAt` run backwards the moment one is edited. Clamping each
+ * stamp on its own then pushes an `updatedAt` behind its own `createdAt`, so
+ * the whole set shifts by the same day instead.
+ */
+const ANCHOR = (() => {
+  const now = new Date();
+  if (now.getHours() <= LATEST_SEED_HOUR) now.setDate(now.getDate() - 1);
+  return now;
+})();
+
 const daysAgo = (n: number, hour = 10) => {
-  const d = new Date(Date.now() - n * DAY);
+  const d = new Date(ANCHOR.getTime() - n * DAY);
   d.setHours(hour, (n * 7) % 60, 0, 0);
   return d.toISOString();
 };

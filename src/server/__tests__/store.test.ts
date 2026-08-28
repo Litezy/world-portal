@@ -35,11 +35,13 @@ describe("enquiries", () => {
 
   it("updates status and stamps updatedAt", () => {
     const target = listEnquiries({ perPage: 1 }).data[0]!;
-    const before = target.updatedAt;
+    // Compare against the clock, not the seeded value: the point is that the
+    // stamp is refreshed now, and seed times shift with the hour of the run.
+    const before = Date.now();
     const updated = updateEnquiry(target.id, { status: "won" });
 
     expect(updated?.status).toBe("won");
-    expect(Date.parse(updated!.updatedAt)).toBeGreaterThanOrEqual(Date.parse(before));
+    expect(Date.parse(updated!.updatedAt)).toBeGreaterThanOrEqual(before);
   });
 
   it("returns null for an unknown id", () => {
