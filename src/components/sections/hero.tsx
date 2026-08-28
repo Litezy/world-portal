@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { hero } from "@/content/landing";
 import { useGsap } from "@/hooks/use-gsap";
+import { useIdleMount } from "@/hooks/use-idle-mount";
 import { EASE_GLASS, gsap } from "@/lib/motion/gsap";
 import { cn } from "@/lib/utils";
 
@@ -32,19 +33,8 @@ const WebglWordmark = dynamic(
  * with the scroll along with the plate behind it.
  */
 export function Hero() {
-  const [webglReady, setWebglReady] = React.useState(false);
+  const webglReady = useIdleMount();
   const [wordmarkReady, setWordmarkReady] = React.useState(false);
-
-  // Only mount the shader once the browser is idle — it is decoration.
-  React.useEffect(() => {
-    const id = window.requestIdleCallback
-      ? window.requestIdleCallback(() => setWebglReady(true), { timeout: 2500 })
-      : window.setTimeout(() => setWebglReady(true), 1200);
-    return () => {
-      if (window.cancelIdleCallback) window.cancelIdleCallback(id as number);
-      else clearTimeout(id as number);
-    };
-  }, []);
 
   const scopeRef = useGsap(({ scope }) => {
     if (!scope) return;
@@ -127,7 +117,7 @@ export function Hero() {
               <Link href={hero.cta.href}>{hero.cta.label}</Link>
             </Button>
             <Button asChild variant="glassDark" size="lg">
-              <Link href="#visas">See our services</Link>
+              <Link href={hero.secondaryCta.href}>{hero.secondaryCta.label}</Link>
             </Button>
           </div>
         </div>

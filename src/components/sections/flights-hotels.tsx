@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 
-import { BellRing } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { ParallaxImage } from "@/components/motion/parallax-image";
 import { Reveal } from "@/components/motion/reveal";
-import { ComingSoonNotice, waitlistHref } from "@/components/sections/coming-soon";
+import { ComingSoonNotice } from "@/components/sections/coming-soon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -77,10 +78,10 @@ export function FlightsHotels() {
             size="md"
             className="shrink-0 self-start sm:self-end"
           >
-            <a href={waitlistHref(flightsHotels.cta.subject)}>
-              <BellRing />
+            <Link href={flightsHotels.cta.href}>
               {flightsHotels.cta.label}
-            </a>
+              <ArrowRight />
+            </Link>
           </Button>
         </div>
       </Container>

@@ -10,22 +10,23 @@
  */
 
 export const hero = {
-  badge: "Visas · Flights · Experiences",
-  lead: "Visas approved, seats secured, journeys worth the flight — one team handling every part of getting you there.",
-  cta: { label: "Plan my trip", href: "#contact" },
-  navCta: { label: "Get started", href: "#contact" },
+  badge: "Passports · Visas · Flights · Stays",
+  lead: "Tell us where you want to go. We sort out the passport, the visa, the flights and the hotel — so you just pack.",
+  cta: { label: "Start my trip", href: "/start" },
+  navCta: { label: "Get started", href: "#start-here" },
+  secondaryCta: { label: "See what we do", href: "#visas" },
   image: {
     src: "/images/hero.jpg",
     alt: "Islands scattered across a turquoise lagoon seen from above",
   },
-  wordmark: "DISCOVER",
+  wordmark: "EXPLORE",
 } as const;
 
 export const intro = {
-  headingLead: "Three things stand between you and",
-  headingBreak: "the trip —",
-  headingAccent: "we handle all three.",
-  body: "The visa, the booking, and the plan itself. World Portal takes all of it: licensed consultants filing your application, fares held while you decide, and itineraries built around how you actually want to travel.",
+  headingLead: "Travelling abroad takes",
+  headingBreak: "a lot of paperwork —",
+  headingAccent: "we do it for you.",
+  body: "A passport. Then a visa. Then a flight and somewhere to stay. Most people give up somewhere in the middle. Tell us where you are going and we handle every step, in the right order, and tell you what is happening as it happens.",
   thumbnails: [
     {
       src: "/images/intro/temple.jpg",
@@ -52,9 +53,9 @@ export const intro = {
 
 export const whyUs = {
   eyebrow: "Why World Portal",
-  headingLead: "Why travel with",
-  headingAccent: "World Portal?",
-  body: "Because approvals, availability and logistics should never be yours to chase.",
+  headingLead: "Why people let us",
+  headingAccent: "do it for them.",
+  body: "Because chasing embassies, forms and fares is a full-time job, and you already have one.",
   background: {
     src: "/images/why-us.jpg",
     alt: "Mist rising over open country at first light",
@@ -62,47 +63,49 @@ export const whyUs = {
   cards: [
     {
       icon: "passport",
-      title: "Licensed & accredited",
-      body: "Registered consultants who file directly with embassies, consulates and immigration portals.",
-      cta: "See our visa services",
+      title: "We are licensed to file",
+      body: "We are registered agents. Your forms go straight to the embassy or passport office — not to a middleman.",
+      cta: "See visa services",
       href: "#visas",
     },
     {
       icon: "bolt",
-      title: "Answers in hours",
-      body: "Fare and room options land in your inbox the same working day, with the price held while you decide.",
-      cta: "Book flights & stays",
-      href: "#flights-hotels",
+      title: "You hear back same day",
+      body: "Ask us anything before nine, get an answer before you finish work. No waiting a week to find out where you stand.",
+      cta: "See passport services",
+      href: "#passports",
     },
     {
       icon: "concierge",
-      title: "One point of contact",
-      body: "The same consultant from your first enquiry to your return flight. No ticket queues, no handovers.",
-      cta: "Talk to a consultant",
-      href: "#contact",
+      title: "One person, start to finish",
+      body: "The same consultant handles your whole trip. You never have to explain your situation twice.",
+      cta: "Start my trip",
+      href: "/start",
     },
     {
       icon: "compass",
-      title: "Curated, not just booked",
-      body: "Private guides, timed access and the days you cannot assemble from a search results page.",
-      cta: "Browse experiences",
-      href: "#experiences",
+      title: "We tell you what is next",
+      body: "You always know which step you are on, what we need from you, and how long it should take.",
+      cta: "Track an application",
+      href: "/track",
     },
   ],
 } as const;
 
 /** Service 1 — sells comfort and ease. */
+/** Service 1 — live. Sold on how little the traveller has to do. */
 export const visas = {
-  eyebrow: "Visa Applications",
-  headingLead: "Visas, without the",
-  headingAccent: "guesswork.",
-  body: "Tell us where you are going and on which passport. We confirm exactly which visa applies, prepare the file, and track it through to a decision — so the only thing you handle is your trip.",
-  cta: { label: "Check my visa options", href: "#contact" },
+  eyebrow: "Visas",
+  headingLead: "The visa part,",
+  headingAccent: "handled.",
+  body: "A visa is permission to enter another country. Which one you need depends on your passport, where you are going and why. Tell us those three things and we will say exactly which visa applies, fill in the forms, and follow it up until there is a decision.",
+  cta: { label: "Start a visa application", href: "/apply" },
+  secondaryCta: { label: "Track an application", href: "/track" },
   items: [
     {
       name: "eVisa",
       tag: "3–7 days",
-      body: "Applied for and approved entirely online. We complete the portal submission, validate every document, and send the approval straight to your phone. No embassy visit, no queue.",
+      body: "Done entirely online — no embassy visit and no queue. We fill in the portal, check every document, and send the approval to your phone.",
       image: {
         src: "/images/visas/evisa.jpg",
         alt: "A modern airport concourse lit at night",
@@ -111,7 +114,7 @@ export const visas = {
     {
       name: "T.Visa (Traditional Visa)",
       tag: "2–4 weeks",
-      body: "Full embassy filing, handled end to end: document preparation, sponsorship letters, appointment booking and interview coaching before you walk in.",
+      body: "The kind you apply for at an embassy in person. We prepare the paperwork, book your appointment, and run you through the interview beforehand.",
       image: {
         src: "/images/visas/consular.jpg",
         alt: "A consular building behind wrought-iron gates",
@@ -120,7 +123,7 @@ export const visas = {
     {
       name: "ETA",
       tag: "24–72 hours",
-      body: "Electronic travel authorisation for visa-free routes. A short form, checked and submitted the same day, with approval usually back before you have packed.",
+      body: "A short online approval for countries you do not need a full visa for. One form, checked and sent the same day, usually back before you pack.",
       image: {
         src: "/images/visas/eta.jpg",
         alt: "A departure hall with flight information boards",
@@ -129,69 +132,107 @@ export const visas = {
   ],
 } as const;
 
+/** Service 2 — live. Nothing else can start until this exists. */
+export const passports = {
+  eyebrow: "Passports",
+  headingLead: "No passport yet?",
+  headingAccent: "Start here.",
+  body: "Your passport is the one thing you cannot travel without, and every visa is stamped into it. If you do not have one, or it runs out within six months of your trip, this is the first thing to fix. We handle the forms, the photos and the appointment.",
+  cta: { label: "Start a passport application", href: "/passport" },
+  items: [
+    {
+      name: "First passport",
+      tag: "4–6 weeks",
+      body: "Never had one. We tell you which documents prove your identity, check them before you submit, and book your appointment.",
+      image: {
+        src: "/images/passports/new.jpg",
+        alt: "A traveller at an airport departure gate",
+      },
+    },
+    {
+      name: "Renewal",
+      tag: "2–4 weeks",
+      body: "Yours has expired, or expires within six months. Most countries will refuse you a visa on a passport that is running out — renew first.",
+      image: {
+        src: "/images/passports/renewal.jpg",
+        alt: "Travel documents on a desk",
+      },
+    },
+    {
+      name: "Lost or damaged",
+      tag: "3–5 weeks",
+      body: "Gone, stolen or water-damaged. There is a police report and a declaration involved — we walk you through both and file the replacement.",
+      image: {
+        src: "/images/passports/replacement.jpg",
+        alt: "An immigration desk at an airport",
+      },
+    },
+  ],
+} as const;
+
 /** The shared process behind all three services. */
+/** The shared process behind every service. */
 export const journey = {
   eyebrow: "How it works",
-  headingLead: "From first question to",
-  headingAccent: "final boarding pass.",
-  body: "One process behind every service, so you always know exactly where things stand.",
-  cta: { label: "Start with a free consultation", href: "#contact" },
+  headingLead: "Four steps. That is",
+  headingAccent: "the whole thing.",
+  body: "No jargon, no chasing. Here is exactly what happens once you get in touch.",
+  cta: { label: "Start my trip", href: "/start" },
   steps: [
     {
       day: 1,
       title: "Tell us the plan",
-      body: "A five-minute form or a call. Destination, dates, passport, and what you actually want out of the trip.",
+      body: "Where you want to go, roughly when, and which passport you hold. A short form or a quick call — five minutes either way.",
       image: {
-        src: "/images/itinerary/day-1.jpg",
-        alt: "A temple glowing at sunset over still water",
+        src: "/images/journey/plan.jpg",
+        alt: "A world map and notebook laid out for trip planning",
       },
     },
     {
       day: 2,
       title: "We map the route",
-      body: "Which visa applies and what it needs. Which fares and stays are realistic for your dates and budget. You get one clear plan, not twelve tabs.",
+      body: "We work out what you actually need and in what order: passport first if it is missing, then the right visa, then flights and a place to stay. You get one clear list.",
       image: {
-        src: "/images/itinerary/day-2.jpg",
-        alt: "Terraced fields in morning light",
+        src: "/images/journey/route.jpg",
+        alt: "A route traced across a map",
       },
     },
     {
       day: 3,
       title: "We file and book",
-      body: "Documents prepared and submitted, seats and rooms held at the quoted price. You approve once; we handle every follow-up from there.",
+      body: "We fill in the forms, submit them, and hold your seats and rooms at the price we quoted. You approve once — we chase everything after that.",
       image: {
-        src: "/images/itinerary/day-3.jpg",
-        alt: "A wooden boat crossing clear turquoise water",
+        src: "/images/journey/documents.jpg",
+        alt: "Documents being prepared and signed at a desk",
       },
     },
     {
       day: 4,
       title: "You travel",
-      body: "Approvals, tickets and the full itinerary in one place, with your consultant reachable on WhatsApp for the entire trip.",
+      body: "Approvals, tickets and your day-by-day plan all in one place, with your consultant on WhatsApp the whole way there and back.",
       image: {
-        src: "/images/itinerary/day-4.jpg",
-        alt: "A thatched cabana beside a resort pool",
+        src: "/images/journey/travel.jpg",
+        alt: "An airliner climbing away after takeoff",
       },
     },
   ],
 } as const;
 
 /** Service 2 — sells speed and reliability. */
+/** Service 3 — not open yet. Sold on speed. */
 export const flightsHotels = {
   eyebrow: "Flights & Hotels",
-  headingLead: "Booked in hours,",
-  headingAccent: "not days.",
-  body: "Live fares, held seats and stays we have actually vetted. We quote fast, hold faster, and never leave you refreshing a booking page at midnight.",
-  /** Not live yet — the section renders in full but its CTA is a waitlist. */
+  headingLead: "Flights and rooms,",
+  headingAccent: "sorted in hours.",
+  body: "Send us your dates and we come back the same day with real prices, not an estimate. We hold the seat and the room while you think about it, so nothing goes up in price while you decide.",
   comingSoon: true,
-  notice: "Launching soon. Visa applications are open today.",
-  cta: { label: "Notify me when it's live", subject: "Notify me — Flights & Hotels" },
+  notice: "Not open yet. Passports and visas are live today.",
+  cta: { label: "See how it will work", href: "/services/flights" },
   stats: [
-    { value: "4 hrs", label: "Average quote turnaround" },
-    { value: "24/7", label: "Rebooking support in transit" },
-    { value: "0", label: "Hidden booking fees" },
+    { value: "4 hrs", label: "Typical time to get your prices" },
+    { value: "24/7", label: "Someone to call if a flight changes" },
+    { value: "0", label: "Extra fees added at the end" },
   ],
-  /** Two rows that slide opposite ways as the section scrolls past. */
   marqueeTop: [
     {
       src: "/images/travel/flight-cloud.jpg",
@@ -227,23 +268,20 @@ export const flightsHotels = {
 } as const;
 
 /** Service 3 — sells curation and quality. */
+/** Service 4 — not open yet. Sold on curation. */
 export const experiences = {
-  eyebrow: "Experiences & Tours",
-  headingLead: "Journeys worth",
-  headingAccent: "retelling.",
-  body: "Curated holiday packages, private guides and timed access to the places everyone else queues for. We build the days, you just turn up for them.",
-  /** Not live yet — the section renders in full but its CTA is a waitlist. */
+  eyebrow: "Tours & Experiences",
+  headingLead: "The trip itself,",
+  headingAccent: "planned properly.",
+  body: "Days worth remembering, booked before you land: a guide who actually knows the place, tickets that skip the queue, and a plan that leaves room to do nothing.",
   comingSoon: true,
-  notice: "Launching soon. Visa applications are open today.",
-  cta: {
-    label: "Notify me when it's live",
-    subject: "Notify me — Experiences & Tours",
-  },
+  notice: "Not open yet. Passports and visas are live today.",
+  cta: { label: "See how it will work", href: "/services/experiences" },
   highlights: [
-    "Private guides & drivers",
-    "Timed & after-hours access",
-    "Small-group departures",
-    "Fully bespoke itineraries",
+    "Private guides and drivers",
+    "Tickets booked ahead, no queues",
+    "Small groups, not coach parties",
+    "Or built entirely around you",
   ],
   images: [
     {
@@ -276,69 +314,72 @@ export const experiences = {
 
 export const contact = {
   eyebrow: "Start here",
-  headingLead: "Ready to start your",
-  headingAccent: "application?",
-  body: "Visa applications run on their own secure form — upload your documents, submit, and track the decision with the reference we give you. It takes about ten minutes.",
-  getInTouch: "Or reach us directly",
+  headingLead: "Tell us where you want",
+  headingAccent: "to go.",
+  body: "Passport, visa, flights, hotel, the days in between — you do not have to know which parts you need. Answer a few questions and we will tell you exactly what applies to you, in the order it has to happen, and what each step costs.",
+  getInTouch: "Or just talk to someone",
   background: {
     src: "/images/contact.jpg",
     alt: "A coastline silhouetted against a golden sunset",
   },
   whatsappLabel: "Chat with us on WhatsApp",
-  /** The two live entry points. Flights and experiences are not open yet. */
-  actions: [
-    {
-      title: "Start a visa application",
-      body: "eVisa, T.Visa or ETA. Upload your documents and submit in one sitting.",
-      cta: "Begin application",
-      href: "/apply",
-      primary: true,
-    },
-    {
-      title: "Track an existing one",
-      body: "Enter the reference we sent you to see exactly where your file stands.",
-      cta: "Track my application",
-      href: "/track",
-      primary: false,
-    },
+  primary: {
+    title: "Start my trip",
+    body: "Two questions about where you are going, then a few about what you already have. Takes a minute, and there is nothing to pay.",
+    cta: "Start my trip",
+    href: "/start",
+  },
+  /** Every service, so nobody has to guess which door is theirs. */
+  services: [
+    { label: "Passport application", href: "/passport", status: "live" },
+    { label: "Visa application", href: "/apply", status: "live" },
+    { label: "Flight booking", href: "/services/flights", status: "soon" },
+    { label: "Hotel booking", href: "/services/hotels", status: "soon" },
+    { label: "Tours & experiences", href: "/services/experiences", status: "soon" },
+    { label: "Track an application", href: "/track", status: "live" },
   ],
   assurances: [
-    "Replies within 24 hours",
-    "Fixed quotes, no hidden fees",
-    "Licensed consultants",
+    "We reply the same working day",
+    "Fixed price, quoted up front",
+    "Licensed and registered agents",
   ],
 } as const;
 
 export const faq = {
-  eyebrow: "FAQ",
-  headingLead: "Frequently Asked",
-  headingAccent: "Questions?",
-  body: "The things travellers ask us most, before they book anything.",
+  eyebrow: "Questions",
+  headingLead: "Things people ask",
+  headingAccent: "before they book.",
+  body: "Short answers, no jargon.",
   items: [
+    {
+      question: "What is the difference between a passport and a visa?",
+      answer:
+        "Your passport is your own country saying who you are — you need it before anything else, and it is the booklet everything gets stamped into. A visa is a different country giving you permission to enter, and it goes inside that passport. So passport first, always, then the visa.",
+    },
     {
       question: "Which visa do I actually need?",
       answer:
-        "That depends on your passport, your destination and why you are going — and it changes more often than most people expect. Send us those three things and we will confirm whether you need an eVisa, a T.Visa or just an ETA, usually the same working day and before you pay us anything.",
+        "It depends on three things: the passport you hold, where you are going, and why. The rules change more often than most people expect. Send us those three details and we will tell you whether it is an eVisa, a T.Visa or just an ETA — usually the same working day, and before you pay us anything.",
     },
     {
-      question: "How fast can you book flights and hotels?",
+      question: "My passport expires next year. Is that a problem?",
       answer:
-        "Most quotes go out within about four hours of your request during business hours. Once you approve, seats and rooms are held at the quoted price while payment clears, so a fare cannot move under you mid-decision.",
+        "Probably, yes. Most countries want at least six months left on your passport on the day you arrive, and many will refuse a visa outright if it is running out. If yours expires within six months of your trip, renew it first — we can start that today.",
     },
     {
       question: "What does it cost, and when do I pay?",
       answer:
-        "You get a fixed quote up front covering our service fee and any government charges, itemised separately. Nothing is payable until you approve that quote, and the figure you approve is the figure you pay.",
+        "You get one fixed price up front, split into our fee and the government's fee so you can see both. Nothing is payable until you have seen and agreed that number. The price you agree is the price you pay.",
     },
     {
-      question: "What happens if my visa is refused?",
+      question: "What if my visa is refused?",
       answer:
-        "We read the refusal notice with you, identify exactly what triggered it, and rebuild the case before reapplying. Where the refusal was down to an error on our side, the reapplication is handled at no further service charge.",
+        "We read the refusal letter with you, work out exactly what caused it, and rebuild the application before trying again. If the refusal was down to a mistake on our side, we redo it at no extra charge.",
     },
     {
-      question: "Can you handle an entire trip end to end?",
+      question: "Can you do the whole trip, not just the paperwork?",
       answer:
-        "Yes — that is the point of running all three services under one roof. One consultant takes the visa, the flights, the accommodation and the day-to-day itinerary, so nothing falls between providers and you only ever have one person to ask.",
+        "That is the plan. Passports and visas are live now; flights, hotels and tours are opening soon. When they are, one person will handle everything from your passport to your last day away, so nothing falls between two companies.",
     },
   ],
 } as const;

@@ -1,8 +1,10 @@
-import { BellRing, Check } from "lucide-react";
+import Link from "next/link";
+
+import { ArrowRight, Check } from "lucide-react";
 
 import { ParallaxImage } from "@/components/motion/parallax-image";
 import { Reveal } from "@/components/motion/reveal";
-import { ComingSoonNotice, waitlistHref } from "@/components/sections/coming-soon";
+import { ComingSoonNotice } from "@/components/sections/coming-soon";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
@@ -66,10 +68,10 @@ export function Experiences() {
 
         <div className="mt-12 flex justify-center">
           <Button asChild variant="outline" size="lg">
-            <a href={waitlistHref(experiences.cta.subject)}>
-              <BellRing />
+            <Link href={experiences.cta.href}>
               {experiences.cta.label}
-            </a>
+              <ArrowRight />
+            </Link>
           </Button>
         </div>
       </Container>

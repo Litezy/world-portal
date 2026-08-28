@@ -33,6 +33,7 @@ const FRAG = /* glsl */ `
   uniform float uReveal;   // 0 -> 1 over the intro
   uniform float uScroll;   // 0 at rest, grows as the hero leaves
   uniform vec2  uPointer;
+  uniform float uSheen;    // 0 -> 1, loops forever
 
   varying vec2 vUv;
 
@@ -58,9 +59,11 @@ const FRAG = /* glsl */ `
     float rise = (1.0 - uReveal) * 1.06;
     uv.y += rise;
 
-    // Turbulence is strongest while the wipe is travelling, then all but stops.
+    // Turbulence is strongest while the wipe is travelling, then settles into a
+    // permanent slow breath rather than stopping dead.
     float settle = smoothstep(0.55, 1.0, uReveal);
-    float churn = (1.0 - settle) * 0.9 + 0.045;
+    float breathe = 0.045 + 0.02 * sin(uTime * 0.6);
+    float churn = (1.0 - settle) * 0.9 + breathe;
 
     float n1 = noise(uv * vec2(3.0, 7.0) + vec2(uTime * 0.06, uTime * 0.11));
     float n2 = noise(uv * vec2(6.0, 3.0) - vec2(uTime * 0.04, uTime * 0.08));
@@ -76,12 +79,20 @@ const FRAG = /* glsl */ `
     float g = texture2D(uTexture, uv).a;
     float b = texture2D(uTexture, uv - vec2(split, 0.0)).a;
 
-    // A soft horizontal band that sweeps up with the reveal front.
     float front = smoothstep(0.0, 0.35, uReveal);
     float alpha = g * front;
     if (alpha <= 0.001) discard;
 
     vec3 color = vec3(1.0) - vec3(1.0 - r, 1.0 - g, 1.0 - b) * 0.22;
+
+    // Infinite sheen: a soft diagonal band of light travelling left to right
+    // across the glyphs, for ever. Diagonal so it reads as a moving highlight
+    // rather than a wipe, and scaled by settle so it never fights the intro.
+    float band = vUv.x * 0.82 + (1.0 - vUv.y) * 0.18;
+    float head = uSheen * 1.6 - 0.3;
+    float glow = exp(-pow((band - head) / 0.11, 2.0));
+    color += vec3(1.0, 0.96, 0.86) * glow * 0.55 * settle;
+
     gl_FragColor = vec4(color, alpha);
   }
 `;
@@ -171,6 +182,7 @@ export function WebglWordmark({
       uReveal: { value: 0 },
       uScroll: { value: 0 },
       uPointer: { value: new THREE.Vector2() },
+      uSheen: { value: 0 },
     };
 
     const mesh = new THREE.Mesh(
@@ -235,6 +247,10 @@ export function WebglWordmark({
         // Expo-out: fast off the mark, long settle.
         uniforms.uReveal.value = 1 - Math.pow(2, -10 * t);
       }
+
+      // 3.4s of travel, then a 2.6s pause before the next pass.
+      const CYCLE = 6;
+      uniforms.uSheen.value = Math.min((elapsed % CYCLE) / 3.4, 1);
 
       uniforms.uScroll.value = Math.min(window.scrollY / window.innerHeight, 1.5);
       uniforms.uPointer.value.lerp(pointerTarget, 0.05);

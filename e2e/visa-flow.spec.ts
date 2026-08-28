@@ -6,6 +6,29 @@ import { expect, type Page, test } from "@playwright/test";
  * shapes the integration guide documents — including the awkward ones (string
  * array validation messages on a 400, decimals as strings).
  */
+/**
+ * /apply now opens on the route check — which visa this origin/destination pair
+ * needs — because everything after it depends on the answer.
+ */
+async function pickCountry(page: Page, field: string, country: string) {
+  await page.getByLabel(field).click();
+  const open = page.locator('[role="dialog"][data-state="open"]');
+  await open.getByPlaceholder("Search countries").fill(country);
+  // Click the filtered result rather than matching its label: the displayed
+  // name can differ from what you type ("Turkey" -> "Türkiye").
+  await open.getByRole("option").first().click();
+}
+
+/** Walks the route check and lands on step 1 of the chosen branch. */
+async function enterApplication(page: Page, to = "Turkey") {
+  await page.goto("/apply");
+  await pickCountry(page, "Passport / travelling from", "Nigeria");
+  await pickCountry(page, "Travelling to", to);
+  await page.getByRole("button", { name: /check what i need/i }).click();
+  await page.getByRole("button", { name: /continue my|start my embassy/i }).click();
+  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+}
+
 const API = "**/*trycloudflare.com/api";
 
 const APPLICATION = {
@@ -53,14 +76,15 @@ async function fillThroughDocuments(page: Page) {
   await page.getByLabel(/last name/i).fill("Lovelace");
   await page.getByLabel(/email address/i).fill("ada@example.com");
   await page.getByLabel(/nationality/i).fill("British");
-  await page.getByRole("button", { name: /continue/i }).click();
+  await page.getByRole("button", { name: /^continue$/i }).click();
 
   await expect(page.getByRole("heading", { name: "Passport" })).toBeVisible();
-  await page.getByRole("button", { name: /continue/i }).click();
+  await page.getByRole("button", { name: /^continue$/i }).click();
 
   await expect(page.getByRole("heading", { name: "Your trip" })).toBeVisible();
-  await page.getByLabel(/destination country/i).fill("Canada");
-  await page.getByRole("button", { name: /continue/i }).click();
+  // Destination is already filled in from the route check.
+  await expect(page.getByLabel(/destination country/i)).not.toHaveValue("");
+  await page.getByRole("button", { name: /^continue$/i }).click();
 
   await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
 
@@ -77,8 +101,8 @@ async function fillThroughDocuments(page: Page) {
 
 test.describe("visa application", () => {
   test("blocks the step until its own fields are valid", async ({ page }) => {
-    await page.goto("/apply");
-    await page.getByRole("button", { name: /continue/i }).click();
+    await enterApplication(page);
+    await page.getByRole("button", { name: /^continue$/i }).click();
 
     await expect(page.getByText(/enter your first name/i)).toBeVisible();
     await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
@@ -94,7 +118,7 @@ test.describe("visa application", () => {
       }),
     );
 
-    await page.goto("/apply");
+    await enterApplication(page);
     await fillThroughDocuments(page);
     await page.getByRole("button", { name: /submit application/i }).click();
 
@@ -120,7 +144,7 @@ test.describe("visa application", () => {
       }),
     );
 
-    await page.goto("/apply");
+    await enterApplication(page);
     await fillThroughDocuments(page);
     await page.getByRole("button", { name: /submit application/i }).click();
 
@@ -131,7 +155,7 @@ test.describe("visa application", () => {
   });
 
   test("rejects an oversized upload before it leaves the browser", async ({ page }) => {
-    await page.goto("/apply");
+    await enterApplication(page);
     await fillThroughDocuments(page).catch(() => {});
     await page.getByRole("heading", { name: "Documents" }).waitFor();
 
@@ -189,6 +213,47 @@ test.describe("application tracking", () => {
     await page.goto("/track?ref=VISA-2026-8941");
     await expect(
       page.getByText(/could not reach the world portal service/i),
+    ).toBeVisible();
+  });
+});
+
+test.describe("visa route check", () => {
+  test("an embassy route drops the document step entirely", async ({ page }) => {
+    await page.goto("/apply");
+    await pickCountry(page, "Passport / travelling from", "Nigeria");
+    await pickCountry(page, "Travelling to", "France");
+    await page.getByRole("button", { name: /check what i need/i }).click();
+
+    await expect(page.getByText(/T\.Visa \(Traditional Visa\)/i)).toBeVisible();
+    await expect(page.getByText(/finishes in person/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /start my embassy application/i }).click();
+    // Three steps, not four — there is nothing to upload for an embassy filing.
+    await expect(page.locator("ol li button")).toHaveCount(3);
+  });
+
+  test("an online route keeps all four steps", async ({ page }) => {
+    await page.goto("/apply");
+    await pickCountry(page, "Passport / travelling from", "Nigeria");
+    await pickCountry(page, "Travelling to", "Turkey");
+    await page.getByRole("button", { name: /check what i need/i }).click();
+
+    await expect(page.getByText(/eVisa/i).first()).toBeVisible();
+    await page.getByRole("button", { name: /continue my/i }).click();
+    await expect(page.locator("ol li button")).toHaveCount(4);
+  });
+
+  test("a visa-free pair says so instead of selling an application", async ({
+    page,
+  }) => {
+    await page.goto("/apply");
+    await pickCountry(page, "Passport / travelling from", "France");
+    await pickCountry(page, "Travelling to", "Germany");
+    await page.getByRole("button", { name: /check what i need/i }).click();
+
+    await expect(page.getByText(/no visa needed/i)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /plan the rest of the trip/i }),
     ).toBeVisible();
   });
 });
