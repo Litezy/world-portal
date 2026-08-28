@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { DetailItem, DetailList, PageHeader, UserAvatar } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { settings } from "@/content/admin";
+import { roleLabels, settings } from "@/content/admin";
 import { NotificationSettings } from "@/features/settings/components/notification-settings";
 import { SignOutButton } from "@/features/settings/components/sign-out-button";
+import { TeamList } from "@/features/settings/components/team-list";
 import { buildMetadata } from "@/lib/seo";
 import { getSession } from "@/server/auth";
 
@@ -41,11 +42,11 @@ export default async function SettingsPage() {
 
           <DetailList className="mt-8 sm:grid-cols-2">
             <DetailItem label="Role">
-              <Badge variant="muted" size="sm" className="capitalize">
-                {user.role}
+              <Badge variant="muted" size="sm">
+                {roleLabels[user.role]}
               </Badge>
             </DetailItem>
-            <DetailItem label="Console access">Full</DetailItem>
+            <DetailItem label="Signed in as">{user.email}</DetailItem>
           </DetailList>
         </Card>
 
@@ -57,6 +58,16 @@ export default async function SettingsPage() {
             </CardDescription>
             <div className="mt-6">
               <NotificationSettings />
+            </div>
+          </Card>
+
+          <Card variant="solid" radius="lg" padding="none" className="gap-0 p-6">
+            <CardTitle className="text-base">{settings.team.title}</CardTitle>
+            <CardDescription className="text-[13px]">
+              {settings.team.body}
+            </CardDescription>
+            <div className="mt-6">
+              <TeamList />
             </div>
           </Card>
 

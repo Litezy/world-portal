@@ -41,10 +41,10 @@ pnpm dev
 | `/admin/customers`    | Customer list                                      |
 | `/admin/settings`     | Profile, notifications, sign out                   |
 
-Sign in with the values in `.env.example` (`admin@worldportal.travel` /
-`worldportal`). Both are development defaults and are **refused in
-production** — set `ADMIN_PASSWORD` and `SESSION_SECRET` before deploying or
-the build fails.
+Sign in with an email that has an active Profile on the backend — its
+`prisma/seed.ts` creates `manager@loveworld.com` — and the console password
+from `.env.example`. Both defaults are **refused in production**: set
+`ADMIN_PASSWORD` and `SESSION_SECRET` before deploying or the build fails.
 
 ## Scripts
 
@@ -271,14 +271,19 @@ the two read as one product.
 
 **Auth.** `src/proxy.ts` guards `/admin/:path*`, verifying an HMAC-signed,
 `httpOnly` session cookie and bouncing to the login with a `next` param so you
-land back where you were headed. There is no user table yet — `authenticate()`
-compares one set of environment credentials, which is the seam to replace when
-real accounts arrive.
+land back where you were headed. Signing in exchanges the email for a World
+Portal access token and then proves the account exists and is active through
+`GET /profiles/me`. Authorisation stays the service's: its `RolesGuard` decides
+what a MANAGER, STAFF or PARTNER may read.
 
-**Data.** `src/server/data/store.ts` is an in-memory stub seeded with realistic
-enquiries, applications and customers. Every function mirrors a call the real
-backend will expose, so swapping the bodies for HTTP or SQL leaves the routes,
-the hooks and the UI untouched. It resets whenever the server restarts.
+**Data.** The console is a backend-for-frontend. Its hooks call same-origin
+route handlers under `src/app/api/admin`, and those call the World Portal API
+through `src/server/api/backend.ts` with the token from the cookie — so the
+token never reaches the browser. Visa applications come from
+`/visa-documentation`, passports from `/passport-application`, the team from
+`/profiles`. The service exposes no customer or stats resource, so applicants
+are grouped from their applications and the dashboard figures are derived in
+`/api/admin/stats`.
 
 **Charts.** Series colours are tokens (`--chart-1..3`), assigned in a fixed
 order and validated for colourblind separation, lightness band and contrast in

@@ -20,6 +20,15 @@ const clientSchema = z.object({
 const serverSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    /**
+     * The World Portal API, including its `/api` prefix. Server-side only:
+     * the console proxies through route handlers so the access token never
+     * reaches the browser. Falls back to the public value so one variable is
+     * enough in development.
+     */
+    WORLD_PORTAL_API_URL: z
+      .url()
+      .default(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api"),
     // Console credentials. The defaults exist so a fresh clone runs, and are
     // refused in production below — shipping them would publish the password.
     ADMIN_EMAIL: z.email().default("admin@worldportal.travel"),

@@ -1,46 +1,62 @@
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { applicationStatusLabels, enquiryStatusLabels } from "@/content/admin";
-import type { ApplicationStatus, EnquiryStatus } from "@/types";
+import {
+  passportStatusLabels,
+  paymentStatusLabels,
+  visaStatusLabels,
+} from "@/content/admin";
+import type {
+  BackendPaymentStatus,
+  PassportStatus,
+  VisaStatus,
+} from "@/server/data/backend-types";
 
 type Tone = NonNullable<BadgeProps["variant"]>;
 
-const enquiryTone: Record<EnquiryStatus, Tone> = {
-  new: "softInfo",
-  contacted: "softNeutral",
-  quoted: "softWarning",
-  won: "softSuccess",
-  lost: "softDestructive",
+const visaTone: Record<VisaStatus, Tone> = {
+  SUBMITTED: "softInfo",
+  EVALUATED: "softNeutral",
+  UNDER_REVIEW: "softWarning",
+  APPROVED: "softSuccess",
+  REJECTED: "softDestructive",
 };
 
-const applicationTone: Record<ApplicationStatus, Tone> = {
-  draft: "softNeutral",
-  submitted: "softInfo",
-  in_review: "softInfo",
-  documents_required: "softWarning",
-  biometrics_scheduled: "softNeutral",
-  decision_pending: "softWarning",
-  approved: "softSuccess",
-  rejected: "softDestructive",
+const passportTone: Record<PassportStatus, Tone> = {
+  SUBMITTED: "softInfo",
+  UNDER_REVIEW: "softWarning",
+  APPROVED: "softSuccess",
+  REJECTED: "softDestructive",
 };
 
-export function EnquiryStatusBadge({
-  status,
-  ...props
-}: { status: EnquiryStatus } & Omit<BadgeProps, "variant" | "children">) {
+const paymentTone: Record<BackendPaymentStatus, Tone> = {
+  PENDING_EVALUATION: "softNeutral",
+  AWAITING_PAYMENT: "softWarning",
+  PARTIALLY_PAID: "softInfo",
+  FULLY_PAID: "softSuccess",
+  REFUNDED: "softDestructive",
+};
+
+type Props<T> = { status: T } & Omit<BadgeProps, "variant" | "children">;
+
+export function VisaStatusBadge({ status, ...props }: Props<VisaStatus>) {
   return (
-    <Badge variant={enquiryTone[status]} size="sm" dot {...props}>
-      {enquiryStatusLabels[status]}
+    <Badge variant={visaTone[status]} size="sm" dot {...props}>
+      {visaStatusLabels[status]}
     </Badge>
   );
 }
 
-export function ApplicationStatusBadge({
-  status,
-  ...props
-}: { status: ApplicationStatus } & Omit<BadgeProps, "variant" | "children">) {
+export function PassportStatusBadge({ status, ...props }: Props<PassportStatus>) {
   return (
-    <Badge variant={applicationTone[status]} size="sm" dot {...props}>
-      {applicationStatusLabels[status]}
+    <Badge variant={passportTone[status]} size="sm" dot {...props}>
+      {passportStatusLabels[status]}
+    </Badge>
+  );
+}
+
+export function PaymentStatusBadge({ status, ...props }: Props<BackendPaymentStatus>) {
+  return (
+    <Badge variant={paymentTone[status]} size="sm" dot {...props}>
+      {paymentStatusLabels[status]}
     </Badge>
   );
 }

@@ -4,12 +4,37 @@ import { env } from "@/config/env";
 
 export type FieldErrors = Record<string, string[]>;
 
-/** What NestJS actually returns — see the API guide, §9. */
+/**
+ * What the API actually returns. Every success is wrapped by the backend's
+ * TransformInterceptor; every failure is shaped by its AllExceptionsFilter.
+ */
 type NestErrorBody = {
+  success?: false;
   statusCode?: number;
   message?: string | string[];
+  errors?: FieldErrors;
   error?: string;
 };
+
+type Wrapped<T> = { success: true; data: T };
+
+function isWrapped<T>(body: unknown): body is Wrapped<T> {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    (body as { success?: unknown }).success === true &&
+    "data" in body
+  );
+}
+
+/**
+ * The API wraps every 2xx body as `{ success: true, data }`. Callers want the
+ * payload, so unwrap here — once — rather than in every hook. Anything not
+ * wrapped (a plain proxy, a future endpoint) passes straight through.
+ */
+export function unwrap<T>(body: unknown): T {
+  return isWrapped<T>(body) ? body.data : (body as T);
+}
 
 /** Normalised error every caller can rely on, whatever the transport did. */
 export class ApiError extends Error {
@@ -115,6 +140,25 @@ apiClient.interceptors.response.use(
     const body = error.response?.data;
     const raw = body?.message;
 
+    // The current API sends a real field map on 422 ("Validation failed").
+    // Prefer it over reconstructing anything from prose.
+    if (body?.errors && Object.keys(body.errors).length > 0) {
+      const count = Object.keys(body.errors).length;
+      return Promise.reject(
+        new ApiError({
+          message:
+            count === 1
+              ? (Object.values(body.errors)[0]?.[0] ??
+                "Please check the highlighted field.")
+              : `${count} fields need attention before this can be submitted.`,
+          status,
+          code: body?.error,
+          errors: body.errors,
+        }),
+      );
+    }
+
+    // Older builds sent a flat string array on a 400 with no `errors` object.
     if (Array.isArray(raw) && raw.length > 0) {
       const errors = parseValidationMessages(raw);
       return Promise.reject(
@@ -150,19 +194,19 @@ apiClient.interceptors.response.use(
 /** Thin typed wrappers so call sites never touch `AxiosResponse`. */
 export const api = {
   get: <T>(url: string, config?: Parameters<AxiosInstance["get"]>[1]) =>
-    apiClient.get<T>(url, config).then((r) => r.data),
+    apiClient.get(url, config).then((r) => unwrap<T>(r.data)),
   post: <T>(
     url: string,
     body?: unknown,
     config?: Parameters<AxiosInstance["post"]>[2],
-  ) => apiClient.post<T>(url, body, config).then((r) => r.data),
+  ) => apiClient.post(url, body, config).then((r) => unwrap<T>(r.data)),
   patch: <T>(
     url: string,
     body?: unknown,
     config?: Parameters<AxiosInstance["patch"]>[2],
-  ) => apiClient.patch<T>(url, body, config).then((r) => r.data),
+  ) => apiClient.patch(url, body, config).then((r) => unwrap<T>(r.data)),
   delete: <T>(url: string, config?: Parameters<AxiosInstance["delete"]>[1]) =>
-    apiClient.delete<T>(url, config).then((r) => r.data),
+    apiClient.delete(url, config).then((r) => unwrap<T>(r.data)),
 };
 
 /* ---------------------------------------------------------------------------

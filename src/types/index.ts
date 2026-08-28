@@ -1,3 +1,11 @@
+import type {
+  BackendPaymentStatus,
+  BackendUserRole,
+  BackendVisaCategory,
+  PassportStatus,
+  VisaStatus,
+} from "@/server/data/backend-types";
+
 export type VisaCategory =
   "tourist" | "business" | "study" | "work" | "family" | "transit" | "residency";
 
@@ -74,10 +82,14 @@ export type Paginated<T> = {
 };
 
 /* ---------------------------------------------------------------------------
- * Admin
+ * Admin console
+ *
+ * These are the console's view models. They mirror the World Portal API's
+ * records (see src/server/data/backend-types.ts) with the decimals already
+ * parsed and the applicant flattened.
  * ------------------------------------------------------------------------- */
 
-export type AdminRole = "admin" | "consultant";
+export type AdminRole = BackendUserRole;
 
 export type AdminUser = {
   id: string;
@@ -87,30 +99,10 @@ export type AdminUser = {
   avatar?: string;
 };
 
-export type ServiceKind = "visa" | "booking" | "experience";
-
-export type EnquiryStatus = "new" | "contacted" | "quoted" | "won" | "lost";
-
-export type Enquiry = {
-  id: string;
-  reference: string;
-  service: ServiceKind;
-  fullName: string;
-  email: string;
-  phone?: string;
-  destination: string;
-  travelDate?: string;
-  details?: string;
-  status: EnquiryStatus;
-  assigneeId?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type VisaRoute = "evisa" | "consular" | "eta";
+export type Applicant = { name: string; email: string; phone?: string };
 
 export type ApplicationEvent = {
-  status: ApplicationStatus;
+  status: VisaStatus | PassportStatus;
   at: string;
   note?: string;
 };
@@ -118,31 +110,63 @@ export type ApplicationEvent = {
 export type VisaApplication = {
   id: string;
   reference: string;
-  applicant: { name: string; email: string; customerId: string };
+  applicant: Applicant;
   destination: string;
-  countryCode: string;
-  category: VisaCategory;
-  route: VisaRoute;
-  status: ApplicationStatus;
-  consultantId: string;
-  fee: number;
-  currency: string;
-  submittedAt: string;
-  dueAt: string;
-  /** Server-computed: the decision date has passed and no decision is in. */
-  overdue: boolean;
+  category: BackendVisaCategory;
+  status: VisaStatus;
+  paymentStatus: BackendPaymentStatus;
+  /** Parsed from the API's string decimals. */
+  totalAmount: number;
+  amountPaid: number;
+  balanceDue: number;
+  allowInstallment: boolean;
+  travelDate: string;
+  returnDate: string;
+  purpose: string;
+  nationality: string;
+  passportNumber: string;
+  verificationNotes: string | null;
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
   timeline: ApplicationEvent[];
 };
 
+export type PassportApplication = {
+  id: string;
+  reference: string;
+  applicant: Applicant;
+  category: string;
+  validity: string;
+  bookletType: string;
+  stateOfOrigin: string;
+  status: PassportStatus;
+  verificationNotes: string | null;
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: AdminRole;
+  isActive: boolean;
+  createdAt: string;
+};
+
+/** Derived from applications — the API has no customer table. */
 export type Customer = {
   id: string;
   name: string;
   email: string;
   phone?: string;
   country: string;
-  avatar?: string;
   applications: number;
-  trips: number;
   lifetimeValue: number;
   currency: string;
   createdAt: string;
@@ -150,13 +174,13 @@ export type Customer = {
 };
 
 export type DashboardStats = {
-  enquiries: { total: number; open: number; change: number };
-  applications: { total: number; active: number; change: number };
-  customers: { total: number; change: number };
-  revenue: { amount: number; currency: string; change: number };
-  pipeline: { status: ApplicationStatus; count: number }[];
-  enquiriesByService: { service: ServiceKind; count: number }[];
-  weekly: { label: string; enquiries: number; applications: number }[];
+  visas: { total: number; active: number; approved: number };
+  passports: { total: number; active: number };
+  customers: { total: number };
+  revenue: { collected: number; outstanding: number; currency: string };
+  visaPipeline: { status: VisaStatus; count: number }[];
+  visasByCategory: { category: BackendVisaCategory; count: number }[];
+  weekly: { label: string; visas: number; passports: number }[];
 };
 
 export type ListParams = {

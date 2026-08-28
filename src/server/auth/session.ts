@@ -5,14 +5,15 @@ import type { AdminUser } from "@/types";
 export const SESSION_COOKIE = "wp_admin_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-export type SessionPayload = AdminUser & { exp: number };
+/** The console's cookie also carries the API token — it never reaches the browser. */
+export type SessionPayload = AdminUser & { exp: number; token: string };
 
 function sign(value: string, secret: string) {
   return createHmac("sha256", secret).update(value).digest("base64url");
 }
 
 export function createSessionToken(
-  user: AdminUser,
+  user: AdminUser & { token: string },
   secret: string,
   ttlSeconds = SESSION_TTL_SECONDS,
 ) {

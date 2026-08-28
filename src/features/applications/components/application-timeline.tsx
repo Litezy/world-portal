@@ -1,6 +1,11 @@
-import { applicationStatusLabels } from "@/content/admin";
+import { passportStatusLabels, visaStatusLabels } from "@/content/admin";
 import { cn, formatDate } from "@/lib/utils";
 import type { ApplicationEvent } from "@/types";
+
+const labels: Record<string, string> = {
+  ...visaStatusLabels,
+  ...passportStatusLabels,
+};
 
 export function ApplicationTimeline({ events }: { events: ApplicationEvent[] }) {
   return (
@@ -26,7 +31,7 @@ export function ApplicationTimeline({ events }: { events: ApplicationEvent[] }) 
                 latest ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              {applicationStatusLabels[event.status]}
+              {labels[event.status] ?? event.status}
             </p>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
               {formatDate(event.at, {
