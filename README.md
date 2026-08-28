@@ -29,10 +29,22 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-| Route      | What it is                                               |
-| ---------- | -------------------------------------------------------- |
-| `/`        | Placeholder home page — replace once the UI is chosen    |
-| `/contact` | Working reference form (zod → RHF → react-query → toast) |
+| Route                 | What it is                                         |
+| --------------------- | -------------------------------------------------- |
+| `/`                   | The landing page — every section, in reading order |
+| `/apply`              | The visa application form                          |
+| `/track`              | Track an application by reference                  |
+| `/admin/login`        | Console sign-in                                    |
+| `/admin`              | Dashboard — KPIs, activity, pipeline               |
+| `/admin/enquiries`    | Enquiry list and detail                            |
+| `/admin/applications` | Visa application list, detail and stage timeline   |
+| `/admin/customers`    | Customer list                                      |
+| `/admin/settings`     | Profile, notifications, sign out                   |
+
+Sign in with the values in `.env.example` (`admin@worldportal.travel` /
+`worldportal`). Both are development defaults and are **refused in
+production** — set `ADMIN_PASSWORD` and `SESSION_SECRET` before deploying or
+the build fails.
 
 ## Scripts
 
@@ -57,7 +69,8 @@ First Playwright run on a fresh machine needs browsers:
 src/
 ├─ app/
 │  ├─ (site)/             # The page — shares the header/footer layout
-│  ├─ api/                # Route handlers (booking, health)
+│  ├─ (admin)/            # The console — login + the signed-in shell
+│  ├─ api/                # Route handlers (booking, health, admin)
 │  ├─ layout.tsx          # Root layout: fonts, metadata, providers
 │  ├─ opengraph-image.tsx # Dynamically generated OG card
 │  ├─ error.tsx           # Error boundary
@@ -249,10 +262,40 @@ Packages, Contact) are CC-licensed photographs from Wikimedia Commons; check
 their attribution requirements before going live, or swap in the agency's own
 photography — one edit per entry in the content file.
 
+## The admin console
+
+`/admin` is where the requests the site collects get worked: a dashboard, the
+enquiry inbox, visa applications with a stage timeline, customers and settings.
+It is built from the same tokens and the same UI kit as the marketing page, so
+the two read as one product.
+
+**Auth.** `src/proxy.ts` guards `/admin/:path*`, verifying an HMAC-signed,
+`httpOnly` session cookie and bouncing to the login with a `next` param so you
+land back where you were headed. There is no user table yet — `authenticate()`
+compares one set of environment credentials, which is the seam to replace when
+real accounts arrive.
+
+**Data.** `src/server/data/store.ts` is an in-memory stub seeded with realistic
+enquiries, applications and customers. Every function mirrors a call the real
+backend will expose, so swapping the bodies for HTTP or SQL leaves the routes,
+the hooks and the UI untouched. It resets whenever the server restarts.
+
+**Charts.** Series colours are tokens (`--chart-1..3`), assigned in a fixed
+order and validated for colourblind separation, lightness band and contrast in
+both modes. Slot 1 is the brand ramp, which sits below 3:1 on white — so every
+chart labels its values, and status is always a tone plus a word, never colour
+on its own.
+
 ## Environment variables
 
 Validated at startup by `src/config/env.ts` — a missing or malformed variable
 fails loudly instead of surfacing as a runtime bug. See `.env.example`.
+
+`NEXT_PUBLIC_API_URL` points at the World Portal backend and is what the visa
+flow talks to. The admin console does **not** use it: its routes live in this
+app, so it calls them through `internalApi` on a fixed same-origin `/api` base.
+`ADMIN_PASSWORD` and `SESSION_SECRET` ship with development defaults that are
+refused in production.
 
 ## Conventions
 

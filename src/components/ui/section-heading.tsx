@@ -12,12 +12,15 @@ export type SectionHeadingProps = {
   align?: "left" | "center";
   /** Inverts colours for headings sitting on photography. */
   onDark?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
+  /** Heading level. Sections use h2; a page title is an h1. */
+  as?: "h1" | "h2" | "h3";
   className?: string;
   children?: React.ReactNode;
 };
 
 const headingSize = {
+  xs: "text-[24px] sm:text-[28px]",
   sm: "text-[26px] sm:text-3xl lg:text-[34px]",
   md: "text-[30px] sm:text-4xl lg:text-[44px]",
   lg: "text-[34px] sm:text-5xl lg:text-[56px]",
@@ -36,6 +39,7 @@ export function SectionHeading({
   align = "left",
   onDark = false,
   size = "md",
+  as: Heading = "h2",
   className,
   children,
 }: SectionHeadingProps) {
@@ -56,7 +60,7 @@ export function SectionHeading({
         </Badge>
       ) : null}
 
-      <h2
+      <Heading
         className={cn(
           "font-semibold tracking-[-0.03em] text-balance",
           headingSize[size],
@@ -71,7 +75,7 @@ export function SectionHeading({
             <span className="heading-serif font-normal">{accent}</span>
           </>
         ) : null}
-      </h2>
+      </Heading>
 
       {body ? (
         <p

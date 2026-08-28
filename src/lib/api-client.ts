@@ -164,3 +164,59 @@ export const api = {
   delete: <T>(url: string, config?: Parameters<AxiosInstance["delete"]>[1]) =>
     apiClient.delete<T>(url, config).then((r) => r.data),
 };
+
+/* ---------------------------------------------------------------------------
+ * The console talks to this Next app, not the World Portal backend.
+ * ------------------------------------------------------------------------- */
+
+type InternalErrorBody = { message?: string; code?: string; errors?: FieldErrors };
+
+/**
+ * Same-origin client for the route handlers under `src/app/api`.
+ *
+ * Deliberately not `NEXT_PUBLIC_API_URL`: those handlers live in this app, so
+ * pointing them at the backend origin would 404 every console screen the
+ * moment the tunnel URL is set. It also speaks the internal error shape —
+ * a 422 with an `errors` object — rather than NestJS's message array.
+ */
+export const internalClient: AxiosInstance = axios.create({
+  baseURL: "/api",
+  timeout: 20_000,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: true,
+});
+
+internalClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError<InternalErrorBody>) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+
+    const body = error.response?.data;
+    return Promise.reject(
+      new ApiError({
+        message:
+          body?.message ?? error.message ?? "Something went wrong. Please try again.",
+        status: error.response?.status,
+        code: body?.code ?? error.code,
+        errors: body?.errors,
+      }),
+    );
+  },
+);
+
+export const internalApi = {
+  get: <T>(url: string, config?: Parameters<AxiosInstance["get"]>[1]) =>
+    internalClient.get<T>(url, config).then((r) => r.data),
+  post: <T>(
+    url: string,
+    body?: unknown,
+    config?: Parameters<AxiosInstance["post"]>[2],
+  ) => internalClient.post<T>(url, body, config).then((r) => r.data),
+  patch: <T>(
+    url: string,
+    body?: unknown,
+    config?: Parameters<AxiosInstance["patch"]>[2],
+  ) => internalClient.patch<T>(url, body, config).then((r) => r.data),
+  delete: <T>(url: string, config?: Parameters<AxiosInstance["delete"]>[1]) =>
+    internalClient.delete<T>(url, config).then((r) => r.data),
+};

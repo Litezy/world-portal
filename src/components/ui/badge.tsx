@@ -21,6 +21,16 @@ const badgeVariants = cva(
         muted: "bg-secondary text-secondary-foreground",
         destructive: "bg-destructive text-destructive-foreground",
         success: "bg-success text-success-foreground",
+        /**
+         * Tinted status tones for dense surfaces (the console tables), where a
+         * solid fill on every row would shout. Always pair with `dot` and a
+         * word, so the colour is never the only signal.
+         */
+        softSuccess: "bg-success/12 text-success",
+        softWarning: "bg-warning/20 text-brand-800",
+        softDestructive: "bg-destructive/10 text-destructive",
+        softInfo: "bg-info/10 text-info",
+        softNeutral: "bg-ink-100 text-ink-700",
       },
       size: {
         sm: "h-6 px-2.5 text-[11px]",
