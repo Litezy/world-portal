@@ -1,0 +1,815 @@
+# World Portal API — Frontend Integration Guide
+
+> World Portal is a NestJS + Prisma/PostgreSQL backend for travel passport & visa
+> processing: applicant intake, document upload, admin cost evaluation, payment
+> transactions (full or 50% installment), and surcharged refunds. This file is a
+> complete, code-verified reference for building a frontend against it — every
+> route, payload shape, auth rule, and known quirk is listed below.
+
+Base URL (local dev): `http://localhost:4000/api` (port comes from `.env`
+`PORT`; moved off the `3000`/`3001` defaults because other local projects —
+including the `world-portal-frontend` Next.js app itself — occupy those).
+Swagger/OpenAPI UI: `http://localhost:<PORT>/api/docs`.
+
+All routes below are written **relative to the base URL** (`/api` is already a
+global prefix applied in `main.ts` via `app.setGlobalPrefix('api')`) unless a
+note says otherwise.
+
+---
+
+## 0. System architecture & current dev topology
+
+Two sibling repos make up World Portal:
+
+- **`worldPortal`** (this repo) — the NestJS API documented here. Data lives
+  in a shared Neon Postgres instance (`DATABASE_URL` in `.env` already points
+  at it — no local Postgres needed). Redis is referenced in `.env` for a
+  future BullMQ queue, but nothing in the codebase actually enqueues/consumes
+  jobs yet — the "email notification" step in the evaluate-cost flow is
+  currently just a log line, not a real queue dispatch.
+- **`world-portal-frontend`** — a Next.js app (marketing site + applicant
+  flows). It talks to this API through a single shared client at
+  `src/lib/api-client.ts` (see §8 below) — that's the one file that encodes
+  the frontend's expectations of this backend's contract.
+
+**No hosted/staging server exists yet.** Both apps currently only run on a
+developer's machine. To let someone without local access (e.g. a frontend dev
+on a different machine) hit this API, the backend is temporarily exposed via
+a **Cloudflare Quick Tunnel** (`cloudflared tunnel --url http://localhost:4000`,
+no account needed). This produces an ephemeral `https://<random-words>.trycloudflare.com`
+URL that proxies straight to `localhost:4000` — treat it as a temporary
+stand-in for a real deployment:
+- The URL changes every time the tunnel process restarts, and free quick
+  tunnels can also be invalidated server-side after a few hours even without
+  a restart — whoever is running it needs to re-share it when that happens.
+- It only works while both the Nest dev server *and* the `cloudflared` process
+  are running on that machine.
+- `ENABLE_MOCK_AUTH=true` still applies over the tunnel — anyone with the URL
+  can authenticate as anyone (see §2). Fine for a dev handoff, not for wider
+  sharing.
+- CORS is already configured to accept any origin (see below), so no frontend
+  changes are needed when the base URL is a tunnel link vs `localhost`.
+
+---
+
+## 1. Global conventions (read this first)
+
+- **Every response is wrapped in a `{ success, ... }` envelope.** A
+  successful call returns `{ "success": true, "data": <payload> }` — `data`
+  is the resource object for single-item endpoints, or an array for list
+  endpoints. A failed call returns `{ "success": false, "statusCode":
+  <number>, "message": <string>, "errors"?: Record<string, string[]> }`,
+  with `errors` present only for `422` validation failures. This applies to
+  **every** route in this API, including the plain-text-looking health check
+  (`GET /api` now returns `{"success":true,"data":"Hello World!"}`, not raw
+  text). See §9 for the full error-shape breakdown.
+- **Global route prefix**: every controller route is mounted under `/api` in
+  addition to its own `@Controller()` path — e.g. `visa-requirement` is
+  reachable at `/api/visa-requirement/...`.
+- **Validation**: global `ValidationPipe` runs with `whitelist: true` and
+  `forbidNonWhitelisted: true` — any request body field not declared in the
+  DTO causes a `422 Unprocessable Entity` (see §9). Only send fields listed
+  below.
+- **Decimals serialize as strings**: any Prisma `Decimal` field (`totalAmount`,
+  `amountPaid`, `balanceDue`, `amount`, `partnerMarkupPercentage`,
+  `serviceFeePercentage`, `refundSurchargePercentage`,
+  `originalAmount`/`surchargeAmount`/`netRefundAmount`) comes back in JSON as a
+  **string** (e.g. `"500.00"`), not a JS number. Parse with `Number(...)` /
+  `parseFloat(...)` before doing math or formatting.
+- **Dates**: request DTOs accept `YYYY-MM-DD` date strings (`@IsDateString()`).
+  Response payloads return full ISO-8601 `DateTime` strings from Postgres.
+- **No pagination**: all list endpoints (`GET /profiles`, `GET
+  /visa-documentation`, `GET /payments/transactions`) return the **full
+  matching array** inside `data`, no `page`/`limit`/`cursor`. Filter via query
+  params to narrow results; implement client-side pagination if needed.
+- **IDs**: all primary keys are UUID strings.
+- **Auth header**: `Authorization: Bearer <token>` on any guarded route.
+- **CORS**: enabled for any origin (`app.enableCors({ origin: true, credentials: true })`
+  in `main.ts`) — the frontend can call this API from `localhost`, a tunnel
+  URL, or a future deployed domain with no backend changes needed. `credentials: true`
+  is there for future cookie-based auth; today auth is a Bearer header, not a
+  cookie, so `withCredentials` on the frontend's axios client is currently
+  inert but harmless.
+
+**Every JSON example in §4 below shows the raw resource shape for brevity —
+mentally wrap it as `{ "success": true, "data": <that shape> }` (or `data:
+[<that shape>, ...]` for list endpoints) to get the real response body.**
+Request body examples (what you send) are never wrapped — only responses are.
+
+---
+
+## 2. Authentication model (important — this is a mock/dev auth system)
+
+There is no external identity provider actually wired up yet, despite the
+`EXTERNAL_AUTH_SERVICE_URL` env var existing — `ExternalAuthGuard` never calls
+it. Here's what really happens:
+
+1. **Get a token** — `POST /api/auth/test-token` (always public, guard
+   explicitly skips this path):
+   ```json
+   // Request
+   { "email": "manager@loveworld.com", "externalAuthId": "external-auth-manager-001" }
+   // externalAuthId is optional — omit it and the server derives one
+
+   // Response 201
+   {
+     "success": true,
+     "data": {
+       "accessToken": "<JWT>",
+       "tokenType": "Bearer",
+       "expiresIn": "1h",
+       "user": { "email": "manager@loveworld.com", "externalAuthId": "external-auth-manager-001" }
+     }
+   }
+   ```
+   This route 403s if `ENABLE_MOCK_AUTH=false` in `.env`.
+
+2. **Use the token** — send `Authorization: Bearer <accessToken>` on guarded
+   routes. `ExternalAuthGuard` **decodes** the JWT (does not cryptographically
+   verify it against an external service) and attaches `{ externalAuthId,
+   email, token }` to `request.user`.
+
+3. **Dev shortcut** — when `ENABLE_MOCK_AUTH=true`, the guard also accepts a
+   **raw non-JWT bearer string** instead of a real token:
+   - `Authorization: Bearer manager` → resolves to the configured
+     `DEFAULT_MANAGER_EMAIL` / `DEFAULT_MANAGER_EXTERNAL_AUTH_ID`.
+   - `Authorization: Bearer someone@example.com` → identity = that email.
+   - `Authorization: Bearer anything-else` → email becomes
+     `anything-else@loveworld.com`.
+   This is convenient for manual Postman/curl testing but don't build frontend
+   logic that depends on it — always go through `/auth/test-token` or a real
+   token in the actual app.
+
+4. **Role check** — `RolesGuard` (only runs on routes that also declare
+   `@Roles(...)`) looks up a **`Profile` row** in Postgres matching
+   `externalAuthId` OR `email` from the token. If no matching Profile exists,
+   or `isActive` is false, or the Profile's `role` isn't in the route's
+   allowed list, the request gets `403 Forbidden`. **A valid token alone is
+   not enough — the identity must exist as an active Profile row first.**
+   Use `POST /profiles` (as a manager) to create one, or use the pre-seeded
+   default manager (`manager@loveworld.com` in the shared dev DB).
+
+Roles are `MANAGER`, `PARTNER`, `STAFF` (enum `UserRole`).
+
+---
+
+## 3. Enums reference
+
+```
+UserRole                   MANAGER | PARTNER | STAFF
+VisaDocumentStatus         SUBMITTED | EVALUATED | UNDER_REVIEW | APPROVED | REJECTED
+PaymentStatus              PENDING_EVALUATION | AWAITING_PAYMENT | PARTIALLY_PAID | FULLY_PAID | REFUNDED
+PaymentOption              FULL | HALF_INSTALLMENT
+VisaCategory               TOURIST | BUSINESS | STUDENT | WORK | TRANSIT
+Gender                     MALE | FEMALE | OTHER
+PaymentTransactionStatus   INITIATED | CONFIRMED | FAILED | REFUNDED
+RefundStatus               REQUESTED | APPROVED | PROCESSED | REJECTED
+PassportCategory           FRESH | RENEWAL | DAMAGE | MARRIAGE | DIVORCE
+PassportValidity           FIVE_YEARS | TEN_YEARS
+BookletType                THIRTY_TWO_PAGES | SIXTY_FOUR_PAGES
+PassportApplicationStatus  SUBMITTED | UNDER_REVIEW | APPROVED | REJECTED
+```
+
+---
+
+## 4. Endpoints
+
+### 4.1 Auth (`/api/auth`)
+
+| Method | Path | Auth | Body |
+|---|---|---|---|
+| POST | `/auth/test-token` | Public | `{ email: string, externalAuthId?: string }` |
+
+### 4.2 Profiles (`/api/profiles`) — all routes require `Authorization: Bearer <token>`
+
+| Method | Path | Roles | Notes |
+|---|---|---|---|
+| POST | `/profiles` | MANAGER | Create a profile |
+| GET | `/profiles/me` | any authenticated | Resolves current user via token email/externalAuthId |
+| GET | `/profiles` | MANAGER | List/filter, supports `?role=` and `?search=` |
+| GET | `/profiles/:id` | MANAGER, STAFF, PARTNER | |
+| PATCH | `/profiles/:id` | MANAGER | Partial update |
+| DELETE | `/profiles/:id` | MANAGER | **Soft delete** — sets `isActive: false`, does not remove the row |
+
+**CreateProfileDto** (POST body):
+```json
+{
+  "email": "partner.agency@loveworld.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "externalAuthId": "optional-string",
+  "phone": "optional-string",
+  "role": "MANAGER | PARTNER | STAFF"
+}
+```
+`email` and `externalAuthId` are unique — duplicates return `409 Conflict`.
+
+**UpdateProfileDto** (PATCH body, all optional): `email`, `firstName`,
+`lastName`, `externalAuthId`, `phone`, `role`, `isActive` (boolean).
+
+**QueryProfileDto** (GET query params, all optional): `role`, `search`
+(matches email/firstName/lastName, case-insensitive).
+
+**Profile response shape** (wrap in `{ success: true, data: ... }` — array for
+`GET /profiles`, single object for the rest):
+```json
+{
+  "id": "uuid",
+  "externalAuthId": "string | null",
+  "email": "string",
+  "firstName": "string",
+  "lastName": "string",
+  "phone": "string | null",
+  "role": "MANAGER | PARTNER | STAFF",
+  "isActive": true,
+  "createdAt": "ISO-8601",
+  "updatedAt": "ISO-8601"
+}
+```
+
+### 4.3 Document Upload (`/api/upload`) — public, no auth
+
+| Method | Path | Body |
+|---|---|---|
+| POST | `/upload` | `multipart/form-data`, field name **`file`** |
+
+- Accepted types: PDF, JPEG, JPG, PNG, WEBP. Max size: **10 MB**.
+- Storage backend is pluggable (`STORAGE_PROVIDER=s3` or `cloudinary` in
+  `.env`) but the response shape is identical either way.
+- **Workflow**: call this once per document *before* submitting a visa
+  application, and put the returned `url` into the corresponding
+  `*Url` field on `POST /visa-documentation`. There is no endpoint that
+  accepts raw files as part of the visa application payload — uploads and
+  application submission are two separate steps.
+
+Response (`201`, shown unwrapped — see §1):
+```json
+{
+  "url": "https://.../documents/b7a9f1e0-passport-scan.pdf",
+  "key": "documents/b7a9f1e0-passport-scan.pdf",
+  "originalName": "passport-scan.pdf",
+  "mimeType": "application/pdf",
+  "size": 1048576
+}
+```
+
+### 4.4 Visa Requirement lookup (`/api/visa-requirement`) — public, no auth
+
+| Method | Path | Body / Query |
+|---|---|---|
+| GET | `/visa-requirement/passports` | none — full list, server-cached 1h |
+| GET | `/visa-requirement/destinations` | none — full list, server-cached 1h |
+| POST | `/visa-requirement/check` | `{ passport: "CN", destination: "ID" }` (ISO alpha-2/3 codes) |
+| POST | `/visa-requirement/map` | `{ passport: "US" }` |
+
+These proxy a third-party RapidAPI visa-requirement service; a `502 Bad
+Gateway` means that upstream call failed (bad/missing
+`RAPIDAPI_VISA_REQUIREMENT_KEY`, timeout, or upstream error) — not a bug in
+your request.
+
+The upstream RapidAPI service returns its own `{ data, meta }` envelope, but
+the controller unwraps that before returning, so this module follows the
+**same single-level `{ success, data }` shape as everything else** (§1) —
+`meta` (upstream API version/generation timestamp) is intentionally dropped
+at the controller boundary rather than double-nested; it isn't needed by
+consumers of this API.
+
+Passports/destinations response:
+```json
+{
+  "success": true,
+  "data": [{ "iso_alpha2": "US", "iso_alpha3": "USA", "name": "United States of America" }, ...]
+}
+```
+
+`check` response's `data` includes `passport`, `destination` (rich country
+info: currency, phone code, timezone, embassy_url, etc.),
+`mandatory_registration` (optional), and `visa_rules.primary_rule` /
+`secondary_rule` (each with `name`, `duration`, `color`, `link`). Treat this
+as passthrough third-party data — field presence varies by country pair.
+
+`map`'s `data` is an opaque blob (shape not modeled by this API) — pass it
+straight through to whatever visualization you build.
+
+### 4.5 Visa Documentation (`/api/visa-documentation`)
+
+| Method | Path | Auth | Roles |
+|---|---|---|---|
+| POST | `/visa-documentation` | **Public** | — applicant/partner/guest submits an application |
+| GET | `/visa-documentation` | Bearer | MANAGER, STAFF, PARTNER |
+| GET | `/visa-documentation/:id` | **Public** | — `:id` can be the UUID **or** the human `applicationNo` (e.g. `VISA-2026-8941`), used for public status tracking |
+| POST | `/visa-documentation/:id/evaluate` | Bearer | MANAGER, STAFF |
+| PATCH | `/visa-documentation/:id/status` | Bearer | MANAGER, STAFF |
+
+**CreateVisaDocumentationDto** (POST body — only `firstName`, `lastName`,
+`email`, `targetCountry` are required; everything else is optional but
+strongly recommended):
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe@gmail.com",
+  "phone": "+2348012345678",
+  "dateOfBirth": "1992-05-15",
+  "gender": "MALE",
+  "nationality": "Nigerian",
+  "residenceAddress": "123 Loveworld Street, Lagos",
+  "passportNumber": "A12345678",
+  "passportIssueDate": "2022-01-10",
+  "passportExpiryDate": "2032-01-09",
+  "passportIssuingAuthority": "",
+  "targetCountry": "Canada",
+  "visaCategory": "TOURIST",
+  "intendedArrivalDate": "2026-10-01",
+  "intendedDepartureDate": "2026-10-21",
+  "purposeOfVisit": "Annual vacation and tourism",
+  "passportDataPageUrl": "https://.../passport-datapage.pdf",
+  "passportPhotoWhiteBgUrl": "https://.../passport-photo.jpg",
+  "proofOfFunds6MonthsUrl": "https://.../proof-of-funds.pdf",
+  "businessRegistrationCertUrl": "https://.../business-cert.pdf",
+  "taxCertificateUrl": "https://.../tax-cert.pdf",
+  "marriageCertificateUrl": "https://.../marriage-cert.pdf",
+  "childrenBirthCertUrls": ["https://.../child-birth-cert-1.pdf"],
+  "landedPropertyDocUrls": ["https://.../landed-property-doc.pdf"],
+  "previousVisasScanUrls": ["https://.../previous-visa-scan.pdf"],
+  "supportingDocUrls": ["https://.../supporting-doc-1.pdf"],
+  "profileId": "optional-uuid-if-submitted-by-a-logged-in-partner"
+}
+```
+Every `*Url` field must be a valid URL (`@IsUrl()`) — pass the `url` value
+returned from `POST /upload`. On create, server sets
+`status: SUBMITTED`, `paymentStatus: PENDING_EVALUATION`, and generates a
+unique `applicationNo` like `VISA-2026-8941`.
+
+**EvaluateVisaCostDto** (POST `/:id/evaluate` body — MANAGER/STAFF):
+```json
+{ "totalAmount": 500.00, "allowInstallment": true }
+```
+Effect: sets `totalAmount`/`balanceDue` to this value, `amountPaid: 0`,
+`paymentStatus: AWAITING_PAYMENT`, `status: EVALUATED`. This must happen
+before any payment can be initiated for the application.
+
+**UpdateVisaStatusDto** (PATCH `/:id/status` body — MANAGER/STAFF):
+```json
+{
+  "status": "APPROVED",
+  "verificationNotes": "All documents verified successfully by staff.",
+  "rejectionReason": "Passport scan illegible; please re-upload clear page."
+}
+```
+`status` accepts any `VisaDocumentStatus` value; `rejectionReason` is only
+persisted when `status === "REJECTED"`.
+
+**QueryVisaDocumentationDto** (GET list, all optional query params):
+`status`, `paymentStatus`, `visaCategory`, `targetCountry` (partial match),
+`search` (matches firstName/lastName/email/passportNumber/applicationNo).
+
+**VisaDocumentation response shape** (list/detail — detail also embeds
+`profile` when `profileId` is set; shown unwrapped — see §1):
+```json
+{
+  "id": "uuid",
+  "applicationNo": "VISA-2026-8941",
+  "profileId": "uuid | null",
+  "firstName": "John", "lastName": "Doe", "email": "...", "phone": "...",
+  "dateOfBirth": "ISO-8601", "gender": "MALE",
+  "nationality": "...", "residenceAddress": "...",
+  "passportNumber": "...", "passportIssueDate": "ISO-8601",
+  "passportExpiryDate": "ISO-8601", "passportIssuingAuthority": "... | null",
+  "targetCountry": "Canada", "visaCategory": "TOURIST",
+  "intendedArrivalDate": "ISO-8601", "intendedDepartureDate": "ISO-8601",
+  "purposeOfVisit": "...",
+  "passportDataPageUrl": "...", "passportPhotoWhiteBgUrl": "...",
+  "proofOfFunds6MonthsUrl": "...",
+  "businessRegistrationCertUrl": "... | null",
+  "taxCertificateUrl": "... | null", "marriageCertificateUrl": "... | null",
+  "childrenBirthCertUrls": [], "landedPropertyDocUrls": [],
+  "previousVisasScanUrls": [], "supportingDocUrls": [],
+  "totalAmount": "500.00 | null", "amountPaid": "0.00", "balanceDue": "0.00",
+  "allowInstallment": false, "selectedPaymentOption": "FULL | HALF_INSTALLMENT | null",
+  "paymentStatus": "PENDING_EVALUATION",
+  "evaluatedBy": "... | null", "evaluatedAt": "ISO-8601 | null",
+  "status": "SUBMITTED",
+  "verificationNotes": "... | null", "rejectionReason": "... | null",
+  "createdBy": "...", "reviewedBy": "... | null",
+  "createdAt": "ISO-8601", "updatedAt": "ISO-8601",
+  "profile": { "id": "uuid", "email": "...", "firstName": "...", "lastName": "...", "role": "..." }
+}
+```
+
+### 4.6 Payments (`/api/payments`)
+
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/payments/initiate` | Public (by design — applicant-facing) |
+| POST | `/payments/confirm` | Public (by design — applicant-facing) |
+| POST | `/payments/refund` | Bearer — MANAGER only |
+| GET | `/payments/config` | Bearer — MANAGER, STAFF |
+| PATCH | `/payments/config` | Bearer — MANAGER only |
+| GET | `/payments/transactions` | Bearer — MANAGER, STAFF |
+
+**InitiatePaymentTransactionDto** (POST `/initiate`):
+```json
+{
+  "visaDocumentationId": "uuid",
+  "profileId": "optional-uuid",
+  "paymentOption": "FULL | HALF_INSTALLMENT",
+  "amount": 500.00
+}
+```
+- `visaDocumentationId` is required; that application must already have been
+  evaluated (`totalAmount` set) or this 400s.
+- `HALF_INSTALLMENT` is only allowed if that application's
+  `allowInstallment` is `true` (set by the admin during evaluation).
+- `amount` is optional — omit it to let the server auto-calculate (full
+  balance, or 50% for the first installment). If provided, it's validated
+  against the balance/installment rules and used verbatim.
+- Response (shown unwrapped — see §1; note there's no `success` key *inside*
+  `data` here, that field was removed since it duplicated the envelope's own
+  `success`):
+  ```json
+  {
+    "transactionRef": "TXN-PAY-894120",
+    "transactionId": "uuid",
+    "visaDocumentationId": "uuid",
+    "applicationNo": "VISA-2026-8941",
+    "paymentOption": "FULL",
+    "amount": 500,
+    "status": "INITIATED",
+    "checkoutUrl": null,
+    "message": "Payment transaction initiated. Proceed to confirm payment."
+  }
+  ```
+  `checkoutUrl` is always `null` — there is no real payment gateway
+  integration yet; `transactionRef` is what you pass to `/confirm` once
+  the user has "paid" (in whatever flow your frontend implements around
+  that — the backend does not itself talk to a card processor).
+
+**ConfirmPaymentTransactionDto** (POST `/confirm`):
+```json
+{ "transactionRef": "TXN-PAY-894120" }
+```
+Effect (synchronous, no webhook needed): marks the transaction `CONFIRMED`
+**and** directly updates the linked `VisaDocumentation` — recalculates
+`amountPaid`/`balanceDue`, sets `paymentStatus` to `PARTIALLY_PAID` or
+`FULLY_PAID`, and moves `status` to `UNDER_REVIEW`. Call `GET
+/visa-documentation/:id` afterward (or re-check the confirm response) to
+reflect the new state in your UI. Calling confirm twice on the same ref
+returns `409 Conflict`.
+
+**InitiateRefundDto** (POST `/refund`, MANAGER only):
+```json
+{ "transactionRef": "TXN-2026-8941", "reason": "Applicant cancelled application before embassy submission" }
+```
+Only `CONFIRMED` transactions can be refunded. Server computes
+`surchargeAmount = amount * refundSurchargePercentage/100` (from
+`PaymentConfig`) and `netRefundAmount = amount - surchargeAmount`, marks the
+transaction `REFUNDED`. Response is the created `PaymentRefund` row (shown
+unwrapped — see §1):
+```json
+{
+  "id": "uuid", "refundRef": "RFD-894120", "transactionId": "uuid",
+  "originalAmount": "500.00", "surchargeAmount": "75.00", "netRefundAmount": "425.00",
+  "reason": "...", "status": "PROCESSED", "processedBy": "admin@email",
+  "createdAt": "ISO-8601", "updatedAt": "ISO-8601"
+}
+```
+
+**GET `/config`** — returns (auto-creates defaults on first call if none
+exist; shown unwrapped — see §1):
+```json
+{
+  "id": "uuid",
+  "partnerMarkupPercentage": "10.00",
+  "serviceFeePercentage": "5.00",
+  "refundSurchargePercentage": "15.00",
+  "updatedBy": "system-default",
+  "createdAt": "ISO-8601", "updatedAt": "ISO-8601"
+}
+```
+
+**PATCH `/config`** (`UpdatePaymentConfigDto`, all optional, each 0–100):
+```json
+{ "partnerMarkupPercentage": 10.0, "serviceFeePercentage": 5.0, "refundSurchargePercentage": 15.0 }
+```
+Response is the updated config, same shape as `GET /config` above.
+
+**GET `/transactions`** (`QueryPaymentTransactionDto`, optional query
+params): `status` (`PaymentTransactionStatus`), `visaDocumentationId`,
+`search` (matches `transactionRef`/`initiatedBy`). Each row embeds `refunds:
+PaymentRefund[]`.
+
+### 4.7 Passport Application (`/api/passport-application`)
+
+Modeled directly on the Nigeria Immigration Service Electronic Passport Data
+Form (Fresh / Renewal / Damage / Marriage / Divorce categories). Same
+lifecycle shape as `visa-documentation` but simpler — no cost evaluation or
+payment step yet, just submission → review → approve/reject.
+
+| Method | Path | Auth | Roles |
+|---|---|---|---|
+| POST | `/passport-application` | **Public** | — applicant/partner/guest submits an application |
+| GET | `/passport-application` | Bearer | MANAGER, STAFF, PARTNER |
+| GET | `/passport-application/:id` | **Public** | — `:id` can be the UUID **or** the human `applicationNo` (e.g. `PASSPORT-2026-8288`), used for public status tracking |
+| PATCH | `/passport-application/:id/status` | Bearer | MANAGER, STAFF |
+
+**CreatePassportApplicationDto** (POST body — only `passportCategory`,
+`surname`, `firstName`, `sex`, `ninNumber`, `email` are required; everything
+else is optional but strongly recommended, matching the paper form):
+```json
+{
+  "passportCategory": "FRESH",
+  "surname": "Okafor",
+  "firstName": "Chinedu",
+  "middleName": "Emeka",
+  "sex": "MALE",
+  "ninNumber": "12345678901",
+  "dateOfBirth": "1992-05-15",
+  "placeOfBirth": "Enugu",
+  "existingPassportNumber": "",
+  "homeTown": "Nsukka",
+  "stateOfOrigin": "Enugu State",
+  "permanentAddress": "123 Loveworld Street, Lagos",
+  "occupation": "Software Engineer",
+  "contactPhone": "+2348012345678",
+  "email": "chinedu.okafor@gmail.com",
+  "maritalStatus": "Single",
+  "colourOfEyes": "Brown",
+  "colourOfHair": "Black",
+  "height": "5ft 8in",
+  "maidenName": "",
+  "nextOfKinName": "Ifeoma Okafor",
+  "nextOfKinPhone": "+2348098765432",
+  "nextOfKinRelationship": "Sister",
+  "nextOfKinAddress": "123 Loveworld Street, Lagos",
+  "validity": "FIVE_YEARS",
+  "bookletType": "THIRTY_TWO_PAGES",
+  "birthCertificateUrl": "https://.../birth-certificate.pdf",
+  "ninDocumentUrl": "https://.../nin-slip.pdf",
+  "passportPhotoUrl": "https://.../passport-photo.jpg",
+  "profileId": "optional-uuid-if-submitted-by-a-logged-in-partner"
+}
+```
+- `sex` reuses the same `Gender` enum as `visa-documentation` (`MALE | FEMALE | OTHER`).
+- `existingPassportNumber` is the applicant's current passport number — relevant
+  for `RENEWAL`/`DAMAGE`/`MARRIAGE`/`DIVORCE` categories, not `FRESH`.
+- `validity` defaults to `FIVE_YEARS`, `bookletType` defaults to `THIRTY_TWO_PAGES`
+  if omitted.
+- **The three document URLs (`birthCertificateUrl`, `ninDocumentUrl`,
+  `passportPhotoUrl`) are the whole point of this service** — get each one
+  from `POST /upload` first (same as the visa-documentation flow, §4.3), then
+  pass the returned `url` here. They're DTO-optional (matching the
+  `visa-documentation` convention of not hard-blocking submission on missing
+  docs) but functionally required — staff cannot review an application
+  without them, so the frontend should treat all three as required form
+  fields even though the API will accept a submission without them.
+- On create, server sets `status: SUBMITTED` and generates a unique
+  `applicationNo` like `PASSPORT-2026-8288`.
+
+**UpdatePassportStatusDto** (PATCH `/:id/status` body — MANAGER/STAFF):
+```json
+{
+  "status": "APPROVED",
+  "verificationNotes": "NIN and birth certificate verified.",
+  "rejectionReason": "NIN slip does not match applicant name."
+}
+```
+`status` accepts any `PassportApplicationStatus` value; `rejectionReason` is
+only persisted when `status === "REJECTED"`.
+
+**QueryPassportApplicationDto** (GET list, all optional query params):
+`status`, `passportCategory`, `search` (matches
+surname/firstName/email/ninNumber/applicationNo).
+
+**PassportApplication response shape** (list/detail — detail also embeds
+`profile` when `profileId` is set; shown unwrapped — see §1):
+```json
+{
+  "id": "uuid",
+  "applicationNo": "PASSPORT-2026-8288",
+  "profileId": "uuid | null",
+  "passportCategory": "FRESH",
+  "surname": "Okafor", "firstName": "Chinedu", "middleName": "Emeka | null",
+  "sex": "MALE", "ninNumber": "12345678901",
+  "dateOfBirth": "ISO-8601", "placeOfBirth": "...",
+  "existingPassportNumber": "... | null",
+  "homeTown": "...", "stateOfOrigin": "...", "permanentAddress": "...",
+  "occupation": "...", "contactPhone": "...", "email": "...",
+  "maritalStatus": "...", "colourOfEyes": "...", "colourOfHair": "...",
+  "height": "...", "maidenName": "... | null",
+  "nextOfKinName": "...", "nextOfKinPhone": "...",
+  "nextOfKinRelationship": "...", "nextOfKinAddress": "...",
+  "validity": "FIVE_YEARS", "bookletType": "THIRTY_TWO_PAGES",
+  "birthCertificateUrl": "...", "ninDocumentUrl": "...", "passportPhotoUrl": "...",
+  "status": "SUBMITTED",
+  "verificationNotes": "... | null", "rejectionReason": "... | null",
+  "createdBy": "...", "reviewedBy": "... | null",
+  "createdAt": "ISO-8601", "updatedAt": "ISO-8601",
+  "profile": { "id": "uuid", "email": "...", "firstName": "...", "lastName": "...", "role": "..." }
+}
+```
+
+---
+
+## 5. End-to-end flows to implement in the frontend
+
+**A. Applicant submits a visa application (public flow)**
+1. `POST /upload` once per required document (passport data page, passport
+   photo, proof of funds, plus any optional docs) → collect each `url`.
+2. `POST /visa-documentation` with those URLs in the `*Url` fields → get back
+   `applicationNo` (e.g. `VISA-2026-8941`). Show this to the user as their
+   tracking reference.
+3. Applicant can later check status via `GET
+   /visa-documentation/VISA-2026-8941` — no login required.
+
+**B. Admin evaluates and the applicant pays**
+1. Manager/Staff: `POST /visa-documentation/:id/evaluate` with `totalAmount`
+   (and `allowInstallment` if a 50% option should be offered). Status moves
+   to `EVALUATED`, `paymentStatus` to `AWAITING_PAYMENT`.
+2. Applicant/frontend: `POST /payments/initiate` with `visaDocumentationId`
+   and chosen `paymentOption` → get `transactionRef`.
+3. After your payment UI collects payment, call `POST /payments/confirm`
+   with that `transactionRef`. This immediately advances the visa
+   application to `UNDER_REVIEW` and updates its payment totals — no
+   separate refetch/poll needed to know the new state, it's returned in
+   the confirm response (re-fetch `GET /visa-documentation/:id` for the
+   full updated record).
+4. If `HALF_INSTALLMENT` was used, repeat steps 2–3 for the second half —
+   `paymentStatus` will read `PARTIALLY_PAID` until the balance reaches 0,
+   then `FULLY_PAID`.
+
+**C. Manager/Staff review**
+1. `GET /visa-documentation?status=UNDER_REVIEW` to build a review queue.
+2. `PATCH /visa-documentation/:id/status` with `APPROVED` or `REJECTED`
+   (+ `rejectionReason` if rejecting).
+
+**D. Manager processes a refund**
+1. `GET /payments/transactions?status=CONFIRMED` to find the transaction.
+2. `POST /payments/refund` with its `transactionRef` and a `reason`.
+
+**E. Applicant submits a passport application (public flow)**
+1. `POST /upload` for each of the three required documents (birth
+   certificate, NIN, white-background passport photo) → collect each `url`.
+2. `POST /passport-application` with those URLs plus the personal/next-of-kin
+   fields from §4.7 → get back `applicationNo` (e.g. `PASSPORT-2026-8288`) as
+   the tracking reference.
+3. Applicant can later check status via `GET
+   /passport-application/PASSPORT-2026-8288` — no login required.
+4. Manager/Staff review queue: `GET
+   /passport-application?status=SUBMITTED`, then `PATCH
+   /passport-application/:id/status` with `APPROVED` or `REJECTED` (+
+   `rejectionReason` if rejecting). There is no payment step in this flow
+   yet — unlike visa documentation, passport applications don't currently
+   have cost evaluation wired in.
+
+---
+
+## 6. Gotchas / known issues (verified against current code, 2026-08-28)
+
+1. **`ExternalAuthGuard` does not verify JWT signatures** and does not call
+   `EXTERNAL_AUTH_SERVICE_URL` — it's a local mock decoder gated by
+   `ENABLE_MOCK_AUTH`. Fine for local/dev integration; do not treat it as
+   production-grade auth.
+2. **All Decimal fields are strings in JSON** (see §1). This affects
+   `totalAmount`, `amountPaid`, `balanceDue`, payment `amount`, and every
+   `*Percentage`/`*Amount` field in payment config/refund payloads.
+3. **No pagination anywhere.** Large tables (e.g. all visa applications) come
+   back as one array inside `data`.
+4. **`GET /visa-documentation/:id` is intentionally public** (no auth) so
+   applicants can track status by `applicationNo` without an account — don't
+   add a Bearer header requirement for this one route in the frontend.
+5. **Root health-check route is `GET /api`** → `{"success":true,"data":"Hello
+   World!"}` (JSON, not plain text, now that the global envelope wraps every
+   response including this one) — useful as an uptime ping, not a real health
+   payload.
+
+*(Earlier issues found during review — a doubled `/api/api/visa-requirement`
+prefix, missing auth guards on `PaymentController`'s protected routes, no
+consistent response envelope, and a double-nested `data.data` on the
+visa-requirement endpoints — have all been fixed in the backend and are no
+longer applicable. Every endpoint in the API now uses the exact same
+single-level `{ success, data }` / `{ success, statusCode, message, errors?
+}` envelope, no exceptions.)*
+
+---
+
+## 7. Local dev reference
+
+- Swagger UI: `http://localhost:<PORT>/api/docs` — every DTO/enum above is
+  also browsable there with live "Try it out". Note Swagger's documented
+  response schemas show the raw (unwrapped) resource shape — the actual live
+  response is that shape wrapped in `{ success, data }` per §1; the Swagger
+  annotations haven't been updated to reflect the envelope yet.
+- Get a working token fast: `POST /api/auth/test-token` with
+  `{"email":"manager@loveworld.com"}` (matches the pre-seeded default manager
+  in the shared dev database) to act as MANAGER immediately.
+- Even faster: `.env` has `TEST_MANAGER_TOKEN` — a pre-generated
+  manager-identity JWT (2-day expiry) signed with the same `JWT_SECRET`. Copy
+  that value straight into `Authorization: Bearer <token>` for any guarded
+  route without calling `/auth/test-token` first. It's gitignored (never
+  committed) and dev-only — regenerate it every 2 days (or after rotating
+  `JWT_SECRET`) with the command in `.env.example`.
+- `ENABLE_MOCK_AUTH=true` in `.env` is required for both `/auth/test-token`
+  and the raw-string bearer shortcut to work.
+- If you're integrating from a different machine than whoever runs the
+  backend, ask them for the current tunnel URL (see §0) — it's not a fixed
+  value, so don't hardcode one anywhere in the frontend beyond a local
+  `.env.local`.
+
+---
+
+## 8. Frontend client contract (`world-portal-frontend`)
+
+The frontend already has a single shared HTTP client wired up at
+`src/lib/api-client.ts`, built with these assumptions — align backend
+responses to this contract rather than inventing a parallel one:
+
+```ts
+// src/config/env.ts
+NEXT_PUBLIC_API_URL: z.url().optional()   // not set yet — no .env.local exists in that repo
+
+// src/lib/api-client.ts
+baseURL: env.NEXT_PUBLIC_API_URL ?? "/api"
+withCredentials: true
+```
+
+- **To point the frontend at this backend**, create `world-portal-frontend/.env.local`
+  with `NEXT_PUBLIC_API_URL=http://localhost:4000/api` (or the current tunnel
+  URL + `/api`). Without it, `apiClient` falls back to a relative `/api` path,
+  which only works if the frontend is later deployed behind a reverse proxy
+  that forwards `/api/*` to this backend — there is no such proxy today.
+- **Call sites use paths relative to that base** (e.g. `api.get('/profiles')`,
+  not `api.get('/api/profiles')`) — the `/api` segment lives in `baseURL`,
+  don't repeat it in individual calls.
+- **New — every success response is now `{ success, data }` (§1).** The
+  existing `api.get<T>()`/`api.post<T>()` helpers in `api-client.ts` currently
+  do `apiClient.get<T>(url).then(r => r.data)`, which would make `T` resolve
+  to `{ success: true, data: <actual payload> }` instead of the payload
+  itself. Cleanest fix: add one line to the response interceptor in
+  `api-client.ts` that unwraps the envelope before it reaches call sites, so
+  every existing/future `api.get<Profile[]>('/profiles')`-style call keeps
+  getting the plain typed payload:
+  ```ts
+  apiClient.interceptors.response.use((response) => {
+    if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+      response.data = response.data.data;
+    }
+    return response;
+  });
+  ```
+  Add this **before** the existing error-handling interceptor in that file.
+  This one change covers every endpoint in the API uniformly — there are no
+  module-specific exceptions to the envelope shape anymore.
+- **Auth is not wired up yet on the frontend** — `api-client.ts`'s request
+  interceptor has a TODO comment for attaching
+  `config.headers.Authorization = \`Bearer ${token}\``. Once a real login/token
+  flow exists on the frontend, that's where it plugs in; until then, any
+  guarded route called through this client will 401.
+- See §9 — the backend's error shape now lines up cleanly with this client's
+  `ApiErrorShape`, no workaround needed there anymore.
+
+---
+
+## 9. Error response shape
+
+Every error response is now:
+```json
+{ "success": false, "statusCode": 404, "message": "Visa application record with identifier '...' not found." }
+```
+or, for validation failures specifically:
+```json
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation failed",
+  "errors": {
+    "email": ["email should not be empty", "email must be an email"],
+    "passportCategory": ["passportCategory must be one of the following values: FRESH, RENEWAL, DAMAGE, MARRIAGE, DIVORCE"]
+  }
+}
+```
+This is produced by a global exception filter (`AllExceptionsFilter`) plus a
+custom `ValidationPipe` `exceptionFactory`, both in `src/main.ts` /
+`src/common/`. `message` is always a plain string; `errors` (a field →
+message-list map) is present **only** on `422` validation failures, `422` is
+the real HTTP status code for those, and every other thrown exception
+(`NotFoundException`, `ConflictException`, `ForbiddenException`,
+`UnauthorizedException`, `BadGatewayException`, etc.) keeps its original
+status code with `message` as a plain string.
+
+This matches the frontend's existing `ApiError` normalization exactly:
+```ts
+type ApiErrorShape = {
+  message: string;
+  code?: string;
+  status?: number;
+  errors?: Record<string, string[]>;
+};
+// isValidation = status === 422 || Boolean(errors)
+```
+`data?.message` is always a string now (never an array), `data?.errors` is
+populated exactly when `isValidation` should be `true`, and `error.response.status`
+is genuinely `422` for validation failures — so the frontend's existing
+`isValidation`/`isUnauthorized` getters work correctly against this backend
+with **no frontend changes needed** for error handling (only the success-side
+envelope in §8 needs a frontend-side adjustment).

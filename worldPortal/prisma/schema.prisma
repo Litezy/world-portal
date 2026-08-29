@@ -1,0 +1,297 @@
+// Prisma Schema for World Portal
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MANAGER
+  PARTNER
+  STAFF
+}
+
+enum VisaDocumentStatus {
+  SUBMITTED
+  EVALUATED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING_EVALUATION
+  AWAITING_PAYMENT
+  PARTIALLY_PAID
+  FULLY_PAID
+  REFUNDED
+}
+
+enum PaymentOption {
+  FULL
+  HALF_INSTALLMENT
+}
+
+enum VisaCategory {
+  TOURIST
+  BUSINESS
+  STUDENT
+  WORK
+  TRANSIT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum PassportCategory {
+  FRESH
+  RENEWAL
+  DAMAGE
+  MARRIAGE
+  DIVORCE
+}
+
+enum PassportValidity {
+  FIVE_YEARS
+  TEN_YEARS
+}
+
+enum BookletType {
+  THIRTY_TWO_PAGES
+  SIXTY_FOUR_PAGES
+}
+
+enum PassportApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model Profile {
+  id                   String                @id @default(uuid())
+  externalAuthId       String?               @unique
+  email                String                @unique
+  firstName            String
+  lastName             String
+  phone                String?
+  role                 UserRole              @default(STAFF)
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  visaDocumentations   VisaDocumentation[]
+  paymentTransactions  PaymentTransaction[]
+  passportApplications PassportApplication[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model VisaDocumentation {
+  id            String  @id @default(uuid())
+  applicationNo String  @unique
+  profileId     String?
+
+  // Applicant Personal Information
+  firstName        String
+  lastName         String
+  email            String
+  phone            String
+  dateOfBirth      DateTime
+  gender           Gender   @default(MALE)
+  nationality      String
+  residenceAddress String
+
+  // Passport Details
+  passportNumber           String
+  passportIssueDate        DateTime
+  passportExpiryDate       DateTime
+  passportIssuingAuthority String?
+
+  // Travel & Visa Application Details
+  targetCountry         String
+  visaCategory          VisaCategory @default(TOURIST)
+  intendedArrivalDate   DateTime
+  intendedDepartureDate DateTime
+  purposeOfVisit        String
+
+  // Required Document Attachments (S3 URLs)
+  passportDataPageUrl     String
+  passportPhotoWhiteBgUrl String
+  proofOfFunds6MonthsUrl  String
+
+  // Optional Document Attachments (S3 URLs)
+  businessRegistrationCertUrl String?
+  taxCertificateUrl           String?
+  marriageCertificateUrl      String?
+  childrenBirthCertUrls       String[] @default([])
+  landedPropertyDocUrls       String[] @default([])
+  previousVisasScanUrls       String[] @default([])
+  supportingDocUrls           String[] @default([])
+
+  // Admin Cost Evaluation & Payment Allocation
+  totalAmount           Decimal?       @db.Decimal(10, 2)
+  amountPaid            Decimal        @default(0.00) @db.Decimal(10, 2)
+  balanceDue            Decimal        @default(0.00) @db.Decimal(10, 2)
+  allowInstallment      Boolean        @default(false)
+  selectedPaymentOption PaymentOption?
+  paymentStatus         PaymentStatus  @default(PENDING_EVALUATION)
+  evaluatedBy           String?
+  evaluatedAt           DateTime?
+
+  // Processing Lifecycle & Audit
+  status            VisaDocumentStatus @default(SUBMITTED)
+  verificationNotes String?
+  rejectionReason   String?
+  createdBy         String
+  reviewedBy        String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  profile             Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  paymentTransactions PaymentTransaction[]
+
+  @@index([profileId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([passportNumber])
+  @@index([applicationNo])
+  @@index([email])
+}
+
+model PassportApplication {
+  id            String  @id @default(uuid())
+  applicationNo String  @unique
+  profileId     String?
+
+  // Passport Category (Nigeria Immigration Service e-Passport Data Form)
+  passportCategory PassportCategory
+
+  // Personal Information
+  surname                String
+  firstName              String
+  middleName             String?
+  sex                    Gender
+  ninNumber              String
+  dateOfBirth            DateTime
+  placeOfBirth           String
+  existingPassportNumber String?
+  homeTown               String
+  stateOfOrigin          String
+  permanentAddress       String
+  occupation             String
+  contactPhone           String
+  email                  String
+
+  // Personal Features
+  maritalStatus         String
+  colourOfEyes          String
+  colourOfHair          String
+  height                String
+  maidenName            String?
+  nextOfKinName         String
+  nextOfKinPhone        String
+  nextOfKinRelationship String
+  nextOfKinAddress      String
+
+  // Passport Information
+  validity    PassportValidity
+  bookletType BookletType
+
+  // Required Document Attachments (S3/Cloudinary URLs)
+  birthCertificateUrl String
+  ninDocumentUrl      String
+  passportPhotoUrl    String
+
+  // Processing Lifecycle & Audit
+  status            PassportApplicationStatus @default(SUBMITTED)
+  verificationNotes String?
+  rejectionReason   String?
+  createdBy         String
+  reviewedBy        String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  profile Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  @@index([profileId])
+  @@index([status])
+  @@index([ninNumber])
+  @@index([applicationNo])
+  @@index([email])
+}
+
+enum PaymentTransactionStatus {
+  INITIATED
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  PROCESSED
+  REJECTED
+}
+
+model PaymentConfig {
+  id                        String   @id @default(uuid())
+  partnerMarkupPercentage   Decimal  @default(10.00) @db.Decimal(5, 2)
+  serviceFeePercentage      Decimal  @default(5.00) @db.Decimal(5, 2)
+  refundSurchargePercentage Decimal  @default(15.00) @db.Decimal(5, 2)
+  updatedBy                 String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model PaymentTransaction {
+  id                  String                   @id @default(uuid())
+  transactionRef      String                   @unique
+  visaDocumentationId String?
+  profileId           String?
+  amount              Decimal                  @db.Decimal(10, 2)
+  paymentOption       PaymentOption
+  status              PaymentTransactionStatus @default(INITIATED)
+  paymentMethod       String?                  @default("CARD")
+  initiatedBy         String
+  confirmedAt         DateTime?
+  refundedAt          DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  visaDocumentation VisaDocumentation? @relation(fields: [visaDocumentationId], references: [id], onDelete: SetNull)
+  profile           Profile?           @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  refunds           PaymentRefund[]
+
+  @@index([visaDocumentationId])
+  @@index([profileId])
+  @@index([status])
+  @@index([transactionRef])
+}
+
+model PaymentRefund {
+  id              String       @id @default(uuid())
+  refundRef       String       @unique
+  transactionId   String
+  originalAmount  Decimal      @db.Decimal(10, 2)
+  surchargeAmount Decimal      @db.Decimal(10, 2)
+  netRefundAmount Decimal      @db.Decimal(10, 2)
+  reason          String
+  status          RefundStatus @default(REQUESTED)
+  processedBy     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  transaction PaymentTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([status])
+}
