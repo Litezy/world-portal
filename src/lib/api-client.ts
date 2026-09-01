@@ -180,7 +180,7 @@ apiClient.interceptors.response.use(
         ? "The request timed out. Please try again."
         : undefined) ||
       (status === undefined
-        ? "Could not reach the World Portal service. It may be offline — please try again shortly."
+        ? "Could not reach the E-Embassy service. It may be offline — please try again shortly."
         : undefined) ||
       error.message ||
       "Something went wrong. Please try again.";

@@ -52,7 +52,7 @@ export const intro = {
 } as const;
 
 export const whyUs = {
-  eyebrow: "Why World Portal",
+  eyebrow: "Why E-Embassy",
   headingLead: "Why people let us",
   headingAccent: "do it for them.",
   body: "Because chasing embassies, forms and fares is a full-time job, and you already have one.",
@@ -178,6 +178,11 @@ export const journey = {
   headingAccent: "the whole thing.",
   body: "No jargon, no chasing. Here is exactly what happens once you get in touch.",
   cta: { label: "Start my trip", href: "/start" },
+  /** Sits behind the whole panel, heavily dimmed — texture, not subject. */
+  background: {
+    src: "/images/journey/panel.jpg",
+    alt: "",
+  },
   steps: [
     {
       day: 1,
@@ -427,7 +432,7 @@ export const testimonials = {
   items: [
     {
       quote:
-        "My visa had been refused once before. World Portal found the exact line that caused it, rebuilt the application, and it was approved in under three weeks.",
+        "My visa had been refused once before. E-Embassy found the exact line that caused it, rebuilt the application, and it was approved in under three weeks.",
       name: "Sarah Jenkins",
       location: "London, UK",
       avatar: "/images/avatars/1.jpg",

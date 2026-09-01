@@ -218,7 +218,7 @@ test.describe("application tracking", () => {
 
     await page.goto("/track?ref=VISA-2026-8941");
     await expect(
-      page.getByText(/could not reach the world portal service/i),
+      page.getByText(/could not reach the e-embassy service/i),
     ).toBeVisible();
   });
 });

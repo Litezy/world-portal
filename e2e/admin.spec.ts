@@ -1,7 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * These drive the console against a live World Portal API. Point
+ * These drive the console against a live World Portal API (the backend's
+ * own name; the product is E-Embassy). Point
  * `WORLD_PORTAL_API_URL` at one and seed it (`prisma/seed.ts` creates the
  * default manager) before running.
  */
@@ -37,7 +38,7 @@ test.describe("admin console", () => {
     await page.getByLabel("Email").fill("nobody@worldportal.travel");
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page.getByText(/no world portal account/i)).toBeVisible();
+    await expect(page.getByText(/no e-embassy account/i)).toBeVisible();
   });
 
   test("signs in and returns to the originally requested page", async ({ page }) => {

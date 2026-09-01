@@ -11,7 +11,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Start a visa application",
   description:
-    "Submit your visa application to World Portal — upload your documents, submit in one sitting, and track the decision with your reference.",
+    "Submit your visa application to E-Embassy — upload your documents, submit in one sitting, and track the decision with your reference.",
   path: "/apply",
 });
 
@@ -24,7 +24,7 @@ export default function ApplyPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
         >
           <ArrowLeft className="size-4" />
-          Back to World Portal
+          Back to E-Embassy
         </Link>
 
         <div className="mt-6 max-w-2xl">

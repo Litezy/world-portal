@@ -172,13 +172,37 @@ alone: the badges pair a tone with a word, and an overdue date carries an icon.
    content. Reach for a bespoke ScrollTrigger only when a section genuinely
    needs one (journey, flights-hotels, hero).
 
+## Swapping an image? Wipe `.next` first
+
+`next/image` caches per **format**, so after replacing a file in `public/` the
+JPEG entry can refresh while the **AVIF** one stays stale — and browsers ask for
+AVIF. The result is maddening: `curl` returns the new picture, the page shows
+the old one, and nothing looks broken. `rm -rf .next/cache` is not enough with a
+server running; stop every dev server, `rm -rf .next`, then start one.
+
+## The journey panel is layered, not a single gradient
+
+One tall multi-stop gradient banded into visible stripes and read as flat. It is
+now four layers, and all four matter:
+
+1. a dimmed night photograph (`journey/panel.jpg`) for texture,
+2. a soft four-stop wash for the brand colour,
+3. two off-centre radial glows so the light has a direction,
+4. `.grain`, which dithers the whole thing — remove it and the banding returns.
+
+Step images come from different sources with different casts. `.tint-brand`
+pulls their hue toward the palette in `color` blend mode, preserving luminance,
+so a warm photograph sits next to a blue button without clashing. Prefer
+genuinely cool-toned source images; the tint is a finisher, not a rescue.
+
 ## Never hand-write a `-webkit-` prefix in globals.css
 
 Writing `backdrop-filter` followed by `-webkit-backdrop-filter` makes Lightning
 CSS emit **only** the legacy alias, which Chrome ignores — every glass surface
 then silently stops blurring and looks merely translucent. Declare the standard
 property alone and let the build add prefixes from browserslist. This was live
-and unnoticed for several rounds.
+and unnoticed for several rounds; `e2e/glass.spec.ts` now asserts the computed
+`backdrop-filter` is never `none`, so it cannot come back.
 
 ## Motion safety — read before touching an animation
 
@@ -194,6 +218,10 @@ and unnoticed for several rounds.
 Same rule for the WebGL layers: they mount through `useIdleMount`, which waits
 for `requestIdleCallback` **and** for the tab to be visible, because rIC never
 fires in a background tab. Anything behind it must be pure decoration.
+
+The journey panel is blue top to bottom and every step is light type — there is
+no half-way tone flip to keep in sync with the gradient any more. If you
+brighten the mid-band, re-check white body copy against it.
 
 Journey steps are **scrubbed, not fired once** — `once: true` leaves a section
 frozen when you scroll back up. `e2e/motion.spec.ts` asserts a step goes

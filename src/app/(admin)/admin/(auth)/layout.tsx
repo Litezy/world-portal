@@ -22,8 +22,7 @@ export default function AuthLayout({ children }: LayoutProps<"/admin">) {
         <div className="flex h-full flex-col justify-between p-10">
           <Logo href="/" />
           <p className="max-w-md text-[15px] leading-relaxed text-white/80">
-            One desk for every enquiry, application and traveller World Portal looks
-            after.
+            One desk for every enquiry, application and traveller E-Embassy looks after.
           </p>
         </div>
       </div>

@@ -78,7 +78,7 @@ export async function authenticate(email: string, password: string) {
       // 404 from /profiles/me means the address has no account on the service.
       const message =
         error.status === 404
-          ? "No World Portal account matches that email."
+          ? "No E-Embassy account matches that email."
           : error.message;
       return { user: null, token: null, message };
     }

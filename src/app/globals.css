@@ -5,25 +5,44 @@
 
 /* ---------------------------------------------------------------------------
  * Design tokens
- * Brand colour is #fccc2e. Components only ever reference the semantic layer
+ * Brand colour is #0050c1, sampled from the logo. Components only ever
+ * reference the semantic layer
  * (--primary, --muted-foreground, ...), so re-branding means editing the ramp
  * below and nothing else.
  * ------------------------------------------------------------------------- */
 :root {
   --radius: 1rem;
 
-  /* Brand ramp, anchored on #fccc2e at 400 */
-  --brand-50: #fffbeb;
-  --brand-100: #fff4c6;
-  --brand-200: #fee989;
-  --brand-300: #fddc55;
-  --brand-400: #fccc2e;
-  --brand-500: #f6bb0b;
-  --brand-600: #d99806;
-  --brand-700: #b47409;
-  --brand-800: #925a0e;
-  --brand-900: #78490f;
-  --brand-950: #452603;
+  /*
+ * Brand ramp, sampled from the E-Embassy logo.
+ *   #0050c1  the deep blue swoosh — the anchor, and --primary
+ *   #01baf6  the cyan swoosh      — --accent, for lit states and highlights
+ *   #febd10  the Worldstreet gold — --highlight, used sparingly
+ *   #f60211  the red hairline     — kept for --destructive only
+ */
+  --brand-50: #eef4ff;
+  --brand-100: #d8e6ff;
+  --brand-200: #bcd4ff;
+  --brand-300: #8eb7ff;
+  --brand-400: #5990ff;
+  --brand-500: #2f6ef0;
+  --brand-600: #0050c1;
+  --brand-700: #0043a4;
+  --brand-800: #073a86;
+  --brand-900: #0b326d;
+  --brand-950: #071f45;
+
+  /* Cyan — the lower swoosh. */
+  --cyan-300: #7ddcff;
+  --cyan-400: #38ceff;
+  --cyan-500: #01baf6;
+  --cyan-600: #0296cb;
+  --cyan-700: #0a76a3;
+
+  /* Worldstreet gold. */
+  --gold-400: #fdd05a;
+  --gold-500: #febd10;
+  --gold-600: #d99b06;
 
   /* Neutrals — cool near-black through to the section greys in the design */
   --ink-950: #0b0c0e;
@@ -43,23 +62,25 @@
   --popover: #ffffff;
   --popover-foreground: var(--ink-900);
 
-  --primary: var(--brand-400);
-  --primary-foreground: #17130a;
+  --primary: var(--brand-600);
+  --primary-foreground: #ffffff;
   --secondary: var(--ink-100);
   --secondary-foreground: var(--ink-900);
   --muted: var(--ink-100);
   --muted-foreground: var(--ink-500);
-  --accent: var(--brand-400);
-  --accent-foreground: #17130a;
+  --accent: var(--cyan-500);
+  --accent-foreground: #04263a;
+  --highlight: var(--gold-500);
+  --highlight-foreground: #17130a;
 
   --success: #178a4e;
   --success-foreground: #f2fbf5;
-  --warning: var(--brand-500);
+  --warning: var(--gold-500);
   --warning-foreground: #17130a;
-  --destructive: #d5342b;
+  --destructive: #e01b23;
   --destructive-foreground: #fef4f3;
-  --info: #1f6feb;
-  --info-foreground: #f3f8ff;
+  --info: var(--cyan-500);
+  --info-foreground: #04263a;
 
   --border: var(--ink-200);
   --input: var(--ink-200);
@@ -94,13 +115,15 @@
   --popover-foreground: #f4f5f6;
 
   --primary: var(--brand-400);
-  --primary-foreground: #17130a;
+  --primary-foreground: #071f45;
   --secondary: var(--ink-800);
   --secondary-foreground: #f4f5f6;
   --muted: var(--ink-800);
   --muted-foreground: var(--ink-400);
-  --accent: var(--brand-400);
-  --accent-foreground: #17130a;
+  --accent: var(--cyan-400);
+  --accent-foreground: #04263a;
+  --highlight: var(--gold-400);
+  --highlight-foreground: #17130a;
 
   --border: rgb(255 255 255 / 12%);
   --input: rgb(255 255 255 / 16%);
@@ -165,6 +188,18 @@
   --color-brand-900: var(--brand-900);
   --color-brand-950: var(--brand-950);
 
+  --color-cyan-300: var(--cyan-300);
+  --color-cyan-400: var(--cyan-400);
+  --color-cyan-500: var(--cyan-500);
+  --color-cyan-600: var(--cyan-600);
+  --color-cyan-700: var(--cyan-700);
+
+  --color-gold-400: var(--gold-400);
+  --color-gold-500: var(--gold-500);
+  --color-gold-600: var(--gold-600);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+
   --color-ink-50: var(--ink-50);
   --color-ink-100: var(--ink-100);
   --color-ink-200: var(--ink-200);
@@ -211,8 +246,8 @@
   }
 
   ::selection {
-    background: var(--brand-300);
-    color: #17130a;
+    background: var(--cyan-300);
+    color: #04263a;
   }
 }
 
@@ -346,18 +381,19 @@
     isolation: isolate;
     background: linear-gradient(
       180deg,
-      #ffe486 0%,
-      var(--brand-400) 46%,
-      var(--brand-500) 100%
+      var(--brand-400) 0%,
+      var(--brand-600) 52%,
+      var(--brand-700) 100%
     );
-    border: 1px solid rgb(255 255 255 / 0.45);
+    border: 1px solid rgb(255 255 255 / 0.28);
     box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.95),
-      inset 0 -2px 5px 0 rgb(146 90 14 / 0.28),
-      inset 0 0 20px 0 rgb(255 255 255 / 0.3),
-      0 1px 1px 0 rgb(69 38 3 / 0.16),
-      0 8px 18px -6px rgb(217 152 6 / 0.45),
-      0 20px 42px -22px rgb(69 38 3 / 0.5);
+      /* The cyan catch-light along the top edge, straight off the logo. */
+      inset 0 1px 0 0 rgb(126 220 255 / 0.85),
+      inset 0 -2px 5px 0 rgb(7 31 69 / 0.45),
+      inset 0 0 20px 0 rgb(255 255 255 / 0.14),
+      0 1px 1px 0 rgb(7 31 69 / 0.22),
+      0 8px 18px -6px rgb(0 80 193 / 0.5),
+      0 20px 42px -22px rgb(7 31 69 / 0.55);
   }
 
   /* Ink glass — the secondary/solid action from the design's black pills. */
@@ -443,6 +479,55 @@
     .glass-3d:hover {
       transform: none;
     }
+  }
+
+  /*
+   * Fine monochrome grain.
+   *
+   * A tall multi-stop gradient banks visibly on 8-bit displays — you see the
+   * steps as horizontal stripes. A little noise dithers the boundary between
+   * adjacent colours and the banding disappears. Cheap: one inline SVG
+   * turbulence, no image request.
+   */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.16;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+  }
+
+  /*
+   * Cools a photograph into the brand palette.
+   *
+   * The step images come from different sources with different casts — a warm
+   * contract, a beige terminal — and next to a blue button they read as
+   * mismatched. A low-opacity brand wash in `color` blend mode pulls their hue
+   * toward the palette while leaving luminance, so detail survives.
+   */
+  .tint-brand {
+    position: relative;
+  }
+
+  .tint-brand::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(
+      165deg,
+      rgb(47 110 240 / 0.3) 0%,
+      rgb(1 186 246 / 0.16) 55%,
+      rgb(7 31 69 / 0.34) 100%
+    );
+    mix-blend-mode: color;
   }
 
   /* Hairline rule that fades at both ends — used under section headers. */

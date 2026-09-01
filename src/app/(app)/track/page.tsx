@@ -13,7 +13,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Track your application",
   description:
-    "Check the status of a World Portal visa application using the reference from your confirmation.",
+    "Check the status of a E-Embassy visa application using the reference from your confirmation.",
   path: "/track",
   noIndex: true,
 });
@@ -27,7 +27,7 @@ export default function TrackPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
         >
           <ArrowLeft className="size-4" />
-          Back to World Portal
+          Back to E-Embassy
         </Link>
 
         <div className="mt-6">

@@ -52,7 +52,7 @@ export async function backend<T>(
     });
   } catch {
     throw new BackendError(
-      "Could not reach the World Portal service. It may be offline.",
+      "Could not reach the E-Embassy service. It may be offline.",
       503,
     );
   }

@@ -12,7 +12,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Passport application",
   description:
-    "Apply for a first passport, renew one that is expiring, or replace one that was lost or damaged. World Portal handles the forms, photos and appointment.",
+    "Apply for a first passport, renew one that is expiring, or replace one that was lost or damaged. E-Embassy handles the forms, photos and appointment.",
   path: "/passport",
 });
 
@@ -51,7 +51,7 @@ export default function PassportPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
         >
           <ArrowLeft className="size-4" />
-          Back to World Portal
+          Back to E-Embassy
         </Link>
 
         <div className="mt-6 max-w-2xl">
