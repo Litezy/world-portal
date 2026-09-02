@@ -5,20 +5,21 @@
 
 /* ---------------------------------------------------------------------------
  * Design tokens
- * Brand colour is #0050c1, sampled from the logo. Components only ever
- * reference the semantic layer
- * (--primary, --muted-foreground, ...), so re-branding means editing the ramp
- * below and nothing else.
+ * Brand colour is #0050C0, sampled from the logo's swoosh only (not the
+ * wordmark or the gold "by Worldstreet" tagline, which stay baked into the
+ * logo image itself and are not exposed as a reusable UI colour). Components
+ * only ever reference the semantic layer (--primary, --muted-foreground,
+ * ...), so re-branding means editing the ramp below and nothing else.
  * ------------------------------------------------------------------------- */
 :root {
   --radius: 1rem;
 
   /*
- * Brand ramp, sampled from the E-Embassy logo.
- *   #0050c1  the deep blue swoosh — the anchor, and --primary
- *   #01baf6  the cyan swoosh      — --accent, for lit states and highlights
- *   #febd10  the Worldstreet gold — --highlight, used sparingly
- *   #f60211  the red hairline     — kept for --destructive only
+ * Brand ramp, sampled from the E-Embassy logo's swoosh.
+ *   #0050C0  the deep blue swoosh (upper wing) — the anchor, and --primary
+ *   #00B8F8  the cyan swoosh (lower wing)      — --secondary/--accent
+ *   the red hairline edge is NOT reused as a UI colour — --destructive keeps
+ *   its own pre-existing red (see below) rather than the logo's.
  */
   --brand-50: #eef4ff;
   --brand-100: #d8e6ff;
@@ -26,23 +27,24 @@
   --brand-300: #8eb7ff;
   --brand-400: #5990ff;
   --brand-500: #2f6ef0;
-  --brand-600: #0050c1;
-  --brand-700: #0043a4;
-  --brand-800: #073a86;
+  --brand-600: #0050c0;
+  --brand-700: #0040a8;
+  --brand-800: #003a96;
   --brand-900: #0b326d;
   --brand-950: #071f45;
+
+  /* Primary interaction states, named per the brand spec (aliased onto the
+   * ramp so each value is defined exactly once). */
+  --primary-hover: var(--brand-700);
+  --primary-active: var(--brand-800);
+  --primary-subtle: #e6eefa;
 
   /* Cyan — the lower swoosh. */
   --cyan-300: #7ddcff;
   --cyan-400: #38ceff;
-  --cyan-500: #01baf6;
+  --cyan-500: #00b8f8;
   --cyan-600: #0296cb;
   --cyan-700: #0a76a3;
-
-  /* Worldstreet gold. */
-  --gold-400: #fdd05a;
-  --gold-500: #febd10;
-  --gold-600: #d99b06;
 
   /* Neutrals — cool near-black through to the section greys in the design */
   --ink-950: #0b0c0e;
@@ -70,13 +72,16 @@
   --muted-foreground: var(--ink-500);
   --accent: var(--cyan-500);
   --accent-foreground: #04263a;
-  --highlight: var(--gold-500);
-  --highlight-foreground: #17130a;
 
   --success: #178a4e;
   --success-foreground: #f2fbf5;
-  --warning: var(--gold-500);
+  /* Warning is its own semantic amber, independent of brand — carries
+   * meaning (caution), not identity, so it doesn't move with the palette. */
+  --warning: #febd10;
   --warning-foreground: #17130a;
+  /* Destructive keeps its pre-existing red rather than the logo's hairline
+   * red — the logo's red is a thin decorative edge, not tuned for UI use,
+   * and this app already had a dedicated error red before the rebrand. */
   --destructive: #e01b23;
   --destructive-foreground: #fef4f3;
   --info: var(--cyan-500);
@@ -84,7 +89,7 @@
 
   --border: var(--ink-200);
   --input: var(--ink-200);
-  --ring: var(--brand-500);
+  --ring: var(--brand-600);
 
   /* Form field surface. A field's fill has to move with `--foreground`, or the
    * text sits on a background of its own brightness. */
@@ -114,7 +119,12 @@
   --popover: var(--ink-900);
   --popover-foreground: #f4f5f6;
 
-  --primary: var(--brand-400);
+  /* Lightened for legibility as text/icon/border color directly on the dark
+   * background — #0050C0 itself only reaches ~2.7:1 there. Filled buttons
+   * (.glass-primary) are exempt: their background is the same brand-blue
+   * gradient in both themes, so they keep white text regardless of theme
+   * rather than pairing with this lightened value. */
+  --primary: #4d8ae0;
   --primary-foreground: #071f45;
   --secondary: var(--ink-800);
   --secondary-foreground: #f4f5f6;
@@ -122,12 +132,10 @@
   --muted-foreground: var(--ink-400);
   --accent: var(--cyan-400);
   --accent-foreground: #04263a;
-  --highlight: var(--gold-400);
-  --highlight-foreground: #17130a;
 
   --border: rgb(255 255 255 / 12%);
   --input: rgb(255 255 255 / 16%);
-  --ring: var(--brand-400);
+  --ring: var(--primary);
 
   --field: var(--ink-800);
   --field-focus: var(--ink-900);
@@ -151,6 +159,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-subtle: var(--primary-subtle);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -193,12 +204,6 @@
   --color-cyan-500: var(--cyan-500);
   --color-cyan-600: var(--cyan-600);
   --color-cyan-700: var(--cyan-700);
-
-  --color-gold-400: var(--gold-400);
-  --color-gold-500: var(--gold-500);
-  --color-gold-600: var(--gold-600);
-  --color-highlight: var(--highlight);
-  --color-highlight-foreground: var(--highlight-foreground);
 
   --color-ink-50: var(--ink-50);
   --color-ink-100: var(--ink-100);

@@ -139,7 +139,8 @@ same two-tone headings — a console, not a second design language.
   is how you get near-white text on a near-white input.
 - **Never hardcode colours.** Use semantic tokens (`bg-primary`,
   `text-muted-foreground`, `border-border`) or the `brand-*` / `ink-*` ramps,
-  defined once in `src/app/globals.css`. Brand is `#fccc2e` (`--brand-400`).
+  defined once in `src/app/globals.css`. Brand is `#0050C0` (`--brand-600`,
+  aliased as `--primary`) with `#00B8F8` cyan as the secondary swoosh colour.
 - **Copy lives in `src/content`**, not in components — `landing.ts` for the
   site, `admin.ts` for the console (including every status label).
 - **Server Components by default.** `"use client"` only where it is needed —

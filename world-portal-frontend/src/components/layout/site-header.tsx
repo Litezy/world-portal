@@ -38,7 +38,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
       )}
     >
       <div className="mx-auto flex h-[72px] max-w-[1420px] items-center justify-between gap-4 px-5 sm:px-8 lg:h-20 lg:px-12">
-        <Logo />
+        <Logo markClassName="h-11 sm:h-14" />
 
         <nav
           aria-label="Main"

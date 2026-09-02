@@ -15,8 +15,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /** Yellow water glass — the headline action. */
-        primary: "glass-primary glass-3d text-primary-foreground",
+        /** Blue water glass — the headline action. Text is hardcoded white
+         * rather than text-primary-foreground: the gradient background is
+         * the same brand blue in both themes, so the text shouldn't flip to
+         * dark navy in dark mode along with the *other* primary-foreground
+         * consumers, which do sit on the lightened dark-mode primary. */
+        primary: "glass-primary glass-3d text-white",
         /** Near-black extruded pill, as used for "Explore All Locations". */
         ink: "glass-ink glass-3d text-white",
         /** Clear water glass over photography. */

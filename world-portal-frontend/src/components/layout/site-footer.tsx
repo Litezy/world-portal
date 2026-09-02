@@ -25,7 +25,7 @@ export function SiteFooter() {
   return (
     <footer className="relative isolate overflow-hidden bg-ink-950 text-white">
       <div className="mx-auto max-w-[1420px] px-5 pt-14 sm:px-8 lg:px-12 lg:pt-16">
-        <Logo />
+        <Logo markClassName="h-11 sm:h-14" />
 
         <div className="mt-8 grid gap-12 lg:grid-cols-[1.1fr_1fr_auto] lg:gap-8">
           <nav aria-label="Footer">

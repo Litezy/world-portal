@@ -24,7 +24,7 @@ export function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
                   "flex h-11 items-center gap-3 rounded-xl px-3.5 text-[13.5px] font-medium transition-colors duration-300",
                   "focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:outline-none",
                   active
-                    ? "bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_18px_-10px_rgba(252,204,46,0.7)]"
+                    ? "bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_18px_-10px_rgba(0,80,192,0.7)]"
                     : "text-white/65 hover:bg-white/8 hover:text-white",
                 )}
               >

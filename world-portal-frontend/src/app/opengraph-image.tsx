@@ -17,7 +17,9 @@ export default function OpengraphImage() {
         flexDirection: "column",
         justifyContent: "space-between",
         padding: 80,
-        background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0f172a 100%)",
+        // The one blue-to-cyan gradient allowed per the brand guide, mirroring
+        // the logo's own transition — used exactly once, on this standalone image.
+        background: "linear-gradient(135deg, #0050C0 0%, #00B8F8 100%)",
         color: "white",
         fontFamily: "sans-serif",
       }}
