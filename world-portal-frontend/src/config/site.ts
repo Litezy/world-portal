@@ -1,5 +1,7 @@
 export const siteConfig = {
-  name: "World Portal",
+  name: "E-Embassy",
+  /** Shown in the logo lockup as "by Worldstreet". */
+  parent: "Worldstreet",
   wordmark: "EXPLORE",
   tagline: "Visas, flights and journeys worth the trip",
   description:
@@ -8,7 +10,7 @@ export const siteConfig = {
   locale: "en_US",
   contact: {
     phone: "+1 980 971-24-19",
-    email: "hello@worldportal.travel",
+    email: "hello@e-embassy.com",
     address: "1901 Thornridge Cir. Shiloh, Hawaii 81063",
     hours: "/ Everyday",
     whatsapp: "+19809712419",

@@ -45,7 +45,7 @@ export default async function ServicePage({ params }: PageProps<"/services/[slug
             className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
           >
             <ArrowLeft className="size-4" />
-            Back to World Portal
+            Back to E-Embassy
           </Link>
 
           <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-14">

@@ -1,5 +1,5 @@
 /**
- * Line pictograms for the "Why World Portal" cards. Drawn rather than pulled
+ * Line pictograms for the "Why E-Embassy" cards. Drawn rather than pulled
  * from an icon set so each one maps to a specific service rather than a
  * generic shape.
  */

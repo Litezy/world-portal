@@ -57,7 +57,7 @@ export function WhyUs() {
                       interactive
                       className="glass-frost-dark h-full p-6"
                     >
-                      <span className="grid size-11 place-items-center rounded-xl bg-primary/25 text-primary ring-1 ring-primary/40 ring-inset">
+                      <span className="grid size-11 place-items-center rounded-xl bg-cyan-500/18 text-cyan-400 ring-1 ring-cyan-400/40 ring-inset">
                         <Icon />
                       </span>
 

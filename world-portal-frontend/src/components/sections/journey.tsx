@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowRight } from "lucide-react";
@@ -110,12 +111,30 @@ export function Journey() {
       <Container size="panel" gutter="sm">
         <div
           ref={scopeRef as React.Ref<HTMLDivElement>}
-          className="relative isolate overflow-hidden rounded-[2rem] bg-[linear-gradient(180deg,#0a0705_0%,#fde063_15%,#fccc2e_32%,#e9a10f_48%,#a85f08_64%,#4a2606_80%,#160d05_92%,#0a0705_100%)] px-5 py-16 sm:px-10 lg:rounded-[2.5rem] lg:px-14 lg:py-24"
+          className="grain relative isolate overflow-hidden rounded-[2rem] bg-[#061024] px-5 py-16 sm:px-10 lg:rounded-[2.5rem] lg:px-14 lg:py-24"
         >
+          {/*
+            The panel used to be one tall multi-stop gradient, which banded into
+            visible stripes and read as flat. It is now three layers: a night
+            photograph for texture, a softer four-stop wash for the brand
+            colour, and two off-centre glows so the light has a direction. The
+            `grain` class dithers the whole thing so no band survives.
+          */}
+          <Image
+            src={journey.background.src}
+            alt=""
+            fill
+            sizes="(max-width: 1024px) 100vw, 1420px"
+            className="-z-30 object-cover opacity-45"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,rgba(6,16,36,0.94)_0%,rgba(10,63,150,0.80)_28%,rgba(13,96,186,0.72)_50%,rgba(8,52,116,0.86)_74%,rgba(5,11,24,0.97)_100%)]"
+          />
           {/* Warms the yellow at the top and deepens the black at the base. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_45%_at_50%_0%,rgba(0,0,0,0.55),transparent_66%),radial-gradient(90%_45%_at_50%_100%,rgba(0,0,0,0.5),transparent_70%)]"
+            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_38%_at_78%_22%,rgba(1,186,246,0.30),transparent_62%),radial-gradient(55%_34%_at_18%_58%,rgba(47,110,240,0.26),transparent_66%),radial-gradient(130%_44%_at_50%_0%,rgba(3,8,20,0.72),transparent_60%),radial-gradient(110%_40%_at_50%_100%,rgba(3,8,20,0.80),transparent_64%)]"
           />
 
           {webglReady ? (
@@ -140,18 +159,19 @@ export function Journey() {
             {/* Rail track, plus the fill that tracks scroll progress. */}
             <span
               aria-hidden="true"
-              className="absolute inset-y-2 left-[11px] w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.30)_0%,rgba(10,7,5,0.22)_14%,rgba(10,7,5,0.22)_66%,rgba(255,255,255,0.22)_86%,rgba(255,255,255,0.30)_100%)] lg:left-1/2 lg:-translate-x-1/2"
+              className="absolute inset-y-2 left-[11px] w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.30)_0%,rgba(4,20,44,0.30)_14%,rgba(4,20,44,0.30)_66%,rgba(255,255,255,0.22)_86%,rgba(255,255,255,0.30)_100%)] lg:left-1/2 lg:-translate-x-1/2"
             >
               <span
                 ref={railRef}
-                className="absolute inset-0 origin-top bg-[linear-gradient(180deg,rgba(255,255,255,0.70)_0%,rgba(10,7,5,0.50)_14%,rgba(10,7,5,0.50)_66%,rgba(255,255,255,0.55)_86%,rgba(255,255,255,0.70)_100%)]"
+                className="absolute inset-0 origin-top bg-[linear-gradient(180deg,rgba(255,255,255,0.70)_0%,rgba(4,20,44,0.58)_14%,rgba(4,20,44,0.58)_66%,rgba(255,255,255,0.55)_86%,rgba(255,255,255,0.70)_100%)]"
               />
             </span>
 
             {journey.steps.map((step, i) => {
               const flipped = i % 2 === 1;
-              // Steps 1–2 sit on yellow, 3–4 on the dark end of the gradient.
-              const onDark = i >= journey.steps.length / 2;
+              // The panel is blue top to bottom now, so every step is light
+              // type — no half-way flip to keep in sync with the gradient.
+              const onDark = true;
 
               return (
                 <li
@@ -227,9 +247,9 @@ export function Journey() {
                         sizes="(max-width: 1024px) 88vw, 380px"
                         strength={16}
                         className={cn(
-                          "mt-6 aspect-[4/3] w-full max-w-[380px] rounded-2xl",
+                          "tint-brand mt-6 aspect-[4/3] w-full max-w-[380px] rounded-2xl",
                           "shadow-[0_2px_10px_-2px_rgba(20,14,4,0.35),0_26px_50px_-26px_rgba(10,8,3,0.6)]",
-                          onDark ? "ring-1 ring-white/20" : "ring-1 ring-ink-950/10",
+                          "ring-1 ring-white/15",
                         )}
                       />
                     </div>

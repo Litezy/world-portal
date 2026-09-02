@@ -1,54 +1,42 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# This repo houses two projects (worldPortal backend, world-portal-frontend
+# frontend), each with its own .gitignore scoped to its own tree for
+# framework-specific paths. This file is a repo-wide safety net so nothing
+# generated or sensitive gets tracked no matter which subproject (or any
+# future one) produces it.
 
 # dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+node_modules/
 
-# testing
-/coverage
+# env files
+.env
+.env.*
+!.env.example
+!*/.env.example
 
-# next.js
-/.next/
-/out/
+# build output
+dist/
+build/
+out/
+.next/
 
-# production
-/build
+# test coverage / reports
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
 
-# misc
-.DS_Store
-*.pem
-
-# debug
+# logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
+# typescript incremental build info
 *.tsbuildinfo
-next-env.d.ts
 
-# testing
-/coverage
-/playwright-report
-/test-results
-/blob-report
-/playwright/.cache
-
-# editors
-.idea
-*.swp
+# OS
 .DS_Store
+Thumbs.db

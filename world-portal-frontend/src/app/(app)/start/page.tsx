@@ -24,7 +24,7 @@ export default function StartPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
         >
           <ArrowLeft className="size-4" />
-          Back to World Portal
+          Back to E-Embassy
         </Link>
 
         <div className="mt-6">
