@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "world-portal-frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "world-portal-frontend", "dev"],
+      "port": 3000
+    }
+  ]
+}

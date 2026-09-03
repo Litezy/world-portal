@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Emits .next/standalone — a self-contained server bundle the
+  // Docker image runs directly, without node_modules in the runtime layer.
+  output: "standalone",
 
   images: {
     formats: ["image/avif", "image/webp"],
