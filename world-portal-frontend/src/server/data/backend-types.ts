@@ -127,6 +127,31 @@ export type BackendTransaction = {
   createdAt: string;
 };
 
+export type BackendPaymentConfig = {
+  id: string;
+  partnerMarkupPercentage: string;
+  serviceFeePercentage: string;
+  refundSurchargePercentage: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BackendRefund = {
+  id: string;
+  refundRef: string;
+  transactionId: string;
+  originalAmount: string;
+  surchargeAmount: string;
+  netRefundAmount: string;
+  reason: string;
+  status: "REQUESTED" | "APPROVED" | "PROCESSED" | "REJECTED";
+  processedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+
 /** Decimals are strings (`"500.00"`). Parse before any maths or formatting. */
 export function toAmount(value: string | number | null | undefined) {
   if (value === null || value === undefined) return 0;

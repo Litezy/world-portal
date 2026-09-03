@@ -64,7 +64,8 @@ export function SectionHeading({
         className={cn(
           "font-semibold tracking-[-0.03em] text-balance",
           headingSize[size],
-          onDark ? "text-white" : "text-ink-900",
+          onDark ? "text-white" : "text-foreground",
+
           centered ? "leading-[1.12]" : "leading-[1.08]",
         )}
       >

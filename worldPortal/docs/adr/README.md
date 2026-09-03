@@ -20,4 +20,5 @@ All major technical decisions, architectural patterns, data model definitions, a
 - **0004 Payment Transaction Management & Decoupled Engine**: [Technical ADR](./0004-payment-transaction-management.md) | [ADR for Dummies](./0004-payment-transaction-management.dummies.md)
 - **0005 Pluggable Cloud Storage Provider Architecture**: [Technical ADR](./0005-pluggable-cloud-storage-provider.md) | [ADR for Dummies](./0005-pluggable-cloud-storage-provider.dummies.md)
 - **0006 RapidAPI Visa Requirement Integration**: [Technical ADR](./0006-visa-requirement-integration.md) | [ADR for Dummies](./0006-visa-requirement-integration.dummies.md)
+- **0007 Admin Dashboard Architecture, Mobile-First UI & API Specification**: [Technical ADR](./0007-admin-dashboard-architecture.md) | [ADR for Dummies](./0007-admin-dashboard-architecture.dummies.md)
 

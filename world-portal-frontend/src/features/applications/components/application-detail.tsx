@@ -123,15 +123,8 @@ export function ApplicationDetail({ id }: { id: string }) {
             <ApplicationTimeline events={application.timeline} />
           </div>
 
-          <Button asChild variant="primary" size="md" className="mt-8 w-fit">
-            <a
-              href={`mailto:${application.applicant.email}?subject=Your application ${application.reference}`}
-            >
-              <Mail />
-              {copy.detail.reply}
-            </a>
-          </Button>
         </Card>
+
 
         <div className="flex flex-col gap-4">
           <Card variant="solid" radius="lg" padding="none" className="p-6">

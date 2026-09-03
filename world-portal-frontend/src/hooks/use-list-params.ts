@@ -22,7 +22,7 @@ export function useListParams(defaults: Pick<ListParams, "perPage"> = {}) {
   };
 
   const set = React.useCallback(
-    (patch: Partial<ListParams>) => {
+    (patch: Partial<ListParams> & Record<string, string | number | undefined | null>) => {
       const next = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(patch)) {
         if (value === undefined || value === "" || value === null) next.delete(key);
@@ -35,6 +35,7 @@ export function useListParams(defaults: Pick<ListParams, "perPage"> = {}) {
     },
     [pathname, router, searchParams],
   );
+
 
   return { params, set };
 }

@@ -26,11 +26,12 @@ const badgeVariants = cva(
          * solid fill on every row would shout. Always pair with `dot` and a
          * word, so the colour is never the only signal.
          */
-        softSuccess: "bg-success/12 text-success",
-        softWarning: "bg-warning/20 text-brand-800",
-        softDestructive: "bg-destructive/10 text-destructive",
-        softInfo: "bg-info/10 text-info",
-        softNeutral: "bg-ink-100 text-ink-700",
+        softSuccess: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium",
+        softWarning: "bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium",
+        softDestructive: "bg-rose-500/15 text-rose-600 dark:text-rose-400 font-medium",
+        softInfo: "bg-sky-500/15 text-sky-600 dark:text-sky-400 font-medium",
+        softNeutral: "bg-muted text-muted-foreground font-medium",
+
       },
       size: {
         sm: "h-6 px-2.5 text-[11px]",

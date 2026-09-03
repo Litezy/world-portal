@@ -21,8 +21,9 @@ export function PageHeader({ actions, className, ...heading }: Props) {
         as="h1"
         size="xs"
         {...heading}
-        className="[&_p]:mt-2 [&_p]:text-sm"
+        className="[&_p]:mt-2 [&_p]:text-sm [&_.heading-serif]:not-italic [&_.heading-serif]:font-sans [&_.heading-serif]:font-semibold"
       />
+
       {actions ? (
         <div className="flex shrink-0 items-center gap-2">{actions}</div>
       ) : null}
