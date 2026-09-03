@@ -7,9 +7,9 @@ type Props = React.ComponentProps<typeof Avatar> & {
 
 export function UserAvatar({ user, className, ...props }: Props) {
   return (
-    <Avatar className={cn("ring-2 ring-white/70", className)} {...props}>
-      {user.avatar ? <AvatarImage src={user.avatar} alt="" /> : null}
-      <AvatarFallback className="bg-primary/25 text-[12px] font-semibold text-ink-900">
+    <Avatar className={cn("border border-border/80 shadow-xs ring-1 ring-primary/20 shrink-0", className)} {...props}>
+      {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+      <AvatarFallback className="bg-gradient-to-br from-brand-600 to-cyan-600 text-white font-bold tracking-wider text-[11px] uppercase">
         {initials(user.name)}
       </AvatarFallback>
     </Avatar>
