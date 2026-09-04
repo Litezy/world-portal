@@ -72,6 +72,7 @@ export interface SendTeamInviteEmailOptions {
   recipientName: string;
   role: string;
   inviterEmail: string;
+  inviterName?: string;
 }
 
 @Injectable()
@@ -264,13 +265,16 @@ export class SendGridService {
    * 6. Team Invitation Email
    */
   async sendTeamInviteEmail(options: SendTeamInviteEmailOptions): Promise<boolean> {
-    const { to, recipientName, role, inviterEmail } = options;
+    const { to, recipientName, role, inviterEmail, inviterName } = options;
+
+    const formattedInviterName = inviterName || formatReviewerName(inviterEmail);
 
     const data = {
       recipient_name: recipientName,
       to_email: to,
       role,
       inviter_email: inviterEmail,
+      inviter_name: formattedInviterName,
       login_url: `https://thetradefactor.com/admin/login`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
