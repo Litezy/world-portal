@@ -101,6 +101,7 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
     status: record.status,
     paymentStatus: record.paymentStatus,
     totalAmount: toAmount(record.totalAmount),
+    currency: record.currency || "USD",
     amountPaid: toAmount(record.amountPaid),
     balanceDue: toAmount(record.balanceDue),
     allowInstallment: record.allowInstallment,

@@ -139,15 +139,36 @@ export class PassportApplicationService {
     }
   }
 
+  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+    if (!emailOrName) return 'Admin Consultant';
+    if (!emailOrName.includes('@')) return emailOrName;
+
+    const profile = await this.prisma.profile
+      .findUnique({ where: { email: emailOrName } })
+      .catch(() => null);
+
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName} ${profile.lastName}`.trim();
+    }
+
+    const handle = emailOrName.split('@')[0];
+    const parts = handle.split(/[._\-+]/).filter(Boolean);
+    if (parts.length === 0) return 'Admin Consultant';
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  }
+
   async updateStatus(
     id: string,
     dto: UpdatePassportStatusDto,
     reviewerEmail: string,
   ) {
     const record = await this.findApplicationById(id);
+    const reviewerName = await this.resolveReviewerDisplayName(reviewerEmail);
 
     this.logger.log(
-      `Updating review status for passport application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail}`,
+      `Updating review status for passport application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail} (${reviewerName})`,
     );
 
     const updated = await this.prisma.passportApplication.update({
@@ -159,7 +180,7 @@ export class PassportApplicationService {
           dto.status === PassportApplicationStatus.REJECTED
             ? dto.rejectionReason
             : record.rejectionReason,
-        reviewedBy: reviewerEmail,
+        reviewedBy: reviewerName,
       },
     });
 
@@ -172,6 +193,7 @@ export class PassportApplicationService {
           applicationNo: updated.applicationNo,
           targetCountry: 'Nigeria (Passport)',
           reviewerEmail,
+          reviewerName,
         })
         .catch((err) => {
           this.logger.error(`SendGrid passport approval email error: ${err?.message}`);
@@ -184,6 +206,7 @@ export class PassportApplicationService {
           applicationNo: updated.applicationNo,
           targetCountry: 'Nigeria (Passport)',
           reviewerEmail,
+          reviewerName,
           rejectionReason: updated.rejectionReason || undefined,
         })
         .catch((err) => {

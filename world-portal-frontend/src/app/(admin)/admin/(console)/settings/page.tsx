@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabels, settings } from "@/content/admin";
+import { BankAccountsSettings } from "@/features/settings/components/bank-accounts-settings";
 import { InviteMemberModal } from "@/features/settings/components/invite-member-modal";
 import { NotificationSettings } from "@/features/settings/components/notification-settings";
 import { SignOutButton } from "@/features/settings/components/sign-out-button";
@@ -28,8 +29,9 @@ export default async function SettingsPage() {
       />
 
       <Tabs defaultValue="team" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-4 max-w-xl">
           <TabsTrigger value="team">Team & Access</TabsTrigger>
+          <TabsTrigger value="bank-accounts">Bank Accounts</TabsTrigger>
           <TabsTrigger value="profile">Profile & Security</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
@@ -53,7 +55,14 @@ export default async function SettingsPage() {
             </Card>
           </TabsContent>
 
-          {/* Tab 2: Profile & Security */}
+          {/* Tab 2: Bank Accounts Management */}
+          <TabsContent value="bank-accounts" className="m-0">
+            <Card variant="solid" radius="lg" padding="none" className="p-6">
+              <BankAccountsSettings />
+            </Card>
+          </TabsContent>
+
+          {/* Tab 3: Profile & Security */}
           <TabsContent value="profile" className="m-0 space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card variant="solid" radius="lg" padding="none" className="p-6">
@@ -92,7 +101,7 @@ export default async function SettingsPage() {
             </div>
           </TabsContent>
 
-          {/* Tab 3: Notifications */}
+          {/* Tab 4: Notifications */}
           <TabsContent value="notifications" className="m-0">
             <Card variant="solid" radius="lg" padding="none" className="p-6 max-w-2xl">
               <CardTitle className="text-base">{settings.notifications.title}</CardTitle>

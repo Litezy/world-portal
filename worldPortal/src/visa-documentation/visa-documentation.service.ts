@@ -18,7 +18,8 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
-import { SendGridService } from 'src/mail/sendgrid.service';
+import { SendGridService } from '../mail/sendgrid.service';
+import { BankAccountService } from '../bank-account/bank-account.service';
 
 @Injectable()
 export class VisaDocumentationService {
@@ -27,6 +28,7 @@ export class VisaDocumentationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sendGridService: SendGridService,
+    private readonly bankAccountService: BankAccountService,
   ) {}
 
 
@@ -149,6 +151,26 @@ export class VisaDocumentationService {
     }
   }
 
+  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+    if (!emailOrName) return 'Admin Consultant';
+    if (!emailOrName.includes('@')) return emailOrName;
+
+    const profile = await this.prisma.profile
+      .findUnique({ where: { email: emailOrName } })
+      .catch(() => null);
+
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName} ${profile.lastName}`.trim();
+    }
+
+    const handle = emailOrName.split('@')[0];
+    const parts = handle.split(/[._\-+]/).filter(Boolean);
+    if (parts.length === 0) return 'Admin Consultant';
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  }
+
   async evaluateVisaCost(
     id: string,
     dto: EvaluateVisaCostDto,
@@ -156,8 +178,11 @@ export class VisaDocumentationService {
   ) {
     const record = await this.findVisaApplicationById(id);
 
+    const currency = dto.currency?.toUpperCase() || 'USD';
+    const evaluatorName = await this.resolveReviewerDisplayName(evaluatorEmail);
+
     this.logger.log(
-      `Admin evaluating cost for visa application id=${id}, totalAmount=${dto.totalAmount}, allowInstallment=${dto.allowInstallment ?? false}`,
+      `Admin evaluating cost for visa application id=${id}, totalAmount=${dto.totalAmount}, currency=${currency}, allowInstallment=${dto.allowInstallment ?? false}`,
     );
 
     const allowInstallment = dto.allowInstallment ?? false;
@@ -167,15 +192,19 @@ export class VisaDocumentationService {
       where: { id: record.id },
       data: {
         totalAmount: totalAmountDecimal,
+        currency,
         balanceDue: totalAmountDecimal,
         amountPaid: new Prisma.Decimal(0.0),
         allowInstallment,
         paymentStatus: PaymentStatus.AWAITING_PAYMENT,
         status: VisaDocumentStatus.EVALUATED,
-        evaluatedBy: evaluatorEmail,
+        evaluatedBy: evaluatorName,
         evaluatedAt: new Date(),
       },
     });
+
+    // Fetch active bank accounts to include in payment email
+    const activeBankAccounts = await this.bankAccountService.findActive().catch(() => []);
 
     // Send evaluation email via SendGrid
     this.sendGridService
@@ -185,8 +214,20 @@ export class VisaDocumentationService {
         applicationNo: updated.applicationNo,
         targetCountry: updated.targetCountry,
         totalAmount: Number(updated.totalAmount || 0),
+        currency: updated.currency,
         allowInstallment: updated.allowInstallment,
         evaluatorEmail,
+        evaluatorName,
+        bankAccounts: activeBankAccounts.map((b) => ({
+          bankName: b.bankName,
+          accountName: b.accountName,
+          accountNumber: b.accountNumber,
+          swiftCode: b.swiftCode || undefined,
+          iban: b.iban || undefined,
+          routingNumber: b.routingNumber || undefined,
+          currency: b.currency,
+          instructions: b.instructions || undefined,
+        })),
       })
       .catch((err) => {
         this.logger.error(`SendGrid cost evaluation email error: ${err?.message}`);
@@ -255,8 +296,10 @@ export class VisaDocumentationService {
   ) {
     const record = await this.findVisaApplicationById(id);
 
+    const reviewerName = await this.resolveReviewerDisplayName(reviewerEmail);
+
     this.logger.log(
-      `Updating review status for application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail}`,
+      `Updating review status for application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail} (${reviewerName})`,
     );
 
     const updated = await this.prisma.visaDocumentation.update({
@@ -268,7 +311,7 @@ export class VisaDocumentationService {
           dto.status === VisaDocumentStatus.REJECTED
             ? dto.rejectionReason
             : record.rejectionReason,
-        reviewedBy: reviewerEmail,
+        reviewedBy: reviewerName,
       },
     });
 
@@ -281,6 +324,7 @@ export class VisaDocumentationService {
           applicationNo: updated.applicationNo,
           targetCountry: updated.targetCountry,
           reviewerEmail,
+          reviewerName,
         })
         .catch((err) => {
           this.logger.error(`SendGrid approval email error: ${err?.message}`);
@@ -293,6 +337,7 @@ export class VisaDocumentationService {
           applicationNo: updated.applicationNo,
           targetCountry: updated.targetCountry,
           reviewerEmail,
+          reviewerName,
           rejectionReason: updated.rejectionReason || undefined,
         })
         .catch((err) => {

@@ -13,14 +13,39 @@ export interface SendApplicationEmailOptions {
   visaCategory?: string;
 }
 
+export function formatReviewerName(nameOrEmail?: string): string {
+  if (!nameOrEmail) return 'Admin Consultant';
+  if (!nameOrEmail.includes('@')) return nameOrEmail;
+
+  const handle = nameOrEmail.split('@')[0];
+  const parts = handle.split(/[._\-+]/).filter(Boolean);
+  if (parts.length === 0) return 'Admin Consultant';
+
+  return parts
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export interface SendCostEvaluatedEmailOptions {
   to: string;
   recipientName: string;
   applicationNo: string;
   targetCountry: string;
   totalAmount: number;
+  currency?: string;
   allowInstallment: boolean;
   evaluatorEmail: string;
+  evaluatorName?: string;
+  bankAccounts?: Array<{
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    swiftCode?: string;
+    iban?: string;
+    routingNumber?: string;
+    currency?: string;
+    instructions?: string;
+  }>;
 }
 
 export interface SendPaymentConfirmedEmailOptions {
@@ -38,6 +63,7 @@ export interface SendStatusUpdateEmailOptions {
   applicationNo: string;
   targetCountry: string;
   reviewerEmail: string;
+  reviewerName?: string;
   rejectionReason?: string;
 }
 
@@ -88,7 +114,7 @@ export class SendGridService {
       recipient_name: recipientName,
       application_no: applicationNo,
       target_country: targetCountry,
-      visa_category: visaCategory || 'Standard Visa',
+      visa_category: visaCategory || 'Tourist',
       tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
@@ -98,25 +124,41 @@ export class SendGridService {
 
     return this.dispatchMail({
       to,
-      subject: `Application Submitted - Tracking Ref: ${applicationNo}`,
+      subject: `Application Received - ${applicationNo} (${targetCountry})`,
       html,
       ref: applicationNo,
     });
   }
 
   /**
-   * 2. Cost Evaluated Email
+   * 2. Cost Evaluation Completed Email
    */
   async sendCostEvaluatedEmail(options: SendCostEvaluatedEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, totalAmount, allowInstallment, evaluatorEmail } = options;
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      targetCountry,
+      totalAmount,
+      currency,
+      allowInstallment,
+      evaluatorEmail,
+      evaluatorName,
+      bankAccounts,
+    } = options;
+
+    const formattedEvaluatorName = evaluatorName || formatReviewerName(evaluatorEmail);
 
     const data = {
       recipient_name: recipientName,
       application_no: applicationNo,
       target_country: targetCountry,
       total_amount: totalAmount,
+      currency: currency || 'USD',
       allow_installment: allowInstallment,
       evaluator_email: evaluatorEmail,
+      evaluator_name: formattedEvaluatorName,
+      bank_accounts: bankAccounts || [],
       payment_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
@@ -163,13 +205,16 @@ export class SendGridService {
    * 4. Application Approved Email
    */
   async sendApplicationApprovedEmail(options: SendStatusUpdateEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, reviewerEmail } = options;
+    const { to, recipientName, applicationNo, targetCountry, reviewerEmail, reviewerName } = options;
+
+    const formattedReviewerName = reviewerName || formatReviewerName(reviewerEmail);
 
     const data = {
       recipient_name: recipientName,
       application_no: applicationNo,
       target_country: targetCountry,
       reviewer_email: reviewerEmail,
+      reviewer_name: formattedReviewerName,
       tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
@@ -189,13 +234,17 @@ export class SendGridService {
    * 5. Application Rejected Email
    */
   async sendApplicationRejectedEmail(options: SendStatusUpdateEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, rejectionReason } = options;
+    const { to, recipientName, applicationNo, targetCountry, reviewerEmail, reviewerName, rejectionReason } = options;
+
+    const formattedReviewerName = reviewerName || formatReviewerName(reviewerEmail);
 
     const data = {
       recipient_name: recipientName,
       application_no: applicationNo,
       target_country: targetCountry,
       rejection_reason: rejectionReason,
+      reviewer_email: reviewerEmail,
+      reviewer_name: formattedReviewerName,
       tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),

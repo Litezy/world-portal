@@ -19,6 +19,7 @@ import { applications as copy, visaCategoryLabels } from "@/content/admin";
 import { useApplication } from "@/features/applications/api/use-application";
 import { AdvanceApplicationForm } from "@/features/applications/components/advance-application-form";
 import { ApplicationTimeline } from "@/features/applications/components/application-timeline";
+import { ConfirmBankPaymentModal } from "@/features/applications/components/confirm-bank-payment-modal";
 import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
 import { EvaluateCostForm } from "@/features/applications/components/evaluate-cost-form";
 
@@ -102,13 +103,13 @@ export function ApplicationDetail({ id }: { id: string }) {
             </DetailItem>
             <DetailItem label={copy.detail.fee}>
               {application.totalAmount > 0
-                ? formatCurrency(application.totalAmount)
+                ? formatCurrency(application.totalAmount, application.currency)
                 : "Not evaluated"}
             </DetailItem>
             <DetailItem label={copy.detail.outstanding}>
-              {formatCurrency(application.balanceDue)}
+              {formatCurrency(application.balanceDue, application.currency)}
               <span className="ml-2 text-[12px] text-muted-foreground">
-                {formatCurrency(application.amountPaid)}{" "}
+                {formatCurrency(application.amountPaid, application.currency)}{" "}
                 {copy.detail.paid.toLowerCase()}
               </span>
             </DetailItem>
@@ -166,8 +167,6 @@ export function ApplicationDetail({ id }: { id: string }) {
           </div>
         </Card>
 
-
-
         <div className="flex flex-col gap-4">
           <Card variant="solid" radius="lg" padding="none" className="p-6">
             <AdvanceApplicationForm id={id} status={application.status} />
@@ -178,9 +177,19 @@ export function ApplicationDetail({ id }: { id: string }) {
             <EvaluateCostForm
               id={id}
               totalAmount={application.totalAmount}
+              currency={application.currency}
               allowInstallment={application.allowInstallment}
             />
           </Card>
+
+          <ConfirmBankPaymentModal
+            id={id}
+            totalAmount={application.totalAmount}
+            amountPaid={application.amountPaid}
+            balanceDue={application.balanceDue}
+            currency={application.currency}
+            allowInstallment={application.allowInstallment}
+          />
         </div>
       </div>
     </div>

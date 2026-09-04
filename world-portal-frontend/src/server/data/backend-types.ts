@@ -72,6 +72,7 @@ export type BackendVisaApplication = {
   intendedDepartureDate: string;
   purposeOfVisit: string;
   totalAmount: string | null;
+  currency?: string;
   amountPaid: string;
   balanceDue: string;
   allowInstallment: boolean;

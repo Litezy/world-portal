@@ -122,6 +122,7 @@ export type VisaApplication = {
   paymentStatus: BackendPaymentStatus;
   /** Parsed from the API's string decimals. */
   totalAmount: number;
+  currency: string;
   amountPaid: number;
   balanceDue: number;
   allowInstallment: boolean;
