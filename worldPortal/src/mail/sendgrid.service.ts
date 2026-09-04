@@ -80,6 +80,7 @@ export class SendGridService {
   private readonly logger = new Logger(SendGridService.name);
   private readonly fromEmail: string;
   private readonly fromName: string;
+  private readonly frontendUrl: string;
   private readonly isConfigured: boolean = false;
 
   constructor(private readonly configService: ConfigService) {
@@ -93,6 +94,12 @@ export class SendGridService {
       this.configService.get<string>('SENDGRID_FROM_NAME') ||
       process.env.SENDGRID_FROM_NAME ||
       'World Portal | The Trade Factor';
+
+    const rawFrontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      process.env.FRONTEND_URL ||
+      'https://thetradefactor.com';
+    this.frontendUrl = rawFrontendUrl.replace(/\/+$/, '');
 
     if (apiKey) {
       sgMail.setApiKey(apiKey);
@@ -116,7 +123,7 @@ export class SendGridService {
       application_no: applicationNo,
       target_country: targetCountry,
       visa_category: visaCategory || 'Tourist',
-      tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
@@ -160,7 +167,7 @@ export class SendGridService {
       evaluator_email: evaluatorEmail,
       evaluator_name: formattedEvaluatorName,
       bank_accounts: bankAccounts || [],
-      payment_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
+      payment_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
@@ -187,7 +194,7 @@ export class SendGridService {
       amount_paid: amountPaid,
       balance_due: balanceDue,
       payment_option: paymentOption,
-      tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
@@ -216,7 +223,7 @@ export class SendGridService {
       target_country: targetCountry,
       reviewer_email: reviewerEmail,
       reviewer_name: formattedReviewerName,
-      tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
@@ -246,7 +253,7 @@ export class SendGridService {
       rejection_reason: rejectionReason,
       reviewer_email: reviewerEmail,
       reviewer_name: formattedReviewerName,
-      tracking_url: `https://thetradefactor.com/track?ref=${applicationNo}`,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
@@ -275,7 +282,7 @@ export class SendGridService {
       role,
       inviter_email: inviterEmail,
       inviter_name: formattedInviterName,
-      login_url: `https://thetradefactor.com/admin/login`,
+      login_url: `${this.frontendUrl}/admin/login`,
       from_email: this.fromEmail,
       year: new Date().getFullYear(),
     };
