@@ -18,6 +18,7 @@ dist/
 build/
 out/
 .next/
+auth.md
 
 # test coverage / reports
 coverage/

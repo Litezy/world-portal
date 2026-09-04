@@ -49,6 +49,7 @@ export const evaluateVisaFormSchema = z.object({
     .number({ error: "Enter the total cost" })
     .min(0, "Enter the total cost")
     .max(1_000_000, "That figure looks wrong"),
+  currency: z.string().min(1, "Select currency"),
   allowInstallment: z.boolean().optional(),
 });
 
@@ -57,6 +58,7 @@ export const evaluateVisaSchema = z.object({
     .number()
     .min(0, "Enter the total cost")
     .max(1_000_000, "That figure looks wrong"),
+  currency: z.string().default("USD"),
   allowInstallment: z.boolean().optional(),
 });
 

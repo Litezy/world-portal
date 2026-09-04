@@ -10,13 +10,15 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/admin">)
   const { exp: _exp, ...user } = session;
 
   return (
-    <div className="flex min-h-dvh bg-ink-50">
+    <div className="flex min-h-dvh bg-background text-foreground">
+
       <AdminSidebar user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopbar user={user} />
-        <main id="main" className="flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
-          <div className="mx-auto w-full max-w-[1280px]">{children}</div>
+        <main id="main" className="flex-1 px-4 py-6 sm:px-6 lg:px-6 lg:py-8">
+          <div className="mx-auto w-full max-w-[1440px]">{children}</div>
         </main>
+
       </div>
     </div>
   );

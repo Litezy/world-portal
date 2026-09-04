@@ -18,8 +18,9 @@ import {
   statusIndex,
 } from "@/features/visa/status";
 import { toAmount, type VisaDocumentation } from "@/features/visa/types";
+import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-payment-info";
 import { ApiError } from "@/lib/api-client";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 export function TrackPanel() {
   const params = useSearchParams();
@@ -218,7 +219,7 @@ function ApplicationSummary({ application }: { application: VisaDocumentation })
             {/* Decimals arrive as strings — see types.ts */}
             {total === null
               ? "Not yet costed"
-              : `${total.toLocaleString()} · ${(paid ?? 0).toLocaleString()} paid`}
+              : `${formatCurrency(total, application.currency)} · ${formatCurrency(paid ?? 0, application.currency)} paid`}
           </dd>
         </div>
         <div>
@@ -226,7 +227,7 @@ function ApplicationSummary({ application }: { application: VisaDocumentation })
             Balance due
           </dt>
           <dd className="mt-1 text-[14px] font-medium text-ink-900">
-            {due === null ? "—" : due.toLocaleString()}
+            {due === null ? "—" : formatCurrency(due, application.currency)}
           </dd>
         </div>
       </dl>
@@ -237,6 +238,12 @@ function ApplicationSummary({ application }: { application: VisaDocumentation })
           {application.verificationNotes}
         </p>
       ) : null}
+
+      {(application.status === "EVALUATED" ||
+        application.paymentStatus === "AWAITING_PAYMENT" ||
+        application.paymentStatus === "PARTIALLY_PAID") && (
+        <BankAccountPaymentInfo applicationNo={application.applicationNo} />
+      )}
 
       <p className="mt-6 text-[12px] text-muted-foreground">
         Submitted {formatDate(application.createdAt)} · last updated{" "}

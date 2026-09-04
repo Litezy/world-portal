@@ -45,9 +45,13 @@ export class ProfileController {
     status: 409,
     description: 'Email or External Auth ID conflict.',
   })
-  async createProfile(@Body() dto: CreateProfileDto) {
-    this.logger.log(`POST /profiles requested for email=${dto.email}`);
-    return this.profileService.createProfile(dto);
+  async createProfile(
+    @Body() dto: CreateProfileDto,
+    @CurrentUser() user: { email?: string } | undefined,
+  ) {
+    const inviter = user?.email || 'manager@yopmail.com';
+    this.logger.log(`POST /profiles requested for email=${dto.email} by inviter=${inviter}`);
+    return this.profileService.createProfile(dto, inviter);
   }
 
   @Get('me')

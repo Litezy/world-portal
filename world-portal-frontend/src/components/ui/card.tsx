@@ -6,14 +6,14 @@ const cardVariants = cva("relative flex flex-col", {
   variants: {
     variant: {
       /** Water glass — the default surface across the site. */
-      glass: "glass text-card-foreground",
+      glass: "border border-border/70 bg-card text-card-foreground !shadow-none",
       /** Glass tinted dark, for panels over bright photography. */
       glassDark: "glass-dark text-white",
       /** Opaque white, for surfaces that sit on plain backgrounds. */
-      solid:
-        "bg-card text-card-foreground shadow-[0_1px_2px_rgba(12,14,18,0.05),0_12px_28px_-16px_rgba(12,14,18,0.22)]",
-      outlined: "border border-border bg-card text-card-foreground",
+      solid: "border border-border/70 bg-card text-card-foreground !shadow-none",
+      outlined: "border border-border/70 bg-card text-card-foreground !shadow-none",
       ghost: "",
+
     },
     radius: {
       md: "rounded-xl",

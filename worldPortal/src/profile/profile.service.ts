@@ -8,17 +8,44 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryProfileDto } from './dto/query-profile.dto';
+import { SendGridService } from '../mail/sendgrid.service';
 import { Profile, Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProfileService {
   private readonly logger = new Logger(ProfileService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sendGridService: SendGridService,
+  ) {}
 
-  async createProfile(dto: CreateProfileDto): Promise<Profile> {
+  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+    if (!emailOrName) return 'Admin Consultant';
+    if (!emailOrName.includes('@')) return emailOrName;
+
+    const profile = await this.prisma.profile
+      .findUnique({ where: { email: emailOrName } })
+      .catch(() => null);
+
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName} ${profile.lastName}`.trim();
+    }
+
+    const handle = emailOrName.split('@')[0];
+    const parts = handle.split(/[._\-+]/).filter(Boolean);
+    if (parts.length === 0) return 'Admin Consultant';
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  async createProfile(
+    dto: CreateProfileDto,
+    inviterEmail = 'manager@yopmail.com',
+  ): Promise<Profile> {
     this.logger.log(
-      `Creating profile for email=${dto.email}, role=${dto.role}, externalAuthId=${dto.externalAuthId ?? 'N/A'}`,
+      `Creating profile for email=${dto.email}, role=${dto.role}, externalAuthId=${dto.externalAuthId ?? 'N/A'} by inviter=${inviterEmail}`,
     );
 
     const existingEmail = await this.prisma.profile.findUnique({
@@ -61,9 +88,26 @@ export class ProfileService {
       },
     });
 
+    // Send team invitation email via SendGrid for admin console roles
+    if (['MANAGER', 'STAFF', 'PARTNER'].includes(profile.role)) {
+      const inviterName = await this.resolveReviewerDisplayName(inviterEmail);
+      this.sendGridService
+        .sendTeamInviteEmail({
+          to: profile.email,
+          recipientName: `${profile.firstName} ${profile.lastName}`.trim(),
+          role: profile.role,
+          inviterEmail,
+          inviterName,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid team invite email error: ${err?.message}`);
+        });
+    }
+
     this.logger.log(`Profile created successfully with ID=${profile.id}`);
     return profile;
   }
+
 
   async findAllProfiles(query?: QueryProfileDto): Promise<Profile[]> {
     this.logger.log(

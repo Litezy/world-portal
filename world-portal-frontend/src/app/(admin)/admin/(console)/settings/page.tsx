@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 
 import { DetailItem, DetailList, PageHeader, UserAvatar } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabels, settings } from "@/content/admin";
+import { BankAccountsSettings } from "@/features/settings/components/bank-accounts-settings";
+import { InviteMemberModal } from "@/features/settings/components/invite-member-modal";
 import { NotificationSettings } from "@/features/settings/components/notification-settings";
 import { SignOutButton } from "@/features/settings/components/sign-out-button";
 import { TeamList } from "@/features/settings/components/team-list";
@@ -25,63 +28,93 @@ export default async function SettingsPage() {
         body={settings.body}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <Card variant="solid" radius="lg" padding="none" className="gap-0 p-6">
-          <CardTitle className="text-base">{settings.profile.title}</CardTitle>
-          <CardDescription className="text-[13px]">
-            {settings.profile.body}
-          </CardDescription>
+      <Tabs defaultValue="team" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 max-w-xl">
+          <TabsTrigger value="team">Team & Access</TabsTrigger>
+          <TabsTrigger value="bank-accounts">Bank Accounts</TabsTrigger>
+          <TabsTrigger value="profile">Profile & Security</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        </TabsList>
 
-          <div className="mt-6 flex items-center gap-4">
-            <UserAvatar user={user} size="lg" className="ring-border" />
-            <div className="min-w-0">
-              <p className="truncate text-[15px] font-semibold">{user.name}</p>
-              <p className="truncate text-[13px] text-muted-foreground">{user.email}</p>
+        <div className="mt-6">
+          {/* Tab 1: Team & Access Management */}
+          <TabsContent value="team" className="m-0 space-y-6">
+            <Card variant="solid" radius="lg" padding="none">
+              <CardHeader className="flex flex-row items-center justify-between p-6 pb-4">
+                <div>
+                  <CardTitle className="text-base">{settings.team.title}</CardTitle>
+                  <CardDescription className="text-[13px]">
+                    Manage admin users, processing staff, and partner access permissions.
+                  </CardDescription>
+                </div>
+                {user.role === "MANAGER" && <InviteMemberModal />}
+              </CardHeader>
+              <CardContent className="p-6 pt-0">
+                <TeamList />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab 2: Bank Accounts Management */}
+          <TabsContent value="bank-accounts" className="m-0">
+            <Card variant="solid" radius="lg" padding="none" className="p-6">
+              <BankAccountsSettings />
+            </Card>
+          </TabsContent>
+
+          {/* Tab 3: Profile & Security */}
+          <TabsContent value="profile" className="m-0 space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card variant="solid" radius="lg" padding="none" className="p-6">
+                <CardTitle className="text-base">{settings.profile.title}</CardTitle>
+                <CardDescription className="text-[13px]">
+                  {settings.profile.body}
+                </CardDescription>
+
+                <div className="mt-6 flex items-center gap-4">
+                  <UserAvatar user={user} size="lg" className="ring-border" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold text-foreground">{user.name}</p>
+                    <p className="truncate text-[13px] text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+
+                <DetailList className="mt-8 sm:grid-cols-2">
+                  <DetailItem label="Role">
+                    <Badge variant="softNeutral" size="sm">
+                      {roleLabels[user.role]}
+                    </Badge>
+                  </DetailItem>
+                  <DetailItem label="Signed in as">{user.email}</DetailItem>
+                </DetailList>
+              </Card>
+
+              <Card variant="solid" radius="lg" padding="none" className="gap-4 p-6">
+                <div>
+                  <CardTitle className="text-base">{settings.danger.title}</CardTitle>
+                  <CardDescription className="text-[13px]">
+                    {settings.danger.body}
+                  </CardDescription>
+                </div>
+                <SignOutButton />
+              </Card>
             </div>
-          </div>
+          </TabsContent>
 
-          <DetailList className="mt-8 sm:grid-cols-2">
-            <DetailItem label="Role">
-              <Badge variant="muted" size="sm">
-                {roleLabels[user.role]}
-              </Badge>
-            </DetailItem>
-            <DetailItem label="Signed in as">{user.email}</DetailItem>
-          </DetailList>
-        </Card>
-
-        <div className="flex flex-col gap-4">
-          <Card variant="solid" radius="lg" padding="none" className="gap-0 p-6">
-            <CardTitle className="text-base">{settings.notifications.title}</CardTitle>
-            <CardDescription className="text-[13px]">
-              {settings.notifications.body}
-            </CardDescription>
-            <div className="mt-6">
-              <NotificationSettings />
-            </div>
-          </Card>
-
-          <Card variant="solid" radius="lg" padding="none" className="gap-0 p-6">
-            <CardTitle className="text-base">{settings.team.title}</CardTitle>
-            <CardDescription className="text-[13px]">
-              {settings.team.body}
-            </CardDescription>
-            <div className="mt-6">
-              <TeamList />
-            </div>
-          </Card>
-
-          <Card variant="solid" radius="lg" padding="none" className="gap-4 p-6">
-            <div>
-              <CardTitle className="text-base">{settings.danger.title}</CardTitle>
+          {/* Tab 4: Notifications */}
+          <TabsContent value="notifications" className="m-0">
+            <Card variant="solid" radius="lg" padding="none" className="p-6 max-w-2xl">
+              <CardTitle className="text-base">{settings.notifications.title}</CardTitle>
               <CardDescription className="text-[13px]">
-                {settings.danger.body}
+                {settings.notifications.body}
               </CardDescription>
-            </div>
-            <SignOutButton />
-          </Card>
+              <div className="mt-6">
+                <NotificationSettings />
+              </div>
+            </Card>
+          </TabsContent>
         </div>
-      </div>
+      </Tabs>
     </div>
   );
 }

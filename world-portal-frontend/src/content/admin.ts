@@ -142,6 +142,23 @@ export const settings = {
   danger: { title: "Session", body: "Sign out of this device.", action: "Sign out" },
 } as const;
 
+export const finance = {
+  headingLead: "Financial",
+  headingAccent: "operations.",
+  body: "Transactions, refund requests and platform fee configuration.",
+  searchPlaceholder: "Search by transaction ref, applicant or email",
+  tabs: {
+    transactions: "Transactions",
+    refunds: "Refund Requests",
+    config: "Fee Settings",
+  },
+  empty: {
+    title: "No financial records found",
+    body: "Try adjusting your search query or filters.",
+  },
+} as const;
+
+
 export const visaStatusLabels: Record<VisaStatus, string> = {
   SUBMITTED: "Submitted",
   EVALUATED: "Evaluated",

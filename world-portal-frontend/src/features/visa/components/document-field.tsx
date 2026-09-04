@@ -86,7 +86,8 @@ export function DocumentField({
 
       <div
         className={cn(
-          "flex items-center gap-3 rounded-xl border border-border/70 bg-ink-50/70 px-3.5 py-3 transition-colors",
+          "flex items-center gap-3 rounded-xl border border-border/70 bg-muted/30 px-3.5 py-3 transition-colors",
+
           value && "border-success/50 bg-success/8",
           shown && "border-destructive/60 bg-destructive/5",
         )}

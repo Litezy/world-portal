@@ -124,8 +124,8 @@ export function ApplicationsTable() {
                   <PaymentStatusBadge status={application.paymentStatus} />
                   {application.totalAmount > 0 ? (
                     <span className="mt-1 block text-[11.5px] text-muted-foreground tabular-nums">
-                      {formatCurrency(application.amountPaid)} of{" "}
-                      {formatCurrency(application.totalAmount)}
+                      {formatCurrency(application.amountPaid, application.currency)} of{" "}
+                      {formatCurrency(application.totalAmount, application.currency)}
                     </span>
                   ) : null}
                 </TableCell>

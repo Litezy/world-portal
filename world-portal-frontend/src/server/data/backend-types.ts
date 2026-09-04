@@ -72,6 +72,7 @@ export type BackendVisaApplication = {
   intendedDepartureDate: string;
   purposeOfVisit: string;
   totalAmount: string | null;
+  currency?: string;
   amountPaid: string;
   balanceDue: string;
   allowInstallment: boolean;
@@ -82,8 +83,19 @@ export type BackendVisaApplication = {
   evaluatedBy: string | null;
   evaluatedAt: string | null;
   reviewedBy: string | null;
+  passportDataPageUrl?: string | null;
+  passportPhotoWhiteBgUrl?: string | null;
+  proofOfFunds6MonthsUrl?: string | null;
+  businessRegistrationCertUrl?: string | null;
+  taxCertificateUrl?: string | null;
+  marriageCertificateUrl?: string | null;
+  childrenBirthCertUrls?: string[];
+  landedPropertyDocUrls?: string[];
+  previousVisasScanUrls?: string[];
+  supportingDocUrls?: string[];
   createdAt: string;
   updatedAt: string;
+
   profile?: Pick<
     BackendProfile,
     "id" | "email" | "firstName" | "lastName" | "role"
@@ -126,6 +138,31 @@ export type BackendTransaction = {
   refundedAt: string | null;
   createdAt: string;
 };
+
+export type BackendPaymentConfig = {
+  id: string;
+  partnerMarkupPercentage: string;
+  serviceFeePercentage: string;
+  refundSurchargePercentage: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BackendRefund = {
+  id: string;
+  refundRef: string;
+  transactionId: string;
+  originalAmount: string;
+  surchargeAmount: string;
+  netRefundAmount: string;
+  reason: string;
+  status: "REQUESTED" | "APPROVED" | "PROCESSED" | "REJECTED";
+  processedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 
 /** Decimals are strings (`"500.00"`). Parse before any maths or formatting. */
 export function toAmount(value: string | number | null | undefined) {

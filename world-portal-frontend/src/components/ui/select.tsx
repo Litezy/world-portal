@@ -22,7 +22,8 @@ export function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-background shadow-xs transition-[color,box-shadow] outline-none",
+        "flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-background shadow-xs transition-[color,box-shadow] outline-none text-left",
+        "[&>span]:truncate [&>span]:block [&>span]:w-full [&>span]:text-left [&>span]:whitespace-nowrap",
         "data-[placeholder]:text-muted-foreground",
         "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40",
         "disabled:cursor-not-allowed disabled:opacity-60",
@@ -33,6 +34,7 @@ export function SelectTrigger({
         size === "lg" && "h-12 px-4 text-[15px]",
         className,
       )}
+
       {...props}
     >
       {children}

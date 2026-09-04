@@ -42,7 +42,8 @@ export function ApplicationTimeline({ events }: { events: ApplicationEvent[] }) 
               })}
             </p>
             {event.note ? (
-              <p className="mt-2 rounded-xl bg-ink-50 px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground">
+              <p className="mt-2 rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground">
+
                 {event.note}
               </p>
             ) : null}

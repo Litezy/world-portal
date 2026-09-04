@@ -1,5 +1,6 @@
 import {
   BookUser,
+  CreditCard,
   FileCheck2,
   LayoutDashboard,
   type LucideIcon,
@@ -19,6 +20,8 @@ export const adminNav: AdminNavItem[] = [
   { title: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
   { title: "Visa applications", href: "/admin/applications", icon: FileCheck2 },
   { title: "Passports", href: "/admin/passports", icon: BookUser },
+  { title: "Financials", href: "/admin/finance", icon: CreditCard },
   { title: "Applicants", href: "/admin/customers", icon: Users },
   { title: "Settings", href: "/admin/settings", icon: Settings },
 ];
+

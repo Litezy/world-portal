@@ -67,22 +67,27 @@ export function DashboardOverview() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card variant="solid" radius="lg" padding="none" className="p-5 lg:col-span-2">
-          <CardTitle className="text-base">{overview.weekly.title}</CardTitle>
-          <WeeklyChart data={stats.weekly} className="mt-5" />
+      <div className="grid gap-4 lg:grid-cols-3 items-stretch">
+        <Card variant="solid" radius="lg" padding="none" className="flex flex-col justify-between p-5 lg:col-span-2">
+          <div>
+            <CardTitle className="text-base">{overview.weekly.title}</CardTitle>
+            <WeeklyChart data={stats.weekly} className="mt-5" />
+          </div>
         </Card>
 
-        <Card variant="solid" radius="lg" padding="none" className="p-5">
-          <CardTitle className="text-base">{overview.services.title}</CardTitle>
-          <ShareBar
-            className="mt-5"
-            segments={stats.visasByCategory
-              .filter((c) => c.count > 0)
-              .map((c) => ({ label: visaCategoryLabels[c.category], value: c.count }))}
-          />
+        <Card variant="solid" radius="lg" padding="none" className="flex flex-col justify-between p-5">
+          <div>
+            <CardTitle className="text-base">{overview.services.title}</CardTitle>
+            <ShareBar
+              className="mt-5"
+              segments={stats.visasByCategory
+                .filter((c) => c.count > 0)
+                .map((c) => ({ label: visaCategoryLabels[c.category], value: c.count }))}
+            />
+          </div>
         </Card>
       </div>
+
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card variant="solid" radius="lg" padding="none" className="p-5">
@@ -128,7 +133,8 @@ export function DashboardOverview() {
                 <li key={application.id}>
                   <Link
                     href={`/admin/applications/${application.id}`}
-                    className="-mx-2 flex items-center gap-4 rounded-xl px-2 py-3 transition-colors hover:bg-ink-50"
+                    className="-mx-2 flex items-center gap-4 rounded-xl px-2 py-3 transition-colors hover:bg-muted/40"
+
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13.5px] font-medium text-foreground">

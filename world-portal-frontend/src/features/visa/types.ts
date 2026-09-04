@@ -80,6 +80,7 @@ export type VisaDocumentation = {
   supportingDocUrls: string[];
 
   totalAmount: string | null;
+  currency?: string;
   amountPaid: string;
   balanceDue: string;
   allowInstallment: boolean;
