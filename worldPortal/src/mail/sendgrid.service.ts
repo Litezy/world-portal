@@ -93,7 +93,7 @@ export class SendGridService {
     this.fromName =
       this.configService.get<string>('SENDGRID_FROM_NAME') ||
       process.env.SENDGRID_FROM_NAME ||
-      'World Portal | The Trade Factor';
+      'E-Embassy';
 
     const rawFrontendUrl =
       this.configService.get<string>('FRONTEND_URL') ||
@@ -291,9 +291,32 @@ export class SendGridService {
 
     return this.dispatchMail({
       to,
-      subject: `Invitation: Join World Portal Console as ${role}`,
+      subject: `Invitation: Join E-Embassy Console as ${role}`,
       html,
       ref: `INVITE-${to}`,
+    });
+  }
+
+  /**
+   * 7. OTP Email Verification
+   */
+  async sendOtpEmail(to: string, otpCode: string): Promise<boolean> {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <h2 style="color: #0f172a; margin-bottom: 8px;">E-Embassy Verification Code</h2>
+        <p style="color: #475569; font-size: 14px; margin-bottom: 24px;">Your 6-digit email verification code is:</p>
+        <div style="background-color: #f1f5f9; text-align: center; padding: 16px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0f172a; margin-bottom: 24px;">
+          ${otpCode}
+        </div>
+        <p style="color: #64748b; font-size: 12px;">This code will expire in 10 minutes. If you did not request this code, please ignore this email.</p>
+      </div>
+    `;
+
+    return this.dispatchMail({
+      to,
+      subject: `${otpCode} is your E-Embassy verification code`,
+      html,
+      ref: `OTP-${to}`,
     });
   }
 

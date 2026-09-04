@@ -33,7 +33,7 @@ import { DocumentField } from "@/features/visa/components/document-field";
 import { RouteCheck } from "@/features/visa/components/route-check";
 import { routeToApiNote, type VisaVerdict } from "@/features/visa/requirement";
 import { GENDERS, VISA_CATEGORIES } from "@/features/visa/types";
-import { ApiError } from "@/lib/api-client";
+import { ApiError, internalApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   applicationSteps,
@@ -54,7 +54,6 @@ const categoryLabels: Record<(typeof VISA_CATEGORIES)[number], string> = {
 const genderLabels: Record<(typeof GENDERS)[number], string> = {
   MALE: "Male",
   FEMALE: "Female",
-  OTHER: "Other",
 };
 
 export function ApplicationForm() {
@@ -109,14 +108,25 @@ export function ApplicationForm() {
   const { mutateAsync, isPending } = useSubmitVisaApplication();
   const isLast = step === steps.length - 1;
 
-  /** Only advance once this step's own fields are clean. */
+  const [isEmailVerified, setIsEmailVerified] = React.useState(false);
+
+  /** Only advance once this step's own fields are clean and email is verified. */
   async function next() {
+    if (step === 0 && !isEmailVerified) {
+      toast.error("Please verify your email address with OTP before continuing.");
+      return;
+    }
     const fields = steps[step].fields as (keyof VisaApplicationInput)[];
     const ok = await form.trigger(fields, { shouldFocus: true });
     if (ok) setStep((s) => Math.min(s + 1, steps.length - 1));
   }
 
   async function onSubmit(values: VisaApplicationInput) {
+    if (!isEmailVerified) {
+      toast.error("Please verify your email address with OTP before submitting.");
+      setStep(0);
+      return;
+    }
     try {
       const record = await mutateAsync(
         toApiPayload({
@@ -191,7 +201,13 @@ export function ApplicationForm() {
               </p>
             </header>
 
-            {step === 0 ? <ApplicantStep form={form} /> : null}
+            {step === 0 ? (
+              <ApplicantStep
+                form={form}
+                isEmailVerified={isEmailVerified}
+                setIsEmailVerified={setIsEmailVerified}
+              />
+            ) : null}
             {step === 1 ? <PassportStep form={form} /> : null}
             {step === 2 ? <TripStep form={form} /> : null}
             {step === 3 ? <DocumentsStep form={form} /> : null}
@@ -333,7 +349,62 @@ function Text({
   );
 }
 
-function ApplicantStep({ form }: StepProps) {
+function ApplicantStep({
+  form,
+  isEmailVerified,
+  setIsEmailVerified,
+}: StepProps & {
+  isEmailVerified: boolean;
+  setIsEmailVerified: (verified: boolean) => void;
+}) {
+  const emailValue = form.watch("email");
+  const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
+  const [otpSent, setOtpSent] = React.useState(false);
+  const [otpCode, setOtpCode] = React.useState("");
+  const [sendingOtp, setSendingOtp] = React.useState(false);
+  const [verifyingOtp, setVerifyingOtp] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isEmailVerified && emailValue !== verifiedEmail) {
+      setIsEmailVerified(false);
+    }
+  }, [emailValue, isEmailVerified, verifiedEmail, setIsEmailVerified]);
+
+  const handleSendOtp = async () => {
+    if (!emailValue || !emailValue.includes("@")) {
+      toast.error("Please enter a valid email address first.");
+      return;
+    }
+    setSendingOtp(true);
+    try {
+      await internalApi.post<any>("/otp/send", { email: emailValue });
+      toast.success(`Verification code sent to ${emailValue}`);
+      setOtpSent(true);
+    } catch (err: any) {
+      toast.error(err?.message || "Could not send OTP code.");
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error("Please enter the 6-digit OTP code.");
+      return;
+    }
+    setVerifyingOtp(true);
+    try {
+      await internalApi.post<any>("/otp/verify", { email: emailValue, code: otpCode });
+      toast.success("Email verified successfully!");
+      setVerifiedEmail(emailValue);
+      setIsEmailVerified(true);
+    } catch (err: any) {
+      toast.error(err?.message || "Invalid or expired OTP code.");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
   return (
     <div className="grid gap-5 sm:grid-cols-2">
       <Text
@@ -352,15 +423,83 @@ function ApplicantStep({ form }: StepProps) {
         placeholder="Doe"
         autoComplete="family-name"
       />
-      <Text
-        form={form}
-        name="email"
-        label="Email address"
-        required
-        type="email"
-        placeholder="you@example.com"
-        autoComplete="email"
-      />
+      <div className="space-y-2 sm:col-span-2">
+        <Text
+          form={form}
+          name="email"
+          label="Email address"
+          required
+          type="email"
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
+
+        <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 mt-2">
+          {isEmailVerified ? (
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+              <Check className="size-4" strokeWidth={3} />
+              <span>Email Verified ({emailValue})</span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Verify ownership of your email address
+                </span>
+                {!otpSent ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendOtp}
+                    isLoading={sendingOtp}
+                    disabled={!emailValue || !emailValue.includes("@")}
+                    className="h-8 text-xs shrink-0"
+                  >
+                    Send OTP Code
+                  </Button>
+                ) : null}
+              </div>
+
+              {otpSent ? (
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
+                  <Input
+                    type="text"
+                    maxLength={6}
+                    placeholder="6-digit OTP"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                    className="h-9 font-mono tracking-widest text-center max-w-[140px]"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={handleVerifyOtp}
+                      isLoading={verifyingOtp}
+                      disabled={otpCode.length !== 6}
+                      className="h-9 text-xs"
+                    >
+                      Verify OTP
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSendOtp}
+                      isLoading={sendingOtp}
+                      className="h-9 text-xs text-muted-foreground"
+                    >
+                      Resend
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
       <Text
         form={form}
         name="phone"

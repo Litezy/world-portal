@@ -78,9 +78,10 @@ describe('ProfileController', () => {
         role: UserRole.MANAGER,
       };
 
-      const result = await controller.createProfile(dto);
+      const user = { email: 'manager@loveworld.com' };
+      const result = await controller.createProfile(dto, user);
       expect(result).toEqual(mockProfile);
-      expect(mockProfileService.createProfile).toHaveBeenCalledWith(dto);
+      expect(mockProfileService.createProfile).toHaveBeenCalledWith(dto, 'manager@loveworld.com');
     });
   });
 

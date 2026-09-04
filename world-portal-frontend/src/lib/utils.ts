@@ -15,8 +15,9 @@ export function absoluteUrl(path = "/") {
   return new URL(path, base).toString();
 }
 
-export function formatCurrency(amount: number, currency = "USD", locale = "en-US") {
-  return new Intl.NumberFormat(locale, {
+export function formatCurrency(amount: number, currency = "NGN", locale = "en-US") {
+  const targetLocale = currency === "NGN" ? "en-NG" : locale;
+  return new Intl.NumberFormat(targetLocale, {
     style: "currency",
     currency,
     maximumFractionDigits: amount % 1 === 0 ? 0 : 2,

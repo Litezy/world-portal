@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VisaDocumentationService } from './visa-documentation.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SendGridService } from '../mail/sendgrid.service';
+import { BankAccountService } from '../bank-account/bank-account.service';
+import { OtpService } from '../otp/otp.service';
 import {
   VisaDocumentStatus,
   PaymentStatus,
@@ -73,13 +76,27 @@ describe('VisaDocumentationService', () => {
   };
 
   beforeEach(async () => {
+    const mockOtpService = {
+      isEmailVerified: jest.fn().mockReturnValue(true),
+    };
+    const mockSendGridService = {
+      sendApplicationConfirmationEmail: jest.fn().mockResolvedValue(true),
+      sendCostEvaluatedEmail: jest.fn().mockResolvedValue(true),
+      sendPaymentConfirmedEmail: jest.fn().mockResolvedValue(true),
+      sendApplicationApprovedEmail: jest.fn().mockResolvedValue(true),
+      sendApplicationRejectedEmail: jest.fn().mockResolvedValue(true),
+    };
+    const mockBankAccountService = {
+      findActive: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VisaDocumentationService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: SendGridService, useValue: mockSendGridService },
+        { provide: BankAccountService, useValue: mockBankAccountService },
+        { provide: OtpService, useValue: mockOtpService },
       ],
     }).compile();
 

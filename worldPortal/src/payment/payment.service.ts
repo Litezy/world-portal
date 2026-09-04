@@ -356,12 +356,22 @@ export class PaymentService {
       ];
     }
 
-    return this.prisma.paymentTransaction.findMany({
+    const records = await this.prisma.paymentTransaction.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
         refunds: true,
+        visaDocumentation: {
+          select: {
+            currency: true,
+          },
+        },
       },
     });
+
+    return records.map((t) => ({
+      ...t,
+      currency: t.visaDocumentation?.currency || 'NGN',
+    }));
   }
 }

@@ -3,7 +3,16 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 
-import { AlertTriangle, Check, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  KeyRound,
+  Mail,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,58 +31,293 @@ import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-
 import { ApiError } from "@/lib/api-client";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
+type TrackStep = "DETAILS" | "OTP" | "VERIFIED";
+
 export function TrackPanel() {
   const params = useSearchParams();
-  const initial = params.get("ref") ?? "";
+  const initialRef = params.get("ref") ?? "";
 
-  const [input, setInput] = React.useState(initial);
-  const [reference, setReference] = React.useState(initial || null);
+  const [referenceInput, setReferenceInput] = React.useState(initialRef);
+  const [emailInput, setEmailInput] = React.useState("");
 
-  const { data, isFetching, error } = useVisaApplication(reference);
+  const [step, setStep] = React.useState<TrackStep>("DETAILS");
+  const [otpCode, setOtpCode] = React.useState("");
+
+  const [isSendingOtp, setIsSendingOtp] = React.useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = React.useState(false);
+  const [otpError, setOtpError] = React.useState<string | null>(null);
+  const [otpSuccessMsg, setOtpSuccessMsg] = React.useState<string | null>(null);
+
+  const [verifiedRef, setVerifiedRef] = React.useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
+
+  const { data, isFetching, error } = useVisaApplication(verifiedRef, verifiedEmail);
+
+  // Send OTP handler
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!referenceInput.trim()) {
+      setOtpError("Please enter your application reference number.");
+      return;
+    }
+    if (!emailInput.trim() || !emailInput.includes("@")) {
+      setOtpError("Please enter a valid applicant email address.");
+      return;
+    }
+
+    setOtpError(null);
+    setOtpSuccessMsg(null);
+    setIsSendingOtp(true);
+
+    try {
+      const res = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || "Failed to send verification code");
+      }
+
+      setStep("OTP");
+      setOtpSuccessMsg("Verification code sent to your email address.");
+    } catch (err: any) {
+      setOtpError(err.message || "Failed to send verification code.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // Verify OTP handler
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setOtpError("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setOtpError(null);
+    setOtpSuccessMsg(null);
+    setIsVerifyingOtp(true);
+
+    try {
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim(), code: otpCode.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body.error || "Invalid or expired verification code");
+      }
+
+      // Verification successful! Set verified tracking state
+      setVerifiedRef(referenceInput.trim());
+      setVerifiedEmail(emailInput.trim());
+      setStep("VERIFIED");
+    } catch (err: any) {
+      setOtpError(err.message || "Invalid or expired verification code.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleReset = () => {
+    setStep("DETAILS");
+    setVerifiedRef(null);
+    setVerifiedEmail(null);
+    setOtpCode("");
+    setOtpError(null);
+    setOtpSuccessMsg(null);
+  };
 
   return (
     <div className="grid gap-8">
-      <Card variant="glass" radius="2xl" padding="none" className="p-6 sm:p-7">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setReference(input.trim() || null);
-          }}
-          className="flex flex-col gap-3 sm:flex-row"
-        >
-          <label htmlFor="reference" className="sr-only">
-            Application reference
-          </label>
-          <Input
-            id="reference"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="VISA-2026-8941"
-            autoComplete="off"
-            spellCheck={false}
-            className="font-mono uppercase"
-            leftIcon={<Search />}
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            isLoading={isFetching}
-            loadingText="Checking…"
-            className="shrink-0"
-          >
-            Track application
-          </Button>
-        </form>
-        <p className="mt-3 text-[12.5px] text-muted-foreground">
-          Use the reference from your confirmation — it looks like{" "}
-          <span className="font-mono">VISA-2026-8941</span>. No account needed.
-        </p>
-      </Card>
+      {step !== "VERIFIED" ? (
+        <Card variant="glass" radius="2xl" padding="none" className="p-6 sm:p-7">
+          {step === "DETAILS" ? (
+            <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-[17px] font-semibold text-ink-900">
+                  Verify & Track Application
+                </h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  Provide your application reference number and applicant email address to receive a verification code.
+                </p>
+              </div>
 
-      {isFetching && !data ? <TrackSkeleton /> : null}
-      {error && !isFetching ? <TrackError error={error} /> : null}
-      {data && !isFetching ? <ApplicationSummary application={data} /> : null}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="reference"
+                    className="mb-1.5 block text-[12.5px] font-medium text-ink-800"
+                  >
+                    Application Reference
+                  </label>
+                  <Input
+                    id="reference"
+                    value={referenceInput}
+                    onChange={(e) => setReferenceInput(e.target.value)}
+                    placeholder="VISA-2026-8941"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="font-mono uppercase"
+                    leftIcon={<Search />}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="mb-1.5 block text-[12.5px] font-medium text-ink-800"
+                  >
+                    Applicant Email
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="applicant@example.com"
+                    autoComplete="email"
+                    leftIcon={<Mail />}
+                  />
+                </div>
+              </div>
+
+              {otpError ? (
+                <p className="text-[13px] text-destructive font-medium">{otpError}</p>
+              ) : null}
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  isLoading={isSendingOtp}
+                  loadingText="Sending OTP…"
+                  className="w-full sm:w-auto"
+                >
+                  Send Verification Code
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Badge variant="solid" className="mb-2">
+                    Step 2: Enter Verification Code
+                  </Badge>
+                  <h2 className="text-[17px] font-semibold text-ink-900">
+                    Check your email inbox
+                  </h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    We sent a 6-digit code to{" "}
+                    <span className="font-semibold text-ink-900">{emailInput}</span> for
+                    application{" "}
+                    <span className="font-mono font-semibold text-ink-900">
+                      {referenceInput}
+                    </span>
+                    .
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleReset}
+                  className="shrink-0 text-muted-foreground"
+                >
+                  <ArrowLeft className="mr-1 size-3.5" />
+                  Edit details
+                </Button>
+              </div>
+
+              {/* OTP code sent via email */}
+
+              <div>
+                <label
+                  htmlFor="otpCode"
+                  className="mb-1.5 block text-[12.5px] font-medium text-ink-800"
+                >
+                  6-Digit OTP Code
+                </label>
+                <div className="flex gap-3">
+                  <Input
+                    id="otpCode"
+                    value={otpCode}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="123456"
+                    maxLength={6}
+                    className="font-mono text-center tracking-widest text-[18px]"
+                    leftIcon={<KeyRound />}
+                  />
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    isLoading={isVerifyingOtp}
+                    loadingText="Verifying…"
+                    className="shrink-0"
+                  >
+                    Verify & Track
+                  </Button>
+                </div>
+              </div>
+
+              {otpError ? (
+                <p className="text-[13px] text-destructive font-medium">{otpError}</p>
+              ) : null}
+
+              {otpSuccessMsg ? (
+                <p className="text-[13px] text-success font-medium">
+                  {otpSuccessMsg}
+                </p>
+              ) : null}
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[12.5px]">
+                <span className="text-muted-foreground">Didn't receive the code?</span>
+                <button
+                  type="button"
+                  onClick={() => handleSendOtp()}
+                  disabled={isSendingOtp}
+                  className="font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  Resend code
+                </button>
+              </div>
+            </form>
+          )}
+        </Card>
+      ) : (
+        <div className="flex items-center justify-between rounded-xl border border-success/30 bg-success/10 px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="size-5 text-success" />
+            <span className="text-[13.5px] font-medium text-ink-900">
+              Verified identity for <span className="font-semibold">{verifiedEmail}</span>
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+          >
+            Track another application
+          </Button>
+        </div>
+      )}
+
+      {step === "VERIFIED" && isFetching && !data ? <TrackSkeleton /> : null}
+      {step === "VERIFIED" && error && !isFetching ? <TrackError error={error} /> : null}
+      {step === "VERIFIED" && data && !isFetching ? (
+        <ApplicationSummary application={data} />
+      ) : null}
     </div>
   );
 }
@@ -98,12 +342,12 @@ function TrackError({ error }: { error: unknown }) {
       </span>
       <h2 className="text-[17px] font-semibold text-ink-900">
         {notFound
-          ? "We could not find that reference"
+          ? "We could not find a matching application"
           : "Could not load that application"}
       </h2>
       <p className="text-[13.5px] leading-relaxed text-muted-foreground">
         {notFound
-          ? "Check the reference for typos. It is case-sensitive and looks like VISA-2026-8941."
+          ? "Please check that your application reference number and email address are correct. The reference number looks like VISA-2026-8941."
           : error instanceof Error
             ? error.message
             : "Please try again shortly."}

@@ -26,7 +26,7 @@ export const VISA_CATEGORIES = [
 ] as const;
 export type VisaCategory = (typeof VISA_CATEGORIES)[number];
 
-export const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
+export const GENDERS = ["MALE", "FEMALE"] as const;
 export type Gender = (typeof GENDERS)[number];
 
 export type UploadedDocument = {
