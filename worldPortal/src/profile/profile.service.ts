@@ -20,9 +20,32 @@ export class ProfileService {
     private readonly sendGridService: SendGridService,
   ) {}
 
-  async createProfile(dto: CreateProfileDto): Promise<Profile> {
+  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+    if (!emailOrName) return 'Admin Consultant';
+    if (!emailOrName.includes('@')) return emailOrName;
+
+    const profile = await this.prisma.profile
+      .findUnique({ where: { email: emailOrName } })
+      .catch(() => null);
+
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName} ${profile.lastName}`.trim();
+    }
+
+    const handle = emailOrName.split('@')[0];
+    const parts = handle.split(/[._\-+]/).filter(Boolean);
+    if (parts.length === 0) return 'Admin Consultant';
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  async createProfile(
+    dto: CreateProfileDto,
+    inviterEmail = 'manager@yopmail.com',
+  ): Promise<Profile> {
     this.logger.log(
-      `Creating profile for email=${dto.email}, role=${dto.role}, externalAuthId=${dto.externalAuthId ?? 'N/A'}`,
+      `Creating profile for email=${dto.email}, role=${dto.role}, externalAuthId=${dto.externalAuthId ?? 'N/A'} by inviter=${inviterEmail}`,
     );
 
     const existingEmail = await this.prisma.profile.findUnique({
@@ -67,12 +90,14 @@ export class ProfileService {
 
     // Send team invitation email via SendGrid for admin console roles
     if (['MANAGER', 'STAFF', 'PARTNER'].includes(profile.role)) {
+      const inviterName = await this.resolveReviewerDisplayName(inviterEmail);
       this.sendGridService
         .sendTeamInviteEmail({
           to: profile.email,
           recipientName: `${profile.firstName} ${profile.lastName}`.trim(),
           role: profile.role,
-          inviterEmail: 'manager@yopmail.com',
+          inviterEmail,
+          inviterName,
         })
         .catch((err) => {
           this.logger.error(`SendGrid team invite email error: ${err?.message}`);
