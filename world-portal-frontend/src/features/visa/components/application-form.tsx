@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, Check, Copy } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Copy, Search } from "lucide-react";
 import { type Resolver, useForm, type UseFormReturn } from "react-hook-form";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,8 @@ import { RouteCheck } from "@/features/visa/components/route-check";
 import { routeToApiNote, type VisaVerdict } from "@/features/visa/requirement";
 import { GENDERS, VISA_CATEGORIES } from "@/features/visa/types";
 import { ApiError, internalApi } from "@/lib/api-client";
+import { countries } from "@/lib/countries";
+import { findNationality, nationalities } from "@/lib/nationalities";
 import { cn } from "@/lib/utils";
 import {
   applicationSteps,
@@ -349,6 +352,253 @@ function Text({
   );
 }
 
+function NationalitySelect({ form }: StepProps) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+
+  const filteredNationalities = React.useMemo(() => {
+    if (!query.trim()) return nationalities;
+    const q = query.toLowerCase();
+    return nationalities.filter(
+      (n) =>
+        n.name.toLowerCase().includes(q) ||
+        n.country.toLowerCase().includes(q) ||
+        n.code.toLowerCase().includes(q)
+    );
+  }, [query]);
+
+  return (
+    <FormField
+      control={form.control}
+      name="nationality"
+      render={({ field }) => {
+        const selected = findNationality(field.value);
+
+        return (
+          <FormItem className="flex flex-col">
+            <FormLabel required>Nationality</FormLabel>
+            <Popover
+              open={open}
+              onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) setQuery("");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-ink-50/70 px-3.5 text-left transition-[color,box-shadow,background-color] outline-none",
+                      "focus-visible:border-ring/60 focus-visible:bg-white focus-visible:ring-[3px] focus-visible:ring-ring/25",
+                      !field.value && "text-muted-foreground/70"
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {selected ? (
+                        <>
+                          <span aria-hidden="true" className="text-lg leading-none">
+                            {selected.flag}
+                          </span>
+                          <span className="truncate text-[14px] text-ink-900">
+                            {selected.name}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="truncate text-[14px]">
+                          {field.value || "Select nationality"}
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </FormControl>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
+              >
+                <div className="border-b border-border p-2">
+                  <Input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search nationality..."
+                    leftIcon={<Search />}
+                    size="sm"
+                  />
+                </div>
+
+                <ul className="max-h-64 overflow-y-auto p-1" role="listbox">
+                  {filteredNationalities.length === 0 ? (
+                    <li className="px-3 py-6 text-center text-[13px] text-muted-foreground">
+                      No nationality matches “{query}”.
+                    </li>
+                  ) : (
+                    filteredNationalities.map((n) => (
+                      <li key={n.code + n.name}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={field.value === n.name}
+                          onClick={() => {
+                            form.setValue("nationality", n.name, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            });
+                            setOpen(false);
+                            setQuery("");
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[14px] transition-colors hover:bg-secondary"
+                        >
+                          <span aria-hidden="true" className="text-base leading-none">
+                            {n.flag}
+                          </span>
+                          <span className="flex-1 truncate text-ink-900">
+                            {n.name} <span className="text-muted-foreground text-xs font-normal">({n.country})</span>
+                          </span>
+                          {field.value === n.name ? (
+                            <Check className="size-4 text-primary" strokeWidth={3} />
+                          ) : null}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
+
+function DestinationSelect({ form }: StepProps) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+
+  const filteredCountries = React.useMemo(() => {
+    if (!query.trim()) return countries;
+    const q = query.toLowerCase();
+    return countries.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q)
+    );
+  }, [query]);
+
+  return (
+    <FormField
+      control={form.control}
+      name="targetCountry"
+      render={({ field }) => {
+        const selectedCountry = countries.find(
+          (c) => c.name === field.value || c.code === field.value
+        );
+
+        return (
+          <FormItem className="flex flex-col">
+            <FormLabel required>Destination country</FormLabel>
+            <Popover
+              open={open}
+              onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) setQuery("");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-ink-50/70 px-3.5 text-left transition-[color,box-shadow,background-color] outline-none",
+                      "focus-visible:border-ring/60 focus-visible:bg-white focus-visible:ring-[3px] focus-visible:ring-ring/25",
+                      !field.value && "text-muted-foreground/70"
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {selectedCountry ? (
+                        <>
+                          <span aria-hidden="true" className="text-lg leading-none">
+                            {selectedCountry.flag}
+                          </span>
+                          <span className="truncate text-[14px] text-ink-900">
+                            {selectedCountry.name}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="truncate text-[14px]">
+                          {field.value || "Select destination country"}
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </FormControl>
+              </PopoverTrigger>
+
+              <PopoverContent
+                align="start"
+                className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
+              >
+                <div className="border-b border-border p-2">
+                  <Input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search country..."
+                    leftIcon={<Search />}
+                    size="sm"
+                  />
+                </div>
+
+                <ul className="max-h-64 overflow-y-auto p-1" role="listbox">
+                  {filteredCountries.length === 0 ? (
+                    <li className="px-3 py-6 text-center text-[13px] text-muted-foreground">
+                      No country matches “{query}”.
+                    </li>
+                  ) : (
+                    filteredCountries.map((c) => (
+                      <li key={c.code}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={field.value === c.name || field.value === c.code}
+                          onClick={() => {
+                            form.setValue("targetCountry", c.name, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            });
+                            setOpen(false);
+                            setQuery("");
+                          }}
+                          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[14px] transition-colors hover:bg-secondary"
+                        >
+                          <span aria-hidden="true" className="text-base leading-none">
+                            {c.flag}
+                          </span>
+                          <span className="flex-1 truncate text-ink-900">{c.name}</span>
+                          {field.value === c.name || field.value === c.code ? (
+                            <Check className="size-4 text-primary" strokeWidth={3} />
+                          ) : null}
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
+
 function ApplicantStep({
   form,
   isEmailVerified,
@@ -533,13 +783,7 @@ function ApplicantStep({
           </FormItem>
         )}
       />
-      <Text
-        form={form}
-        name="nationality"
-        label="Nationality"
-        required
-        placeholder="Nigerian"
-      />
+      <NationalitySelect form={form} />
       <div className="sm:col-span-2">
         <Text
           form={form}
@@ -577,13 +821,7 @@ function PassportStep({ form }: StepProps) {
 function TripStep({ form }: StepProps) {
   return (
     <div className="grid gap-5 sm:grid-cols-2">
-      <Text
-        form={form}
-        name="targetCountry"
-        label="Destination country"
-        required
-        placeholder="Canada"
-      />
+      <DestinationSelect form={form} />
       <FormField
         control={form.control}
         name="visaCategory"
