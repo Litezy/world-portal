@@ -107,6 +107,11 @@ export type ApplicationEvent = {
   note?: string;
 };
 
+export type SubmittedDocument = {
+  label: string;
+  url: string;
+};
+
 export type VisaApplication = {
   id: string;
   reference: string;
@@ -131,7 +136,9 @@ export type VisaApplication = {
   createdAt: string;
   updatedAt: string;
   timeline: ApplicationEvent[];
+  documents: SubmittedDocument[];
 };
+
 
 export type PassportApplication = {
   id: string;

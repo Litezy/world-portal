@@ -4,10 +4,13 @@ import { VisaDocumentationController } from './visa-documentation.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PaymentModule } from '../payment/payment.module';
 
+import { MailModule } from '../mail/mail.module';
+
 @Module({
-  imports: [PrismaModule, forwardRef(() => PaymentModule)],
+  imports: [PrismaModule, MailModule, forwardRef(() => PaymentModule)],
   controllers: [VisaDocumentationController],
   providers: [VisaDocumentationService],
   exports: [VisaDocumentationService],
 })
+
 export class VisaDocumentationModule {}

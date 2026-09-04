@@ -15,12 +15,17 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
+import { SendGridService } from 'src/mail/sendgrid.service';
 
 @Injectable()
 export class PassportApplicationService {
   private readonly logger = new Logger(PassportApplicationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sendGridService: SendGridService,
+  ) {}
+
 
   async createApplication(
     dto: CreatePassportApplicationDto,
@@ -105,7 +110,22 @@ export class PassportApplicationService {
         `Passport application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
       );
 
+      try {
+        await this.sendGridService.sendApplicationConfirmationEmail({
+          to: record.email,
+          recipientName: `${record.firstName} ${record.surname}`.trim(),
+          applicationNo: record.applicationNo,
+          targetCountry: 'Nigeria (Passport Renewal)',
+          visaCategory: record.passportCategory,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `SendGrid passport confirmation email error for applicationNo=${record.applicationNo}: ${err?.message}`,
+        );
+      }
+
       return record;
+
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -143,8 +163,37 @@ export class PassportApplicationService {
       },
     });
 
+    // Send status update email via SendGrid
+    if (updated.status === PassportApplicationStatus.APPROVED) {
+      this.sendGridService
+        .sendApplicationApprovedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.surname}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: 'Nigeria (Passport)',
+          reviewerEmail,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid passport approval email error: ${err?.message}`);
+        });
+    } else if (updated.status === PassportApplicationStatus.REJECTED) {
+      this.sendGridService
+        .sendApplicationRejectedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.surname}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: 'Nigeria (Passport)',
+          reviewerEmail,
+          rejectionReason: updated.rejectionReason || undefined,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid passport rejection email error: ${err?.message}`);
+        });
+    }
+
     return updated;
   }
+
 
   async findAllApplications(query: QueryPassportApplicationDto) {
     const where: Prisma.PassportApplicationWhereInput = {};

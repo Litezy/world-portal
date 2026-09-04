@@ -8,13 +8,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryProfileDto } from './dto/query-profile.dto';
+import { SendGridService } from '../mail/sendgrid.service';
 import { Profile, Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProfileService {
   private readonly logger = new Logger(ProfileService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sendGridService: SendGridService,
+  ) {}
 
   async createProfile(dto: CreateProfileDto): Promise<Profile> {
     this.logger.log(
@@ -61,9 +65,24 @@ export class ProfileService {
       },
     });
 
+    // Send team invitation email via SendGrid for admin console roles
+    if (['MANAGER', 'STAFF', 'PARTNER'].includes(profile.role)) {
+      this.sendGridService
+        .sendTeamInviteEmail({
+          to: profile.email,
+          recipientName: `${profile.firstName} ${profile.lastName}`.trim(),
+          role: profile.role,
+          inviterEmail: 'manager@yopmail.com',
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid team invite email error: ${err?.message}`);
+        });
+    }
+
     this.logger.log(`Profile created successfully with ID=${profile.id}`);
     return profile;
   }
+
 
   async findAllProfiles(query?: QueryProfileDto): Promise<Profile[]> {
     this.logger.log(

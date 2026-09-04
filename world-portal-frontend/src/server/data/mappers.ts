@@ -44,6 +44,49 @@ function visaTimeline(record: BackendVisaApplication): ApplicationEvent[] {
   return events;
 }
 
+function extractVisaDocuments(record: BackendVisaApplication) {
+  const docs: { label: string; url: string }[] = [];
+  if (record.passportDataPageUrl) {
+    docs.push({ label: "Passport Data Page", url: record.passportDataPageUrl });
+  }
+  if (record.passportPhotoWhiteBgUrl) {
+    docs.push({ label: "Passport Photograph (White Bg)", url: record.passportPhotoWhiteBgUrl });
+  }
+  if (record.proofOfFunds6MonthsUrl) {
+    docs.push({ label: "Proof of Funds (6 Months Statement)", url: record.proofOfFunds6MonthsUrl });
+  }
+  if (record.businessRegistrationCertUrl) {
+    docs.push({ label: "Business Registration Certificate (CAC)", url: record.businessRegistrationCertUrl });
+  }
+  if (record.taxCertificateUrl) {
+    docs.push({ label: "Tax Certificate", url: record.taxCertificateUrl });
+  }
+  if (record.marriageCertificateUrl) {
+    docs.push({ label: "Marriage Certificate", url: record.marriageCertificateUrl });
+  }
+  if (Array.isArray(record.childrenBirthCertUrls)) {
+    record.childrenBirthCertUrls.forEach((url, i) => {
+      if (url) docs.push({ label: `Child Birth Certificate ${i + 1}`, url });
+    });
+  }
+  if (Array.isArray(record.landedPropertyDocUrls)) {
+    record.landedPropertyDocUrls.forEach((url, i) => {
+      if (url) docs.push({ label: `Landed Property Document ${i + 1}`, url });
+    });
+  }
+  if (Array.isArray(record.previousVisasScanUrls)) {
+    record.previousVisasScanUrls.forEach((url, i) => {
+      if (url) docs.push({ label: `Previous Visa Scan ${i + 1}`, url });
+    });
+  }
+  if (Array.isArray(record.supportingDocUrls)) {
+    record.supportingDocUrls.forEach((url, i) => {
+      if (url) docs.push({ label: `Supporting Document ${i + 1}`, url });
+    });
+  }
+  return docs;
+}
+
 export function toVisaApplication(record: BackendVisaApplication): VisaApplication {
   return {
     id: record.id,
@@ -72,8 +115,10 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     timeline: visaTimeline(record),
+    documents: extractVisaDocuments(record),
   };
 }
+
 
 export function toPassportApplication(
   record: BackendPassportApplication,

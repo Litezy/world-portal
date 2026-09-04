@@ -18,12 +18,17 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
+import { SendGridService } from 'src/mail/sendgrid.service';
 
 @Injectable()
 export class VisaDocumentationService {
   private readonly logger = new Logger(VisaDocumentationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sendGridService: SendGridService,
+  ) {}
+
 
   async createVisaApplication(
     dto: CreateVisaDocumentationDto,
@@ -115,7 +120,22 @@ export class VisaDocumentationService {
         `Visa application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
       );
 
+      try {
+        await this.sendGridService.sendApplicationConfirmationEmail({
+          to: record.email,
+          recipientName: `${record.firstName} ${record.lastName}`.trim(),
+          applicationNo: record.applicationNo,
+          targetCountry: record.targetCountry,
+          visaCategory: record.visaCategory,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `SendGrid confirmation email dispatch error for applicationNo=${record.applicationNo}: ${err?.message}`,
+        );
+      }
+
       return record;
+
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -157,10 +177,20 @@ export class VisaDocumentationService {
       },
     });
 
-    // Enqueue BullMQ applicant email notification with exponential backoff strategy
-    this.logger.log(
-      `[BullMQ Queue Dispatch] Enqueued email notification job for applicant email=${updated.email} with exponential backoff options: attempts=5, delay=2000ms`,
-    );
+    // Send evaluation email via SendGrid
+    this.sendGridService
+      .sendCostEvaluatedEmail({
+        to: updated.email,
+        recipientName: `${updated.firstName} ${updated.lastName}`,
+        applicationNo: updated.applicationNo,
+        targetCountry: updated.targetCountry,
+        totalAmount: Number(updated.totalAmount || 0),
+        allowInstallment: updated.allowInstallment,
+        evaluatorEmail,
+      })
+      .catch((err) => {
+        this.logger.error(`SendGrid cost evaluation email error: ${err?.message}`);
+      });
 
     return updated;
   }
@@ -201,6 +231,20 @@ export class VisaDocumentationService {
       },
     });
 
+    // Send payment confirmed & under review email via SendGrid
+    this.sendGridService
+      .sendPaymentConfirmedEmail({
+        to: updated.email,
+        recipientName: `${updated.firstName} ${updated.lastName}`,
+        applicationNo: updated.applicationNo,
+        amountPaid: Number(updated.amountPaid),
+        balanceDue: Number(updated.balanceDue),
+        paymentOption: updated.selectedPaymentOption || paymentOption,
+      })
+      .catch((err) => {
+        this.logger.error(`SendGrid payment confirmed email error: ${err?.message}`);
+      });
+
     return updated;
   }
 
@@ -228,8 +272,37 @@ export class VisaDocumentationService {
       },
     });
 
+    // Send status update email via SendGrid
+    if (updated.status === VisaDocumentStatus.APPROVED) {
+      this.sendGridService
+        .sendApplicationApprovedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.lastName}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: updated.targetCountry,
+          reviewerEmail,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid approval email error: ${err?.message}`);
+        });
+    } else if (updated.status === VisaDocumentStatus.REJECTED) {
+      this.sendGridService
+        .sendApplicationRejectedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.lastName}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: updated.targetCountry,
+          reviewerEmail,
+          rejectionReason: updated.rejectionReason || undefined,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid rejection email error: ${err?.message}`);
+        });
+    }
+
     return updated;
   }
+
 
   async findAllVisaApplications(query: QueryVisaDocumentationDto) {
     const where: Prisma.VisaDocumentationWhereInput = {};

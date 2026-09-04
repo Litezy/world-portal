@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Payment Required - Cost Evaluation Complete</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      supported-color-schemes: light dark;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; }
+    .container { max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05); }
+    .header { text-align: center; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0; }
+    .logo { font-size: 20px; font-weight: 700; color: #0284c7; letter-spacing: -0.02em; text-transform: uppercase; }
+    .title { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 16px; margin-bottom: 8px; }
+    .subtitle { font-size: 14px; color: #64748b; margin: 0; }
+    .content { padding: 24px 0; }
+    .text-greeting { font-size: 15px; color: #1e293b; font-weight: 600; }
+    .text-body { font-size: 14px; color: #475569; line-height: 1.6; }
+    .price-card { background-color: #f0f9ff; border: 1.5px solid #0284c7; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }
+    .price-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #0369a1; font-weight: 600; margin-bottom: 6px; }
+    .price-val { font-size: 32px; font-weight: 800; color: #0284c7; }
+    .info-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .info-table td { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    .info-label { color: #64748b; }
+    .info-value { color: #0f172a; font-weight: 600; text-align: right; }
+    .btn-container { text-align: center; margin-top: 28px; }
+    .btn { display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 14px; padding: 14px 32px; border-radius: 9999px; }
+    .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #0f172a !important; color: #f8fafc !important; }
+      .container { background-color: #1e293b !important; border-color: #334155 !important; }
+      .header { border-bottom-color: #334155 !important; }
+      .logo { color: #38bdf8 !important; }
+      .title { color: #ffffff !important; }
+      .subtitle { color: #94a3b8 !important; }
+      .text-greeting { color: #f8fafc !important; }
+      .text-body { color: #94a3b8 !important; }
+      .price-card { background-color: #0f172a !important; border-color: #38bdf8 !important; }
+      .price-label { color: #38bdf8 !important; }
+      .price-val { color: #38bdf8 !important; }
+      .info-table td { border-bottom-color: #334155 !important; }
+      .info-label { color: #94a3b8 !important; }
+      .info-value { color: #ffffff !important; }
+      .footer { color: #64748b !important; border-top-color: #334155 !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">World Portal</div>
+      <h1 class="title">Cost Evaluation Complete</h1>
+      <p class="subtitle">Your visa processing fees have been set.</p>
+    </div>
+
+    <div class="content">
+      <p class="text-greeting">Dear <%= recipient_name %>,</p>
+      <p class="text-body">
+        Our documentation team has evaluated your application <strong><%= application_no %></strong>. Please proceed with payment to advance your application for <strong><%= target_country %></strong>.
+      </p>
+
+      <div class="price-card">
+        <div class="price-label">Total Processing Fee</div>
+        <div class="price-val">$<%= total_amount %></div>
+        <% if (allow_installment) { %>
+          <p style="font-size: 12px; color: #0284c7; margin-top: 6px; font-weight: 600;">50% Upfront Installment Option Available ($<%= (total_amount / 2).toFixed(2) %>)</p>
+        <% } %>
+      </div>
+
+      <table class="info-table">
+        <tr>
+          <td class="info-label">Application Reference</td>
+          <td class="info-value" style="font-family: monospace;"><%= application_no %></td>
+        </tr>
+        <tr>
+          <td class="info-label">Evaluated By</td>
+          <td class="info-value"><%= evaluator_email %></td>
+        </tr>
+        <tr>
+          <td class="info-label">Status</td>
+          <td class="info-value" style="color: #d97706;">Awaiting Payment</td>
+        </tr>
+      </table>
+
+      <div class="btn-container">
+        <a href="<%= payment_url %>" class="btn">Proceed to Secure Payment</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© <%= year %> The Trade Factor / World Portal. All rights reserved.</p>
+      <p>Sent from <%= from_email %></p>
+    </div>
+  </div>
+</body>
+</html>

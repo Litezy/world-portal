@@ -29,4 +29,4 @@ import { PassportApplicationModule } from './passport-application/passport-appli
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

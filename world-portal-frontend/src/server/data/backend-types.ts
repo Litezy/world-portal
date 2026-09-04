@@ -82,8 +82,19 @@ export type BackendVisaApplication = {
   evaluatedBy: string | null;
   evaluatedAt: string | null;
   reviewedBy: string | null;
+  passportDataPageUrl?: string | null;
+  passportPhotoWhiteBgUrl?: string | null;
+  proofOfFunds6MonthsUrl?: string | null;
+  businessRegistrationCertUrl?: string | null;
+  taxCertificateUrl?: string | null;
+  marriageCertificateUrl?: string | null;
+  childrenBirthCertUrls?: string[];
+  landedPropertyDocUrls?: string[];
+  previousVisasScanUrls?: string[];
+  supportingDocUrls?: string[];
   createdAt: string;
   updatedAt: string;
+
   profile?: Pick<
     BackendProfile,
     "id" | "email" | "firstName" | "lastName" | "role"
