@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { VisaDocumentationService } from '../visa-documentation/visa-documentation.service';
 import { InitiatePaymentTransactionDto } from './dto/initiate-payment-transaction.dto';
 import { ConfirmPaymentTransactionDto } from './dto/confirm-payment-transaction.dto';
+import { ConfirmBankTransferDto } from './dto/confirm-bank-transfer.dto';
 import { InitiateRefundDto } from './dto/initiate-refund.dto';
 import { UpdatePaymentConfigDto } from './dto/update-payment-config.dto';
 import { QueryPaymentTransactionDto } from './dto/query-payment-transaction.dto';
@@ -220,6 +221,66 @@ export class PaymentService {
     );
 
     return updatedTxn;
+  }
+
+  async confirmBankTransferPayment(dto: ConfirmBankTransferDto, adminEmail: string) {
+    const visaDoc = await this.visaDocService.findVisaApplicationById(dto.visaDocumentationId);
+
+    if (!visaDoc.totalAmount) {
+      throw new BadRequestException('Visa application cost has not been evaluated by an admin yet.');
+    }
+
+    const total = Number(visaDoc.totalAmount);
+    const paid = Number(visaDoc.amountPaid || 0);
+    const balance = Math.max(0, total - paid);
+
+    if (balance <= 0) {
+      throw new ConflictException('Visa application is already fully paid.');
+    }
+
+    if (dto.amount > balance) {
+      throw new BadRequestException(
+        `Payment amount (${dto.amount}) cannot exceed the remaining balance due of ${balance}.`,
+      );
+    }
+
+    const transactionRef = dto.bankReference?.trim()
+      ? `BANK-${dto.bankReference.trim().toUpperCase()}`
+      : `TXN-BANK-${randomInt(100000, 999999)}`;
+
+    // Create confirmed PaymentTransaction record
+    const transaction = await this.prisma.paymentTransaction.create({
+      data: {
+        transactionRef,
+        visaDocumentationId: visaDoc.id,
+        profileId: visaDoc.profileId || null,
+        amount: new Prisma.Decimal(dto.amount),
+        paymentOption: dto.paymentOption,
+        status: PaymentTransactionStatus.CONFIRMED,
+        paymentMethod: 'BANK_TRANSFER',
+        initiatedBy: adminEmail || 'admin-manual',
+        confirmedAt: new Date(),
+      },
+    });
+
+    // Invoke VisaDocumentationService to update amountPaid, balanceDue, paymentStatus, and advance to UNDER_REVIEW + send receipt email
+    await this.visaDocService.handlePaymentConfirmed(
+      visaDoc.id,
+      new Prisma.Decimal(dto.amount),
+      dto.paymentOption,
+    );
+
+    this.logger.log(
+      `Manual Bank Transfer CONFIRMED by admin=${adminEmail}: transactionRef=${transactionRef}, visaDocId=${visaDoc.id}, amount=${dto.amount}`,
+    );
+
+    return {
+      success: true,
+      transactionRef,
+      transactionId: transaction.id,
+      amount: dto.amount,
+      message: 'Bank transfer payment confirmed successfully. Application advanced to Under Review.',
+    };
   }
 
   async initiateRefund(dto: InitiateRefundDto, adminEmail: string) {

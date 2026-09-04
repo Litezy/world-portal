@@ -1,6 +1,7 @@
 import {
   IsNumber,
   IsBoolean,
+  IsString,
   IsNotEmpty,
   IsOptional,
   Min,
@@ -16,6 +17,14 @@ export class EvaluateVisaCostDto {
   @Min(0)
   @IsNotEmpty()
   totalAmount: number;
+
+  @ApiPropertyOptional({
+    example: 'USD',
+    description: 'Billing currency (e.g., USD, NGN, EUR, GBP, CAD, AUD)',
+  })
+  @IsString()
+  @IsOptional()
+  currency?: string;
 
   @ApiPropertyOptional({
     example: true,

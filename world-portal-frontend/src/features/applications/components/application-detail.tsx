@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, Mail } from "lucide-react";
+
 
 import {
   DetailItem,
@@ -18,7 +19,10 @@ import { applications as copy, visaCategoryLabels } from "@/content/admin";
 import { useApplication } from "@/features/applications/api/use-application";
 import { AdvanceApplicationForm } from "@/features/applications/components/advance-application-form";
 import { ApplicationTimeline } from "@/features/applications/components/application-timeline";
+import { ConfirmBankPaymentModal } from "@/features/applications/components/confirm-bank-payment-modal";
+import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
 import { EvaluateCostForm } from "@/features/applications/components/evaluate-cost-form";
+
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export function ApplicationDetail({ id }: { id: string }) {
@@ -99,13 +103,13 @@ export function ApplicationDetail({ id }: { id: string }) {
             </DetailItem>
             <DetailItem label={copy.detail.fee}>
               {application.totalAmount > 0
-                ? formatCurrency(application.totalAmount)
+                ? formatCurrency(application.totalAmount, application.currency)
                 : "Not evaluated"}
             </DetailItem>
             <DetailItem label={copy.detail.outstanding}>
-              {formatCurrency(application.balanceDue)}
+              {formatCurrency(application.balanceDue, application.currency)}
               <span className="ml-2 text-[12px] text-muted-foreground">
-                {formatCurrency(application.amountPaid)}{" "}
+                {formatCurrency(application.amountPaid, application.currency)}{" "}
                 {copy.detail.paid.toLowerCase()}
               </span>
             </DetailItem>
@@ -115,6 +119,45 @@ export function ApplicationDetail({ id }: { id: string }) {
             <DetailItem label={copy.detail.purpose}>{application.purpose}</DetailItem>
           </div>
 
+          {/* Uploaded Documents & Files */}
+          <div className="mt-8">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="size-4 text-primary" />
+              Uploaded Documents & Files
+            </CardTitle>
+            <CardDescription className="text-[12.5px]">
+              Review files and verification attachments submitted by applicant.
+            </CardDescription>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {application.documents && application.documents.length > 0 ? (
+                application.documents.map((doc, idx) => (
+                  <div
+                    key={`${doc.label}-${idx}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3.5 transition-colors hover:border-primary/40"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                        <FileText className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-foreground">{doc.label}</p>
+                        <p className="truncate text-[11px] text-muted-foreground font-mono">Attachment #{idx + 1}</p>
+                      </div>
+                    </div>
+
+                    <DocumentViewerModal label={doc.label} url={doc.url} />
+                  </div>
+                ))
+
+              ) : (
+                <div className="col-span-2 rounded-xl border border-dashed border-border/70 bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                  No uploaded document files attached to this application.
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="mt-8">
             <CardTitle className="text-base">{copy.detail.timeline}</CardTitle>
             <CardDescription className="text-[12.5px]">
@@ -122,9 +165,7 @@ export function ApplicationDetail({ id }: { id: string }) {
             </CardDescription>
             <ApplicationTimeline events={application.timeline} />
           </div>
-
         </Card>
-
 
         <div className="flex flex-col gap-4">
           <Card variant="solid" radius="lg" padding="none" className="p-6">
@@ -136,9 +177,19 @@ export function ApplicationDetail({ id }: { id: string }) {
             <EvaluateCostForm
               id={id}
               totalAmount={application.totalAmount}
+              currency={application.currency}
               allowInstallment={application.allowInstallment}
             />
           </Card>
+
+          <ConfirmBankPaymentModal
+            id={id}
+            totalAmount={application.totalAmount}
+            amountPaid={application.amountPaid}
+            balanceDue={application.balanceDue}
+            currency={application.currency}
+            allowInstallment={application.allowInstallment}
+          />
         </div>
       </div>
     </div>

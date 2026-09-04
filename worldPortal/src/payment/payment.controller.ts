@@ -16,6 +16,7 @@ import {
 import { PaymentService } from './payment.service';
 import { InitiatePaymentTransactionDto } from './dto/initiate-payment-transaction.dto';
 import { ConfirmPaymentTransactionDto } from './dto/confirm-payment-transaction.dto';
+import { ConfirmBankTransferDto } from './dto/confirm-bank-transfer.dto';
 import { InitiateRefundDto } from './dto/initiate-refund.dto';
 import { UpdatePaymentConfigDto } from './dto/update-payment-config.dto';
 import { QueryPaymentTransactionDto } from './dto/query-payment-transaction.dto';
@@ -62,6 +63,29 @@ export class PaymentController {
   })
   confirmTransaction(@Body() dto: ConfirmPaymentTransactionDto) {
     return this.paymentService.confirmPaymentTransaction(dto);
+  }
+
+  @Post('bank-transfer/confirm')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Manually confirm bank transfer payment (Admin / Manager / Staff)',
+    description:
+      'Records confirmed bank transfer transaction, updates applicant balance, transitions status to UNDER_REVIEW, and dispatches email receipt',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank transfer payment confirmed and visa application moved to UNDER_REVIEW',
+  })
+  confirmBankTransfer(
+    @Body() dto: ConfirmBankTransferDto,
+    @CurrentUser('email') userEmail?: string,
+  ) {
+    return this.paymentService.confirmBankTransferPayment(
+      dto,
+      userEmail || 'admin-manual',
+    );
   }
 
   @Post('refund')

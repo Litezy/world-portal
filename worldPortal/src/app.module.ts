@@ -10,6 +10,7 @@ import { VisaRequirementModule } from './visa-requirement/visa-requirement.modul
 import { VisaDocumentationModule } from './visa-documentation/visa-documentation.module';
 import { PaymentModule } from './payment/payment.module';
 import { PassportApplicationModule } from './passport-application/passport-application.module';
+import { BankAccountModule } from './bank-account/bank-account.module';
 
 @Module({
   imports: [
@@ -25,8 +26,9 @@ import { PassportApplicationModule } from './passport-application/passport-appli
     VisaDocumentationModule,
     PaymentModule,
     PassportApplicationModule,
+    BankAccountModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

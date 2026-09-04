@@ -15,12 +15,17 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
+import { SendGridService } from 'src/mail/sendgrid.service';
 
 @Injectable()
 export class PassportApplicationService {
   private readonly logger = new Logger(PassportApplicationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sendGridService: SendGridService,
+  ) {}
+
 
   async createApplication(
     dto: CreatePassportApplicationDto,
@@ -105,7 +110,22 @@ export class PassportApplicationService {
         `Passport application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
       );
 
+      try {
+        await this.sendGridService.sendApplicationConfirmationEmail({
+          to: record.email,
+          recipientName: `${record.firstName} ${record.surname}`.trim(),
+          applicationNo: record.applicationNo,
+          targetCountry: 'Nigeria (Passport Renewal)',
+          visaCategory: record.passportCategory,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `SendGrid passport confirmation email error for applicationNo=${record.applicationNo}: ${err?.message}`,
+        );
+      }
+
       return record;
+
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -119,15 +139,36 @@ export class PassportApplicationService {
     }
   }
 
+  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+    if (!emailOrName) return 'Admin Consultant';
+    if (!emailOrName.includes('@')) return emailOrName;
+
+    const profile = await this.prisma.profile
+      .findUnique({ where: { email: emailOrName } })
+      .catch(() => null);
+
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName} ${profile.lastName}`.trim();
+    }
+
+    const handle = emailOrName.split('@')[0];
+    const parts = handle.split(/[._\-+]/).filter(Boolean);
+    if (parts.length === 0) return 'Admin Consultant';
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  }
+
   async updateStatus(
     id: string,
     dto: UpdatePassportStatusDto,
     reviewerEmail: string,
   ) {
     const record = await this.findApplicationById(id);
+    const reviewerName = await this.resolveReviewerDisplayName(reviewerEmail);
 
     this.logger.log(
-      `Updating review status for passport application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail}`,
+      `Updating review status for passport application id=${id}, from=${record.status} to=${dto.status} by reviewer=${reviewerEmail} (${reviewerName})`,
     );
 
     const updated = await this.prisma.passportApplication.update({
@@ -139,12 +180,43 @@ export class PassportApplicationService {
           dto.status === PassportApplicationStatus.REJECTED
             ? dto.rejectionReason
             : record.rejectionReason,
-        reviewedBy: reviewerEmail,
+        reviewedBy: reviewerName,
       },
     });
 
+    // Send status update email via SendGrid
+    if (updated.status === PassportApplicationStatus.APPROVED) {
+      this.sendGridService
+        .sendApplicationApprovedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.surname}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: 'Nigeria (Passport)',
+          reviewerEmail,
+          reviewerName,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid passport approval email error: ${err?.message}`);
+        });
+    } else if (updated.status === PassportApplicationStatus.REJECTED) {
+      this.sendGridService
+        .sendApplicationRejectedEmail({
+          to: updated.email,
+          recipientName: `${updated.firstName} ${updated.surname}`,
+          applicationNo: updated.applicationNo,
+          targetCountry: 'Nigeria (Passport)',
+          reviewerEmail,
+          reviewerName,
+          rejectionReason: updated.rejectionReason || undefined,
+        })
+        .catch((err) => {
+          this.logger.error(`SendGrid passport rejection email error: ${err?.message}`);
+        });
+    }
+
     return updated;
   }
+
 
   async findAllApplications(query: QueryPassportApplicationDto) {
     const where: Prisma.PassportApplicationWhereInput = {};
