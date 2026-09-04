@@ -6,6 +6,7 @@ export const mainNav: NavItem[] = [
   { title: "Visas", href: "#visas" },
   { title: "Flights", href: "#flights-hotels" },
   { title: "Tours", href: "#experiences" },
+  { title: "Track application", href: "/track" },
   { title: "How it works", href: "#journey" },
 ];
 

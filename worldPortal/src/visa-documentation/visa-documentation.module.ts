@@ -6,8 +6,16 @@ import { PaymentModule } from '../payment/payment.module';
 import { MailModule } from '../mail/mail.module';
 import { BankAccountModule } from '../bank-account/bank-account.module';
 
+import { OtpModule } from '../otp/otp.module';
+
 @Module({
-  imports: [PrismaModule, MailModule, BankAccountModule, forwardRef(() => PaymentModule)],
+  imports: [
+    PrismaModule,
+    MailModule,
+    BankAccountModule,
+    OtpModule,
+    forwardRef(() => PaymentModule),
+  ],
   controllers: [VisaDocumentationController],
   providers: [VisaDocumentationService],
   exports: [VisaDocumentationService],

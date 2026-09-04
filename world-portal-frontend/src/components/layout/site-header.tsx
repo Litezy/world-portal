@@ -61,7 +61,16 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <Button
+            asChild
+            variant="ghost"
+            size="md"
+            className="hidden lg:inline-flex text-white/90 hover:bg-white/10 hover:text-white"
+          >
+            <Link href="/track">Track application</Link>
+          </Button>
+
           <Button asChild variant="solid" size="md" className="hidden lg:inline-flex">
             <Link href={hero.navCta.href}>{hero.navCta.label}</Link>
           </Button>
@@ -98,11 +107,18 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             </li>
           ))}
         </ul>
-        <Button asChild variant="primary" size="block" className="mt-4">
-          <Link href={hero.navCta.href} onClick={() => setOpen(false)}>
-            {hero.navCta.label}
-          </Link>
-        </Button>
+        <div className="mt-4 grid gap-2">
+          <Button asChild variant="outline" size="block" className="border-white/20 text-white hover:bg-white/10">
+            <Link href="/track" onClick={() => setOpen(false)}>
+              Track application
+            </Link>
+          </Button>
+          <Button asChild variant="primary" size="block">
+            <Link href={hero.navCta.href} onClick={() => setOpen(false)}>
+              {hero.navCta.label}
+            </Link>
+          </Button>
+        </div>
       </div>
     </header>
   );

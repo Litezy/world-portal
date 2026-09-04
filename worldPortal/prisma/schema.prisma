@@ -47,7 +47,6 @@ enum VisaCategory {
 enum Gender {
   MALE
   FEMALE
-  OTHER
 }
 
 enum PassportCategory {

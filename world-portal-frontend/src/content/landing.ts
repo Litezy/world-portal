@@ -13,7 +13,7 @@ export const hero = {
   badge: "Passports · Visas · Flights · Stays",
   lead: "Tell us where you want to go. We sort out the passport, the visa, the flights and the hotel — so you just pack.",
   cta: { label: "Start my trip", href: "/start" },
-  navCta: { label: "Get started", href: "#start-here" },
+  navCta: { label: "Get started", href: "/start" },
   secondaryCta: { label: "See what we do", href: "#visas" },
   image: {
     src: "/images/hero.jpg",

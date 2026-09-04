@@ -20,6 +20,7 @@ import {
 import { randomInt } from 'crypto';
 import { SendGridService } from '../mail/sendgrid.service';
 import { BankAccountService } from '../bank-account/bank-account.service';
+import { OtpService } from '../otp/otp.service';
 
 @Injectable()
 export class VisaDocumentationService {
@@ -29,6 +30,7 @@ export class VisaDocumentationService {
     private readonly prisma: PrismaService,
     private readonly sendGridService: SendGridService,
     private readonly bankAccountService: BankAccountService,
+    private readonly otpService: OtpService,
   ) {}
 
 
@@ -36,6 +38,14 @@ export class VisaDocumentationService {
     dto: CreateVisaDocumentationDto,
     creatorIdentifier?: string,
   ) {
+    if (!this.otpService.isEmailVerified(dto.email)) {
+      this.logger.warn(
+        `Attempted application submission with unverified email=${dto.email}`,
+      );
+      throw new BadRequestException(
+        `Email address '${dto.email}' has not been verified via OTP. Please verify your email before submitting.`,
+      );
+    }
     const maskedPassport = dto.passportNumber
       ? dto.passportNumber.replace(/^(.{2}).*(.{2})$/, '$1****$2')
       : 'N/A';
@@ -388,11 +398,17 @@ export class VisaDocumentationService {
     });
   }
 
-  async findVisaApplicationById(idOrAppNo: string) {
+  async findVisaApplicationById(idOrAppNo: string, email?: string) {
+    const where: Prisma.VisaDocumentationWhereInput = {
+      OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
+    };
+
+    if (email && email.trim()) {
+      where.email = { equals: email.trim(), mode: 'insensitive' };
+    }
+
     const record = await this.prisma.visaDocumentation.findFirst({
-      where: {
-        OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
-      },
+      where,
       include: {
         profile: {
           select: {
@@ -408,10 +424,10 @@ export class VisaDocumentationService {
 
     if (!record) {
       this.logger.warn(
-        `Visa application not found for identifier=${idOrAppNo}`,
+        `Visa application not found for identifier=${idOrAppNo}${email ? ` and email=${email}` : ''}`,
       );
       throw new NotFoundException(
-        `Visa application record with identifier '${idOrAppNo}' not found.`,
+        `Visa application record not found matching identifier '${idOrAppNo}'${email ? ` and email '${email}'` : ''}.`,
       );
     }
 

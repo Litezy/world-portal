@@ -11,6 +11,7 @@ import { VisaDocumentationModule } from './visa-documentation/visa-documentation
 import { PaymentModule } from './payment/payment.module';
 import { PassportApplicationModule } from './passport-application/passport-application.module';
 import { BankAccountModule } from './bank-account/bank-account.module';
+import { OtpModule } from './otp/otp.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BankAccountModule } from './bank-account/bank-account.module';
     PaymentModule,
     PassportApplicationModule,
     BankAccountModule,
+    OtpModule,
   ],
   controllers: [AppController],
   providers: [AppService],
