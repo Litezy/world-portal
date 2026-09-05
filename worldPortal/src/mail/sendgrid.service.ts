@@ -106,6 +106,7 @@ export class SendGridService {
   private readonly fromEmail: string;
   private readonly fromName: string;
   private readonly frontendUrl: string;
+  private readonly emailLogoUrl: string;
   private readonly isConfigured: boolean = false;
 
   constructor(private readonly configService: ConfigService) {
@@ -125,6 +126,11 @@ export class SendGridService {
       process.env.FRONTEND_URL ||
       'https://thetradefactor.com';
     this.frontendUrl = rawFrontendUrl.replace(/\/+$/, '');
+
+    this.emailLogoUrl =
+      this.configService.get<string>('EMAIL_LOGO_URL') ||
+      process.env.EMAIL_LOGO_URL ||
+      'https://res.cloudinary.com/m7fltb77/image/upload/v1788638860/world-portal-brand/e-embassy-logo.png';
 
     if (apiKey) {
       sgMail.setApiKey(apiKey);
@@ -450,6 +456,8 @@ export class SendGridService {
       if (foundPath) {
         return await ejs.renderFile(foundPath, {
           formatAmount: formatAmountWithCommas,
+          logo_url: this.emailLogoUrl,
+          logo_light_url: 'https://res.cloudinary.com/m7fltb77/image/upload/v1788638868/world-portal-brand/e-embassy-logo-light.png',
           ...data,
         });
       }
