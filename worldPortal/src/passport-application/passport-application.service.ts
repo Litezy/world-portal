@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { SendGridService } from 'src/mail/sendgrid.service';
+import { OtpService } from '../otp/otp.service';
 
 @Injectable()
 export class PassportApplicationService {
@@ -24,6 +25,7 @@ export class PassportApplicationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sendGridService: SendGridService,
+    private readonly otpService: OtpService,
   ) {}
 
 
@@ -31,9 +33,19 @@ export class PassportApplicationService {
     dto: CreatePassportApplicationDto,
     creatorIdentifier?: string,
   ) {
+    if (!this.otpService.isEmailVerified(dto.email)) {
+      this.logger.warn(
+        `Attempted passport application submission with unverified email=${dto.email}`,
+      );
+      throw new BadRequestException(
+        `Email address '${dto.email}' has not been verified via OTP. Please verify your email before submitting.`,
+      );
+    }
+
     const maskedNin = dto.ninNumber
       ? dto.ninNumber.replace(/^(.{2}).*(.{2})$/, '$1****$2')
       : 'N/A';
+
 
     this.logger.log(
       `Creating passport application for applicant email=${dto.email}, category=${dto.passportCategory}, nin=${maskedNin}`,
@@ -250,11 +262,17 @@ export class PassportApplicationService {
     });
   }
 
-  async findApplicationById(idOrAppNo: string) {
+  async findApplicationById(idOrAppNo: string, email?: string) {
+    const where: Prisma.PassportApplicationWhereInput = {
+      OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
+    };
+
+    if (email && email.trim()) {
+      where.email = { equals: email.trim(), mode: 'insensitive' };
+    }
+
     const record = await this.prisma.passportApplication.findFirst({
-      where: {
-        OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
-      },
+      where,
       include: {
         profile: {
           select: {
@@ -270,7 +288,7 @@ export class PassportApplicationService {
 
     if (!record) {
       this.logger.warn(
-        `Passport application not found for identifier=${idOrAppNo}`,
+        `Passport application not found for identifier=${idOrAppNo}${email ? ` and email=${email}` : ''}`,
       );
       throw new NotFoundException(
         `Passport application record with identifier '${idOrAppNo}' not found.`,

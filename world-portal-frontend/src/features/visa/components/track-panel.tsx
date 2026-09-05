@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useVisaApplication } from "@/features/visa/api/visa-documentation";
+import { normalizeReference, useVisaApplication } from "@/features/visa/api/visa-documentation";
 import {
   paymentStatusCopy,
   STATUS_FLOW,
@@ -30,6 +30,8 @@ import { toAmount, type VisaDocumentation } from "@/features/visa/types";
 import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-payment-info";
 import { ApiError } from "@/lib/api-client";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+
+import { BackendPassportApplication, PassportStatus } from "@/server/data/backend-types";
 
 type TrackStep = "DETAILS" | "OTP" | "VERIFIED";
 
@@ -112,8 +114,8 @@ export function TrackPanel() {
         throw new Error(body.error || "Invalid or expired verification code");
       }
 
-      // Verification successful! Set verified tracking state
-      setVerifiedRef(referenceInput.trim());
+      // Verification successful! Set verified tracking state with normalized reference
+      setVerifiedRef(normalizeReference(referenceInput));
       setVerifiedEmail(emailInput.trim());
       setStep("VERIFIED");
     } catch (err: any) {
@@ -159,7 +161,7 @@ export function TrackPanel() {
                     id="reference"
                     value={referenceInput}
                     onChange={(e) => setReferenceInput(e.target.value)}
-                    placeholder="VISA-2026-8941"
+                    placeholder="VISA-2026-8941 or PASSPORT-2026-8941"
                     autoComplete="off"
                     spellCheck={false}
                     className="font-mono uppercase"
@@ -316,7 +318,11 @@ export function TrackPanel() {
       {step === "VERIFIED" && isFetching && !data ? <TrackSkeleton /> : null}
       {step === "VERIFIED" && error && !isFetching ? <TrackError error={error} /> : null}
       {step === "VERIFIED" && data && !isFetching ? (
-        <ApplicationSummary application={data} />
+        data.type === "PASSPORT" ? (
+          <PassportApplicationSummary application={data.data} />
+        ) : (
+          <ApplicationSummary application={data.data} />
+        )
       ) : null}
     </div>
   );
@@ -347,7 +353,7 @@ function TrackError({ error }: { error: unknown }) {
       </h2>
       <p className="text-[13.5px] leading-relaxed text-muted-foreground">
         {notFound
-          ? "Please check that your application reference number and email address are correct. The reference number looks like VISA-2026-8941."
+          ? "Please check that your application reference number and email address are correct. Reference numbers look like VISA-2026-8941 or PASSPORT-2026-8941."
           : error instanceof Error
             ? error.message
             : "Please try again shortly."}
@@ -488,6 +494,181 @@ function ApplicationSummary({ application }: { application: VisaDocumentation })
         application.paymentStatus === "PARTIALLY_PAID") && (
         <BankAccountPaymentInfo applicationNo={application.applicationNo} />
       )}
+
+      <p className="mt-6 text-[12px] text-muted-foreground">
+        Submitted {formatDate(application.createdAt)} · last updated{" "}
+        {formatDate(application.updatedAt)}
+      </p>
+    </Card>
+  );
+}
+
+const PASSPORT_STATUS_FLOW: PassportStatus[] = [
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "APPROVED",
+];
+
+const passportStatusCopy: Record<
+  PassportStatus,
+  { label: string; description: string }
+> = {
+  SUBMITTED: {
+    label: "Submitted",
+    description:
+      "We have received your e-Passport application and uploaded documents. An immigration officer is reviewing your file.",
+  },
+  UNDER_REVIEW: {
+    label: "Under Review",
+    description:
+      "Your details and National Identity Number (NIN) records are under official processing & verification.",
+  },
+  APPROVED: {
+    label: "Approved & Ready",
+    description:
+      "Your passport application is approved and scheduled for physical biometric capture / passport collection.",
+  },
+  REJECTED: {
+    label: "Rejected",
+    description: "This passport application was not approved. The reason is shown below.",
+  },
+};
+
+function PassportApplicationSummary({
+  application,
+}: {
+  application: BackendPassportApplication;
+}) {
+  const rejected = application.status === "REJECTED";
+  const current = PASSPORT_STATUS_FLOW.indexOf(application.status as PassportStatus);
+
+  const categoryLabel =
+    application.passportCategory === "FRESH"
+      ? "Fresh Application"
+      : application.passportCategory === "RENEWAL"
+        ? "Re-issue / Renewal"
+        : application.passportCategory === "DAMAGE"
+          ? "Damaged Passport Replacement"
+          : application.passportCategory;
+
+  const validityLabel =
+    application.validity === "FIVE_YEARS" ? "5 Years" : "10 Years";
+  const bookletLabel =
+    application.bookletType === "THIRTY_TWO_PAGES" ? "32 Pages" : "64 Pages";
+
+  return (
+    <Card variant="solid" radius="2xl" padding="none" className="gap-0 p-6 sm:p-8">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            Passport Application
+          </p>
+          <p className="font-mono text-[19px] font-semibold text-ink-900">
+            {application.applicationNo}
+          </p>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            {application.firstName} {application.surname} · Nigeria e-Passport ({categoryLabel})
+          </p>
+        </div>
+        <Badge variant={rejected ? "destructive" : "solid"} size="lg">
+          {passportStatusCopy[application.status as PassportStatus]?.label || application.status}
+        </Badge>
+      </header>
+
+      {rejected ? (
+        <div className="mt-6 rounded-xl border border-destructive/25 bg-destructive/8 p-4">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-destructive">
+            <X className="size-4" strokeWidth={3} />
+            Application rejected
+          </p>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink-800">
+            {application.rejectionReason ??
+              "No reason was recorded. Please contact support."}
+          </p>
+        </div>
+      ) : (
+        <ol className="mt-7 grid gap-0">
+          {PASSPORT_STATUS_FLOW.map((status, i) => {
+            const done = i < current;
+            const active = i === current;
+            const last = i === PASSPORT_STATUS_FLOW.length - 1;
+
+            return (
+              <li key={status} className="relative flex gap-4 pb-7 last:pb-0">
+                {!last ? (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "absolute top-8 left-[13px] h-[calc(100%-2rem)] w-px",
+                      done ? "bg-success" : "bg-border",
+                    )}
+                  />
+                ) : null}
+
+                <span
+                  className={cn(
+                    "z-10 grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
+                    done && "bg-success text-success-foreground",
+                    active &&
+                      "bg-primary text-primary-foreground ring-4 ring-primary/30",
+                    !done && !active && "bg-secondary text-muted-foreground",
+                  )}
+                >
+                  {done ? <Check className="size-3.5" strokeWidth={3} /> : i + 1}
+                </span>
+
+                <div className="pt-0.5">
+                  <p
+                    className={cn(
+                      "text-[14.5px] font-semibold tracking-tight",
+                      active || done ? "text-ink-900" : "text-muted-foreground",
+                    )}
+                  >
+                    {passportStatusCopy[status].label}
+                  </p>
+                  <p className="mt-1 max-w-md text-[13px] leading-relaxed text-muted-foreground">
+                    {passportStatusCopy[status].description}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <dl className="mt-2 grid gap-5 border-t border-border pt-6 sm:grid-cols-3">
+        <div>
+          <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            Passport Category
+          </dt>
+          <dd className="mt-1 text-[14px] font-medium text-ink-900">
+            {categoryLabel}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            Booklet Type
+          </dt>
+          <dd className="mt-1 text-[14px] font-medium text-ink-900">
+            {bookletLabel} ({validityLabel})
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            State of Origin / Town
+          </dt>
+          <dd className="mt-1 text-[14px] font-medium text-ink-900">
+            {application.stateOfOrigin || "N/A"}
+          </dd>
+        </div>
+      </dl>
+
+      {application.verificationNotes ? (
+        <p className="mt-6 border-t border-border pt-5 text-[13px] leading-relaxed text-muted-foreground">
+          <span className="font-medium text-ink-900">Note from officer: </span>
+          {application.verificationNotes}
+        </p>
+      ) : null}
 
       <p className="mt-6 text-[12px] text-muted-foreground">
         Submitted {formatDate(application.createdAt)} · last updated{" "}

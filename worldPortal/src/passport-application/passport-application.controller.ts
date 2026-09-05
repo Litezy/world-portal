@@ -82,8 +82,8 @@ export class PassportApplicationController {
   })
   @ApiResponse({ status: 200, description: 'Passport application details.' })
   @ApiResponse({ status: 404, description: 'Application record not found.' })
-  async findOne(@Param('id') id: string) {
-    return this.passportApplicationService.findApplicationById(id);
+  async findOne(@Param('id') id: string, @Query('email') email?: string) {
+    return this.passportApplicationService.findApplicationById(id, email);
   }
 
   @Patch(':id/status')

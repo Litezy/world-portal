@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -10,42 +10,42 @@ import { PassportForm } from "@/features/passport/components/passport-form";
 import { buildMetadata } from "@/lib/seo";
 
 export const metadata = buildMetadata({
-  title: "Passport application",
+  title: "Passport Application",
   description:
-    "Apply for a first passport, renew one that is expiring, or replace one that was lost or damaged. E-Embassy handles the forms, photos and appointment.",
+    "Apply for a first passport, renew an expiring passport, or replace a lost or damaged passport. E-Embassy handles forms, photo verification, and biometric appointment scheduling.",
   path: "/passport",
 });
 
 const whatYouNeed = [
-  "Proof of who you are — birth certificate or a national ID card",
-  "Proof of where you live — a recent utility bill or bank statement",
-  "Two passport photographs, taken against a plain white background",
-  "Your old passport, if you have ever had one",
+  "National ID Number (NIN) or Birth Certificate",
+  "Proof of Address — recent utility bill or official ID card",
+  "Passport photo (white background, clear biometric standard)",
+  "Existing passport details (if renewing or replacing)",
 ];
 
 const steps = [
   {
-    title: "Send us your details",
-    body: "The short form below. No documents needed yet, and nothing to pay.",
+    title: "Fill the application form",
+    body: "Complete the guided application details. No physical document visits needed yet.",
   },
   {
-    title: "We tell you exactly what to bring",
-    body: "Requirements differ by country and by passport type. We send you one checklist, specific to you.",
+    title: "Requirement verification",
+    body: "Our consultants review your submitted details and verify document validity.",
   },
   {
-    title: "We book your appointment",
-    body: "We fill in the application, submit it, and book the biometrics slot at your nearest office.",
+    title: "Biometric appointment booking",
+    body: "We schedule your official biometric data capture appointment at the nearest center.",
   },
   {
-    title: "You collect your passport",
-    body: "We track it and tell you the day it is ready. Then your visa can start.",
+    title: "Passport issuance & tracking",
+    body: "Track your passport processing in real-time until collection.",
   },
 ];
 
 export default function PassportPage() {
   return (
     <Section spacing="md">
-      <Container>
+      <Container className="max-w-5xl">
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-ink-900"
@@ -54,73 +54,68 @@ export default function PassportPage() {
           Back to E-Embassy
         </Link>
 
-        <div className="mt-6 max-w-2xl">
+        <div className="mt-6 max-w-3xl">
           <Badge variant="eyebrow" dot className="mb-4">
-            Passport application
+            Official Passport Processing
           </Badge>
           <h1 className="text-[32px] leading-[1.1] font-semibold tracking-[-0.03em] text-balance text-ink-900 sm:text-[42px]">
-            Get the passport{" "}
-            <span className="heading-serif font-normal">before anything else.</span>
+            Get your passport{" "}
+            <span className="heading-serif font-normal">processed stress-free.</span>
           </h1>
-          <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-            A passport is proof of who you are, issued by your own country. Every visa
-            is stamped inside it, so nothing else can start until you have one with
-            enough time left on it. Tell us your situation and we will take it from
-            there.
+          <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+            Complete the official e-Passport application form below.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-14">
-          <div className="grid gap-6">
-            <Card variant="solid" radius="2xl" padding="lg" className="gap-0">
-              <h2 className="text-[18px] font-semibold tracking-tight text-ink-900">
-                What you will need
-              </h2>
-              <ul className="mt-4 grid gap-3">
-                {whatYouNeed.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="size-3" strokeWidth={3} />
-                    </span>
-                    <span className="text-[13.5px] leading-relaxed text-ink-800">
-                      {item}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-5 text-[12.5px] leading-relaxed text-muted-foreground">
-                Not sure you have all of these? Send the form anyway — we will tell you
-                what is missing and how to get it.
-              </p>
-            </Card>
+        {/* Passport Application Form - Front and Center */}
+        <div id="form" className="mt-8">
+          <PassportForm />
+        </div>
 
-            <Card variant="solid" radius="2xl" padding="lg" className="gap-0">
-              <h2 className="text-[18px] font-semibold tracking-tight text-ink-900">
-                How it goes
-              </h2>
-              <ol className="mt-5 grid gap-5">
-                {steps.map((step, i) => (
-                  <li key={step.title} className="flex gap-3.5">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-secondary text-[12px] font-semibold text-ink-800">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-[14.5px] font-semibold tracking-tight text-ink-900">
-                        {step.title}
-                      </p>
-                      <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                        {step.body}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </Card>
-          </div>
+        {/* Info Cards Grid Below Form */}
+        <div className="mt-14 grid gap-6 md:grid-cols-2">
+          <Card variant="solid" radius="2xl" padding="lg" className="gap-0 bg-muted/20 border-border/70">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900 flex items-center gap-2">
+              <ShieldCheck className="size-5 text-primary" />
+              What You Will Need
+            </h2>
+            <ul className="mt-4 grid gap-3">
+              {whatYouNeed.map((item) => (
+                <li key={item} className="flex items-start gap-2.5">
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+                    <Check className="size-3" strokeWidth={3} />
+                  </span>
+                  <span className="text-[13.5px] leading-relaxed text-ink-800">
+                    {item}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
 
-          <div id="form">
-            <PassportForm />
-          </div>
+          <Card variant="solid" radius="2xl" padding="lg" className="gap-0 bg-muted/20 border-border/70">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink-900 flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              How It Works
+            </h2>
+            <ol className="mt-4 grid gap-3">
+              {steps.map((step, i) => (
+                <li key={step.title} className="flex items-start gap-3">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[11.5px] font-bold text-primary mt-0.5">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-ink-900">
+                      {step.title}
+                    </p>
+                    <p className="text-[12.5px] leading-normal text-muted-foreground mt-0.5">
+                      {step.body}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Card>
         </div>
       </Container>
     </Section>
