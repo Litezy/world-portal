@@ -47,6 +47,60 @@ import type { Paginated } from "@/types";
 
 const COLUMNS = 6;
 
+function MultiCurrencyDisplay({
+  amountsByCurrency,
+  fallbackCurrency = "NGN",
+}: {
+  amountsByCurrency?: Record<string, number>;
+  fallbackCurrency?: string;
+}) {
+  if (!amountsByCurrency) {
+    return (
+      <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">
+        {formatCurrency(0, fallbackCurrency)}
+      </p>
+    );
+  }
+
+  const entries = Object.entries(amountsByCurrency).filter(([_, amt]) => amt > 0);
+  if (entries.length === 0) {
+    return (
+      <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">
+        {formatCurrency(0, fallbackCurrency)}
+      </p>
+    );
+  }
+
+  if (entries.length === 1) {
+    const [cur, amt] = entries[0];
+    return (
+      <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">
+        {formatCurrency(amt, cur)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="font-sans mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
+      {entries.map(([cur, amt], idx) => (
+        <span key={cur} className="text-[20px] lg:text-[22px] font-bold tracking-tight text-foreground">
+          {formatCurrency(amt, cur)}
+          {idx < entries.length - 1 ? <span className="ml-1.5 font-normal text-muted-foreground/60">+</span> : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatMultiCurrencyInline(amountsByCurrency?: Record<string, number>, fallbackCurrency = "NGN") {
+  if (!amountsByCurrency) return formatCurrency(0, fallbackCurrency);
+
+  const entries = Object.entries(amountsByCurrency).filter(([_, amt]) => amt > 0);
+  if (entries.length === 0) return formatCurrency(0, fallbackCurrency);
+
+  return entries.map(([cur, amt]) => formatCurrency(amt, cur)).join(" + ");
+}
+
 export function FinanceView() {
   const { params, set } = useListParams();
   const listParams = params as typeof params & { tab?: string };
@@ -56,6 +110,14 @@ export function FinanceView() {
     ...listParams,
     tab: activeTab,
   });
+
+  const summary = (data as any)?.summary || {
+    revenueByCurrency: { NGN: 0 },
+    outstandingByCurrency: { NGN: 0 },
+    refundVolumeByCurrency: { NGN: 0 },
+    refundCount: 0,
+    effectiveMargin: 5.0,
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -68,12 +130,14 @@ export function FinanceView() {
               <DollarSign className="size-4" />
             </span>
           </div>
-          <p className="font-sans mt-3 text-[32px] font-bold tracking-tight text-foreground tabular-nums">
-            $54,850.00
-          </p>
+          {isPending ? (
+            <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">...</p>
+          ) : (
+            <MultiCurrencyDisplay amountsByCurrency={summary.revenueByCurrency} />
+          )}
           <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
             <ArrowUpRight className="size-3.5" />
-            <span>+18.4% this month</span>
+            <span>Confirmed transactions</span>
           </div>
         </Card>
 
@@ -84,9 +148,11 @@ export function FinanceView() {
               <Clock className="size-4" />
             </span>
           </div>
-          <p className="font-sans mt-3 text-[32px] font-bold tracking-tight text-foreground tabular-nums">
-            $12,400.00
-          </p>
+          {isPending ? (
+            <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">...</p>
+          ) : (
+            <MultiCurrencyDisplay amountsByCurrency={summary.outstandingByCurrency} />
+          )}
           <p className="mt-3 text-[12px] text-muted-foreground">Pending 50% installment releases</p>
         </Card>
 
@@ -97,10 +163,16 @@ export function FinanceView() {
               <RefreshCw className="size-4" />
             </span>
           </div>
-          <p className="font-sans mt-3 text-[32px] font-bold tracking-tight text-foreground tabular-nums">
-            4 Requests
+          <p className="font-sans mt-3 text-[28px] lg:text-[32px] font-bold tracking-tight text-foreground tabular-nums">
+            {isPending
+              ? "..."
+              : `${summary.refundCount} ${summary.refundCount === 1 ? "Request" : "Requests"}`}
           </p>
-          <p className="mt-3 text-[12px] text-muted-foreground">$1,250.00 net refund volume</p>
+          <p className="mt-3 text-[12px] text-muted-foreground truncate">
+            {isPending
+              ? "..."
+              : `${formatMultiCurrencyInline(summary.refundVolumeByCurrency)} net refund volume`}
+          </p>
         </Card>
 
         <Card variant="solid" radius="lg" padding="none" className="p-5">
@@ -111,7 +183,7 @@ export function FinanceView() {
             </span>
           </div>
           <p className="font-sans mt-3 text-[32px] font-bold tracking-tight text-foreground tabular-nums">
-            12.5%
+            {isPending ? "..." : `${summary.effectiveMargin}%`}
           </p>
           <p className="mt-3 text-[12px] text-muted-foreground">Average service fee yield</p>
         </Card>
@@ -229,7 +301,7 @@ function TransactionsTab({
                   {tx.transactionRef}
                 </TableCell>
                 <TableCell className="font-semibold tabular-nums text-foreground">
-                  {formatCurrency(toAmount(tx.amount))}
+                  {formatCurrency(toAmount(tx.amount), tx.currency || "USD")}
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="text-xs font-medium">
@@ -339,13 +411,13 @@ function RefundsTab({
                   </span>
                 </TableCell>
                 <TableCell className="tabular-nums text-muted-foreground">
-                  {formatCurrency(toAmount(refund.originalAmount))}
+                  {formatCurrency(toAmount(refund.originalAmount), refund.currency || "USD")}
                 </TableCell>
                 <TableCell className="tabular-nums text-destructive">
-                  -{formatCurrency(toAmount(refund.surchargeAmount))}
+                  -{formatCurrency(toAmount(refund.surchargeAmount), refund.currency || "USD")}
                 </TableCell>
                 <TableCell className="font-semibold tabular-nums text-foreground">
-                  {formatCurrency(toAmount(refund.netRefundAmount))}
+                  {formatCurrency(toAmount(refund.netRefundAmount), refund.currency || "USD")}
                 </TableCell>
                 <TableCell>
                   <Badge

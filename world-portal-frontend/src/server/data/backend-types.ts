@@ -131,6 +131,7 @@ export type BackendTransaction = {
   visaDocumentationId: string | null;
   profileId: string | null;
   amount: string;
+  currency?: string;
   paymentOption: string;
   status: string;
   paymentMethod: string | null;
@@ -156,6 +157,7 @@ export type BackendRefund = {
   originalAmount: string;
   surchargeAmount: string;
   netRefundAmount: string;
+  currency?: string;
   reason: string;
   status: "REQUESTED" | "APPROVED" | "PROCESSED" | "REJECTED";
   processedBy: string | null;

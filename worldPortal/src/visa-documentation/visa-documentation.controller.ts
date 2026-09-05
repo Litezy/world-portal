@@ -83,8 +83,8 @@ export class VisaDocumentationController {
   })
   @ApiResponse({ status: 200, description: 'Visa application details.' })
   @ApiResponse({ status: 404, description: 'Application record not found.' })
-  async findOne(@Param('id') id: string) {
-    return this.visaDocumentationService.findVisaApplicationById(id);
+  async findOne(@Param('id') id: string, @Query('email') email?: string) {
+    return this.visaDocumentationService.findVisaApplicationById(id, email);
   }
 
   @Post(':id/evaluate')

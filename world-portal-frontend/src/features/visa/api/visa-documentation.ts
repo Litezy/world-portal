@@ -19,14 +19,19 @@ export function useSubmitVisaApplication() {
  * (`VISA-2026-8941`), and is deliberately public so applicants can track
  * without an account — never add an auth header to this one.
  */
-export function useVisaApplication(reference: string | null) {
+export function useVisaApplication(
+  reference: string | null,
+  email?: string | null,
+) {
   return useQuery({
-    queryKey: ["visa", "application", reference],
-    enabled: Boolean(reference),
+    queryKey: ["visa", "application", reference, email],
+    enabled: Boolean(reference && email),
     retry: false,
-    queryFn: () =>
-      api.get<VisaDocumentation>(
-        `/visa-documentation/${encodeURIComponent(reference!)}`,
-      ),
+    queryFn: () => {
+      const url = email
+        ? `/visa-documentation/${encodeURIComponent(reference!)}?email=${encodeURIComponent(email)}`
+        : `/visa-documentation/${encodeURIComponent(reference!)}`;
+      return api.get<VisaDocumentation>(url);
+    },
   });
 }

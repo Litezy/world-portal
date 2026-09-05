@@ -72,7 +72,7 @@ export async function GET() {
       revenue: {
         collected: visas.reduce((sum, v) => sum + v.amountPaid, 0),
         outstanding: visas.reduce((sum, v) => sum + v.balanceDue, 0),
-        currency: "USD",
+        currency: visas.find((v) => v.currency)?.currency || "NGN",
       },
       visaPipeline: visaStatusValues.map((status) => ({
         status,
