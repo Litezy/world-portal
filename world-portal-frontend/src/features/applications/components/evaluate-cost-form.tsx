@@ -25,6 +25,7 @@ import {
 import { toast } from "@/components/ui/toaster";
 import { applications as copy } from "@/content/admin";
 import { useEvaluateApplication } from "@/features/applications/api/use-evaluate-application";
+import { useEvaluatePassport } from "@/features/passports/api/use-evaluate-passport";
 import { ApiError } from "@/lib/api-client";
 import { evaluateVisaFormSchema, type EvaluateVisaInput } from "@/validations/admin";
 
@@ -43,13 +44,17 @@ export function EvaluateCostForm({
   totalAmount,
   currency = "USD",
   allowInstallment,
+  type = "visa",
 }: {
   id: string;
   totalAmount: number;
   currency?: string;
   allowInstallment: boolean;
+  type?: "visa" | "passport";
 }) {
-  const evaluate = useEvaluateApplication(id);
+  const evaluateVisa = useEvaluateApplication(id);
+  const evaluatePassport = useEvaluatePassport(id);
+  const evaluate = type === "passport" ? evaluatePassport : evaluateVisa;
   const form = useForm<EvaluateVisaInput>({
     resolver: zodResolver(evaluateVisaFormSchema),
     defaultValues: { totalAmount, currency: currency || "USD", allowInstallment },

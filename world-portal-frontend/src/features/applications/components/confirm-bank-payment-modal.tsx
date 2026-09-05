@@ -25,6 +25,7 @@ type Props = {
   balanceDue: number;
   currency?: string;
   allowInstallment: boolean;
+  type?: "visa" | "passport";
 };
 
 export function ConfirmBankPaymentModal({
@@ -34,6 +35,7 @@ export function ConfirmBankPaymentModal({
   balanceDue,
   currency,
   allowInstallment,
+  type = "visa",
 }: Props) {
   const [open, setOpen] = React.useState(false);
 
@@ -50,7 +52,7 @@ export function ConfirmBankPaymentModal({
   const [notes, setNotes] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  const confirmMutation = useConfirmBankPayment(id);
+  const confirmMutation = useConfirmBankPayment(id, type);
 
   React.useEffect(() => {
     if (open) {

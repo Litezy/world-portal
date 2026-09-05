@@ -20,6 +20,8 @@ import { PassportApplicationService } from './passport-application.service';
 import { CreatePassportApplicationDto } from './dto/create-passport-application.dto';
 import { UpdatePassportStatusDto } from './dto/update-passport-status.dto';
 import { QueryPassportApplicationDto } from './dto/query-passport-application.dto';
+import { InviteApplicantDto } from '../visa-documentation/dto/invite-applicant.dto';
+import { EvaluateVisaCostDto } from '../visa-documentation/dto/evaluate-visa-cost.dto';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
@@ -108,5 +110,53 @@ export class PassportApplicationController {
     const reviewer =
       typeof user?.email === 'string' ? user.email : 'staff@worldportal.com';
     return this.passportApplicationService.updateStatus(id, dto, reviewer);
+  }
+
+  @Patch(':id/evaluate')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Evaluate processing fees for a passport application',
+    description:
+      'Sets total processing cost, currency, installment allowance, and updates status to EVALUATED with paymentStatus AWAITING_PAYMENT.',
+  })
+  @ApiParam({ name: 'id', description: 'Passport application ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Passport application cost evaluated successfully.',
+  })
+  async evaluateCost(
+    @Param('id') id: string,
+    @Body() dto: EvaluateVisaCostDto,
+    @CurrentUser() user: { email?: string } | undefined,
+  ) {
+    const evaluator =
+      typeof user?.email === 'string' ? user.email : 'staff@worldportal.com';
+    return this.passportApplicationService.evaluateCost(id, dto, evaluator);
+  }
+
+  @Post(':id/invite')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Invite applicant for appointment / biometrics / interview',
+    description:
+      'Dispatches an appointment invitation email to applicant with purpose, date, time, location, and optional instructions. Requires UNDER_REVIEW status or later.',
+  })
+  @ApiParam({ name: 'id', description: 'Passport application ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Applicant invitation email dispatched and notes updated.',
+  })
+  async inviteApplicant(
+    @Param('id') id: string,
+    @Body() dto: InviteApplicantDto,
+    @CurrentUser() user: { email?: string } | undefined,
+  ) {
+    const inviter =
+      typeof user?.email === 'string' ? user.email : 'admin@worldportal.com';
+    return this.passportApplicationService.inviteApplicant(id, dto, inviter);
   }
 }

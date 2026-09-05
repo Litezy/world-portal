@@ -24,12 +24,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { useInviteApplicant } from "../api/use-invite-applicant";
+import { useInvitePassportApplicant } from "@/features/passports/api/use-invite-passport";
 
 type Props = {
   id: string;
   applicantName: string;
   applicantEmail: string;
   status: string;
+  type?: "visa" | "passport";
 };
 
 const PURPOSE_OPTIONS = [
@@ -48,6 +50,7 @@ export function InviteApplicantModal({
   applicantName,
   applicantEmail,
   status,
+  type = "visa",
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [selectedPurposeOption, setSelectedPurposeOption] = React.useState(
@@ -60,7 +63,9 @@ export function InviteApplicantModal({
   const [note, setNote] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
-  const inviteMutation = useInviteApplicant(id);
+  const visaInviteMutation = useInviteApplicant(id);
+  const passportInviteMutation = useInvitePassportApplicant(id);
+  const inviteMutation = type === "passport" ? passportInviteMutation : visaInviteMutation;
 
   // Default date to 3 business days from today
   React.useEffect(() => {

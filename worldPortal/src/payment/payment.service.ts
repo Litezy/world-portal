@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VisaDocumentationService } from '../visa-documentation/visa-documentation.service';
+import { PassportApplicationService } from '../passport-application/passport-application.service';
 import { InitiatePaymentTransactionDto } from './dto/initiate-payment-transaction.dto';
 import { ConfirmPaymentTransactionDto } from './dto/confirm-payment-transaction.dto';
 import { ConfirmBankTransferDto } from './dto/confirm-bank-transfer.dto';
@@ -31,6 +32,8 @@ export class PaymentService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => VisaDocumentationService))
     private readonly visaDocService: VisaDocumentationService,
+    @Inject(forwardRef(() => PassportApplicationService))
+    private readonly passportAppService: PassportApplicationService,
   ) {}
 
   async getOrCreatePaymentConfig() {
@@ -224,6 +227,68 @@ export class PaymentService {
   }
 
   async confirmBankTransferPayment(dto: ConfirmBankTransferDto, adminEmail: string) {
+    if (dto.passportApplicationId) {
+      const passportApp = await this.passportAppService.findApplicationById(dto.passportApplicationId);
+
+      if (!passportApp.totalAmount) {
+        throw new BadRequestException('Passport application cost has not been evaluated by an admin yet.');
+      }
+
+      const total = Number(passportApp.totalAmount);
+      const paid = Number(passportApp.amountPaid || 0);
+      const balance = Math.max(0, total - paid);
+
+      if (balance <= 0) {
+        throw new ConflictException('Passport application is already fully paid.');
+      }
+
+      if (dto.amount > balance) {
+        throw new BadRequestException(
+          `Payment amount (${dto.amount}) cannot exceed the remaining balance due of ${balance}.`,
+        );
+      }
+
+      const transactionRef = dto.bankReference?.trim()
+        ? `BANK-${dto.bankReference.trim().toUpperCase()}`
+        : `TXN-BANK-${randomInt(100000, 999999)}`;
+
+      const transaction = await this.prisma.paymentTransaction.create({
+        data: {
+          transactionRef,
+          passportApplicationId: passportApp.id,
+          profileId: passportApp.profileId || null,
+          amount: new Prisma.Decimal(dto.amount),
+          paymentOption: dto.paymentOption,
+          status: PaymentTransactionStatus.CONFIRMED,
+          paymentMethod: 'BANK_TRANSFER',
+          initiatedBy: adminEmail || 'admin-manual',
+          confirmedAt: new Date(),
+        },
+      });
+
+      await this.passportAppService.handlePaymentConfirmed(
+        passportApp.id,
+        new Prisma.Decimal(dto.amount),
+        dto.paymentOption,
+      );
+
+      this.logger.log(
+        `Manual Bank Transfer CONFIRMED by admin=${adminEmail}: transactionRef=${transactionRef}, passportAppId=${passportApp.id}, amount=${dto.amount}`,
+      );
+
+      return {
+        success: true,
+        transactionRef,
+        transactionId: transaction.id,
+        amount: dto.amount,
+        message: 'Bank transfer payment confirmed successfully. Passport application advanced to Under Review.',
+      };
+    }
+
+    if (!dto.visaDocumentationId) {
+      throw new BadRequestException('Either visaDocumentationId or passportApplicationId is required.');
+    }
+
     const visaDoc = await this.visaDocService.findVisaApplicationById(dto.visaDocumentationId);
 
     if (!visaDoc.totalAmount) {

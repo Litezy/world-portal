@@ -3,8 +3,12 @@ import { PaymentOption } from '@prisma/client';
 
 export class ConfirmBankTransferDto {
   @IsString()
-  @IsNotEmpty()
-  visaDocumentationId: string;
+  @IsOptional()
+  visaDocumentationId?: string;
+
+  @IsString()
+  @IsOptional()
+  passportApplicationId?: string;
 
   @IsNumber()
   @IsPositive()

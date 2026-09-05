@@ -8,6 +8,7 @@ import type {
   ApplicationEvent,
   Customer,
   PassportApplication,
+  SubmittedDocument,
   TeamMember,
   VisaApplication,
 } from "@/types";
@@ -121,6 +122,41 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
 }
 
 
+function extractPassportDocuments(record: BackendPassportApplication): SubmittedDocument[] {
+  const docs: SubmittedDocument[] = [];
+  if (record.passportPhotoUrl) {
+    docs.push({ label: "Passport Photograph (White BG)", url: record.passportPhotoUrl });
+  }
+  if (record.ninDocumentUrl) {
+    docs.push({ label: "NIN Slip / Document", url: record.ninDocumentUrl });
+  }
+  if (record.birthCertificateUrl) {
+    docs.push({ label: "Birth Certificate / Age Declaration", url: record.birthCertificateUrl });
+  }
+  return docs;
+}
+
+function passportTimeline(record: BackendPassportApplication): ApplicationEvent[] {
+  const events: ApplicationEvent[] = [
+    { status: "SUBMITTED", at: record.createdAt },
+  ];
+  if (record.evaluatedAt) {
+    events.push({
+      status: "EVALUATED",
+      at: record.evaluatedAt,
+      note: `Processing fee set to ${record.currency || "USD"} ${record.totalAmount}`,
+    });
+  }
+  if (record.status === "UNDER_REVIEW" || record.status === "APPROVED" || record.status === "REJECTED") {
+    events.push({
+      status: record.status,
+      at: record.updatedAt,
+      note: record.verificationNotes ?? record.rejectionReason ?? undefined,
+    });
+  }
+  return events;
+}
+
 export function toPassportApplication(
   record: BackendPassportApplication,
 ): PassportApplication {
@@ -133,15 +169,44 @@ export function toPassportApplication(
       phone: record.contactPhone,
     },
     category: record.passportCategory,
+    sex: record.sex,
+    ninNumber: record.ninNumber,
+    dateOfBirth: record.dateOfBirth,
+    placeOfBirth: record.placeOfBirth,
+    existingPassportNumber: record.existingPassportNumber,
+    homeTown: record.homeTown,
+    stateOfOrigin: record.stateOfOrigin,
+    permanentAddress: record.permanentAddress,
+    occupation: record.occupation,
+    maritalStatus: record.maritalStatus,
+    colourOfEyes: record.colourOfEyes,
+    colourOfHair: record.colourOfHair,
+    height: record.height,
+    maidenName: record.maidenName,
+    nextOfKin: {
+      name: record.nextOfKinName,
+      phone: record.nextOfKinPhone,
+      relationship: record.nextOfKinRelationship,
+      address: record.nextOfKinAddress,
+    },
     validity: record.validity,
     bookletType: record.bookletType,
-    stateOfOrigin: record.stateOfOrigin,
+    paymentStatus: record.paymentStatus || "PENDING_EVALUATION",
+    totalAmount: toAmount(record.totalAmount),
+    currency: record.currency || "USD",
+    amountPaid: toAmount(record.amountPaid),
+    balanceDue: toAmount(record.balanceDue),
+    allowInstallment: Boolean(record.allowInstallment),
+    evaluatedBy: record.evaluatedBy,
+    evaluatedAt: record.evaluatedAt,
     status: record.status,
     verificationNotes: record.verificationNotes,
     rejectionReason: record.rejectionReason,
     reviewedBy: record.reviewedBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    timeline: passportTimeline(record),
+    documents: extractPassportDocuments(record),
   };
 }
 
