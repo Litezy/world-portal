@@ -294,6 +294,7 @@ export class VisaDocumentationService {
         amountPaid: Number(updated.amountPaid),
         balanceDue: Number(updated.balanceDue),
         paymentOption: updated.selectedPaymentOption || paymentOption,
+        currency: updated.currency,
       })
       .catch((err) => {
         this.logger.error(`SendGrid payment confirmed email error: ${err?.message}`);

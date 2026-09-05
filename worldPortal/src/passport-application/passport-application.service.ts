@@ -399,6 +399,7 @@ export class PassportApplicationService {
         amountPaid: Number(amount),
         balanceDue: Number(updated.balanceDue),
         paymentOption,
+        currency: updated.currency,
       });
     } catch (err: any) {
       this.logger.error(

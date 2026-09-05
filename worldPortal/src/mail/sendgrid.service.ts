@@ -28,12 +28,11 @@ export function formatReviewerName(nameOrEmail?: string): string {
 
 export function formatAmountWithCommas(amount: number | string | null | undefined): string {
   if (amount === null || amount === undefined) return '0.00';
-  const num = typeof amount === 'number' ? amount : Number(amount);
+  const num = typeof amount === 'number' ? amount : parseFloat(String(amount));
   if (isNaN(num)) return '0.00';
-  return num.toLocaleString('en-US', {
-    minimumFractionDigits: num % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
+  const parts = num.toFixed(num % 1 === 0 ? 0 : 2).split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
 }
 
 export interface SendCostEvaluatedEmailOptions {
@@ -65,6 +64,7 @@ export interface SendPaymentConfirmedEmailOptions {
   amountPaid: number;
   balanceDue: number;
   paymentOption: string;
+  currency?: string;
 }
 
 export interface SendStatusUpdateEmailOptions {
@@ -187,6 +187,8 @@ export class SendGridService {
       application_no: applicationNo,
       target_country: targetCountry,
       total_amount: totalAmount,
+      formatted_total_amount: formatAmountWithCommas(totalAmount),
+      formatted_installment_amount: formatAmountWithCommas(totalAmount / 2),
       currency: currency || 'USD',
       allow_installment: allowInstallment,
       evaluator_email: evaluatorEmail,
@@ -211,13 +213,16 @@ export class SendGridService {
    * 3. Payment Confirmed & In Review Email
    */
   async sendPaymentConfirmedEmail(options: SendPaymentConfirmedEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, amountPaid, balanceDue, paymentOption } = options;
+    const { to, recipientName, applicationNo, amountPaid, balanceDue, paymentOption, currency } = options;
 
     const data = {
       recipient_name: recipientName,
       application_no: applicationNo,
       amount_paid: amountPaid,
       balance_due: balanceDue,
+      currency: currency || 'USD',
+      formatted_amount_paid: formatAmountWithCommas(amountPaid),
+      formatted_balance_due: formatAmountWithCommas(balanceDue),
       payment_option: paymentOption,
       tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
@@ -435,8 +440,8 @@ export class SendGridService {
   private async renderEjsTemplate(templateName: string, data: Record<string, any>): Promise<string> {
     try {
       const possiblePaths = [
-        path.join(__dirname, 'templates', templateName),
         path.join(process.cwd(), 'src', 'mail', 'templates', templateName),
+        path.join(__dirname, 'templates', templateName),
         path.join(process.cwd(), 'dist', 'mail', 'templates', templateName),
       ];
 
