@@ -214,7 +214,13 @@ export type DashboardStats = {
   visas: { total: number; active: number; approved: number };
   passports: { total: number; active: number };
   customers: { total: number };
-  revenue: { collected: number; outstanding: number; currency: string };
+  revenue: {
+    collected: number;
+    outstanding: number;
+    currency: string;
+    revenueByCurrency?: Record<string, number>;
+    outstandingByCurrency?: Record<string, number>;
+  };
   visaPipeline: { status: VisaStatus; count: number }[];
   visasByCategory: { category: BackendVisaCategory; count: number }[];
   weekly: { label: string; visas: number; passports: number }[];

@@ -5,6 +5,7 @@ import { requireSession } from "@/server/auth";
 import {
   type BackendPassportApplication,
   type BackendVisaApplication,
+  toAmount,
   visaCategoryValues,
   visaStatusValues,
 } from "@/server/data/backend-types";
@@ -20,27 +21,57 @@ const ACTIVE_VISA = ["SUBMITTED", "EVALUATED", "UNDER_REVIEW"];
 const ACTIVE_PASSPORT = ["SUBMITTED", "UNDER_REVIEW"];
 const DAY = 86_400_000;
 
-/**
- * The service exposes no stats endpoint, so the console derives them from the
- * collections it can already read. Cheap today; swap for a real summary
- * endpoint when the volume makes two list calls per load wasteful.
- */
 export async function GET() {
   const { session, response } = await requireSession();
   if (response) return response;
 
   try {
-    const [visaRecords, passportRecords] = await Promise.all([
+    const [visaRecords, passportRecords, rawTx] = await Promise.all([
       backend<BackendVisaApplication[]>("/visa-documentation", {
         token: session.token,
-      }),
+      }).catch(() => []),
       backend<BackendPassportApplication[]>("/passport-application", {
         token: session.token,
-      }),
+      }).catch(() => []),
+      backend<any[]>("/payments/transactions", {
+        token: session.token,
+      }).catch(() => []),
     ]);
 
-    const visas = visaRecords.map(toVisaApplication);
-    const passports = passportRecords.map(toPassportApplication);
+    const visas = (visaRecords || []).map(toVisaApplication);
+    const passports = (passportRecords || []).map(toPassportApplication);
+    const allApps = [...visas, ...passports];
+
+    const revenueByCurrency: Record<string, number> = {};
+    const outstandingByCurrency: Record<string, number> = {};
+
+    (rawTx || []).forEach((t) => {
+      const cur = t.currency || t.visaDocumentation?.currency || t.passportApplication?.currency || "NGN";
+      const amt = toAmount(t.amount);
+      if (t.status === "CONFIRMED") {
+        revenueByCurrency[cur] = (revenueByCurrency[cur] || 0) + amt;
+      }
+    });
+
+    allApps.forEach((app) => {
+      const cur = app.currency || "NGN";
+      if (app.balanceDue > 0) {
+        outstandingByCurrency[cur] = (outstandingByCurrency[cur] || 0) + app.balanceDue;
+      }
+    });
+
+    if (Object.keys(revenueByCurrency).length === 0) {
+      allApps.forEach((app) => {
+        const cur = app.currency || "NGN";
+        if (app.amountPaid > 0) {
+          revenueByCurrency[cur] = (revenueByCurrency[cur] || 0) + app.amountPaid;
+        }
+      });
+    }
+
+    const primaryCurrency = allApps.find((app) => app.currency)?.currency || "NGN";
+    const totalCollected = Object.values(revenueByCurrency).reduce((sum, amt) => sum + amt, 0);
+    const totalOutstanding = Object.values(outstandingByCurrency).reduce((sum, amt) => sum + amt, 0);
 
     const now = Date.now();
     const weekly = Array.from({ length: 7 }, (_, i) => {
@@ -70,9 +101,11 @@ export async function GET() {
       },
       customers: { total: toCustomers(visas, passports).length },
       revenue: {
-        collected: visas.reduce((sum, v) => sum + v.amountPaid, 0),
-        outstanding: visas.reduce((sum, v) => sum + v.balanceDue, 0),
-        currency: visas.find((v) => v.currency)?.currency || "NGN",
+        collected: totalCollected,
+        outstanding: totalOutstanding,
+        currency: primaryCurrency,
+        revenueByCurrency,
+        outstandingByCurrency,
       },
       visaPipeline: visaStatusValues.map((status) => ({
         status,

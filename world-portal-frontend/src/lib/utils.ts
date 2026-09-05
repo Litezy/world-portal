@@ -24,6 +24,19 @@ export function formatCurrency(amount: number, currency = "NGN", locale = "en-US
   }).format(amount);
 }
 
+export function formatMultiCurrencyInline(
+  amountsByCurrency?: Record<string, number>,
+  fallbackCurrency = "NGN",
+  fallbackSingleAmount = 0,
+) {
+  if (!amountsByCurrency) return formatCurrency(fallbackSingleAmount, fallbackCurrency);
+
+  const entries = Object.entries(amountsByCurrency).filter(([_, amt]) => amt > 0);
+  if (entries.length === 0) return formatCurrency(fallbackSingleAmount, fallbackCurrency);
+
+  return entries.map(([cur, amt]) => formatCurrency(amt, cur)).join(" + ");
+}
+
 export function formatWithCommas(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "" || Number.isNaN(value)) return "";
   const numStr = value.toString().replace(/,/g, "");
