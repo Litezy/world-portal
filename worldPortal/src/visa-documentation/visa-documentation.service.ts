@@ -9,6 +9,8 @@ import { CreateVisaDocumentationDto } from './dto/create-visa-documentation.dto'
 import { EvaluateVisaCostDto } from './dto/evaluate-visa-cost.dto';
 import { UpdateVisaStatusDto } from './dto/update-visa-status.dto';
 import { QueryVisaDocumentationDto } from './dto/query-visa-documentation.dto';
+import { InviteApplicantDto } from './dto/invite-applicant.dto';
+
 import {
   VisaDocumentStatus,
   PaymentStatus,
@@ -165,9 +167,10 @@ export class VisaDocumentationService {
     if (!emailOrName) return 'Admin Consultant';
     if (!emailOrName.includes('@')) return emailOrName;
 
-    const profile = await this.prisma.profile
-      .findUnique({ where: { email: emailOrName } })
-      .catch(() => null);
+    const profile = await Promise.resolve(
+      this.prisma.profile?.findUnique({ where: { email: emailOrName } }),
+    ).catch(() => null);
+
 
     if (profile && (profile.firstName || profile.lastName)) {
       return `${profile.firstName} ${profile.lastName}`.trim();
@@ -357,6 +360,65 @@ export class VisaDocumentationService {
 
     return updated;
   }
+
+  async inviteApplicant(
+    id: string,
+    dto: InviteApplicantDto,
+    inviterEmail: string,
+  ) {
+    const record = await this.findVisaApplicationById(id);
+
+    if (
+      record.status === VisaDocumentStatus.SUBMITTED ||
+      record.status === VisaDocumentStatus.EVALUATED
+    ) {
+      throw new BadRequestException(
+        `Invitations can only be issued starting from UNDER_REVIEW status. Current status is ${record.status}.`,
+      );
+    }
+
+    const inviterName = await this.resolveReviewerDisplayName(inviterEmail);
+
+    this.logger.log(
+      `Inviting applicant for application id=${id}, applicationNo=${record.applicationNo}, purpose=${dto.purpose}, date=${dto.date}, time=${dto.time}, location=${dto.location} by inviter=${inviterEmail} (${inviterName})`,
+    );
+
+    const noteLog = `[Invitation Sent - ${dto.purpose}] Date: ${dto.date} at ${dto.time} | Venue: ${dto.location}${dto.note ? ` | Note: ${dto.note}` : ''}`;
+    const updatedNotes = record.verificationNotes
+      ? `${record.verificationNotes}\n${noteLog}`
+      : noteLog;
+
+    const updated = await this.prisma.visaDocumentation.update({
+      where: { id: record.id },
+      data: {
+        verificationNotes: updatedNotes,
+      },
+    });
+
+    // Dispatch invitation email via SendGrid
+    this.sendGridService
+      .sendApplicantInvitationEmail({
+        to: record.email,
+        recipientName: `${record.firstName} ${record.lastName}`,
+        applicationNo: record.applicationNo,
+        targetCountry: record.targetCountry,
+        purpose: dto.purpose,
+        date: dto.date,
+        time: dto.time,
+        location: dto.location,
+        note: dto.note,
+        inviterEmail,
+        inviterName,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `SendGrid applicant invitation email error: ${err?.message}`,
+        );
+      });
+
+    return updated;
+  }
+
 
 
   async findAllVisaApplications(query: QueryVisaDocumentationDto) {

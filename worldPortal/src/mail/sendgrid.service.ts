@@ -75,6 +75,21 @@ export interface SendTeamInviteEmailOptions {
   inviterName?: string;
 }
 
+export interface SendApplicantInvitationEmailOptions {
+  to: string;
+  recipientName: string;
+  applicationNo: string;
+  targetCountry: string;
+  purpose: string;
+  date: string;
+  time: string;
+  location: string;
+  note?: string;
+  inviterEmail: string;
+  inviterName?: string;
+}
+
+
 @Injectable()
 export class SendGridService {
   private readonly logger = new Logger(SendGridService.name);
@@ -296,6 +311,59 @@ export class SendGridService {
       ref: `INVITE-${to}`,
     });
   }
+
+  /**
+   * 7. Applicant Appointment Invitation Email
+   */
+  async sendApplicantInvitationEmail(
+    options: SendApplicantInvitationEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      targetCountry,
+      purpose,
+      date,
+      time,
+      location,
+      note,
+      inviterEmail,
+      inviterName,
+    } = options;
+
+    const formattedInviterName =
+      inviterName || formatReviewerName(inviterEmail);
+
+    const data = {
+      recipient_name: recipientName,
+      application_no: applicationNo,
+      target_country: targetCountry,
+      purpose,
+      date,
+      time,
+      location,
+      note: note || '',
+      inviter_email: inviterEmail,
+      inviter_name: formattedInviterName,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
+      from_email: this.fromEmail,
+      year: new Date().getFullYear(),
+    };
+
+    const html = await this.renderEjsTemplate(
+      'applicant-invitation.ejs',
+      data,
+    );
+
+    return this.dispatchMail({
+      to,
+      subject: `Appointment Invitation: ${purpose} - ${applicationNo}`,
+      html,
+      ref: `INVITE-APP-${applicationNo}`,
+    });
+  }
+
 
   /**
    * 7. OTP Email Verification

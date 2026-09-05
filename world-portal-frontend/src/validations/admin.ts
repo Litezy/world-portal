@@ -69,6 +69,16 @@ export const listParamsSchema = z.object({
   perPage: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+export const inviteApplicantSchema = z.object({
+  purpose: z.string().trim().min(1, "Enter or select the purpose for invitation"),
+  date: z.string().trim().min(1, "Select appointment date"),
+  time: z.string().trim().min(1, "Select appointment time"),
+  location: z.string().trim().min(1, "Enter appointment location"),
+  note: z.string().trim().max(1000, "Keep note under 1000 characters").optional(),
+});
+
 export type UpdateVisaStatusInput = z.infer<typeof updateVisaStatusSchema>;
 export type UpdatePassportStatusInput = z.infer<typeof updatePassportStatusSchema>;
 export type EvaluateVisaInput = z.infer<typeof evaluateVisaFormSchema>;
+export type InviteApplicantInput = z.infer<typeof inviteApplicantSchema>;
+
