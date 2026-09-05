@@ -22,6 +22,7 @@ const visaTone: Record<VisaStatus, Tone> = {
 
 const passportTone: Record<PassportStatus, Tone> = {
   SUBMITTED: "softInfo",
+  EVALUATED: "softNeutral",
   UNDER_REVIEW: "softWarning",
   APPROVED: "softSuccess",
   REJECTED: "softDestructive",

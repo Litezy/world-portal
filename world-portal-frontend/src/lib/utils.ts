@@ -24,6 +24,14 @@ export function formatCurrency(amount: number, currency = "NGN", locale = "en-US
   }).format(amount);
 }
 
+export function formatWithCommas(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "" || Number.isNaN(value)) return "";
+  const numStr = value.toString().replace(/,/g, "");
+  const parts = numStr.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
+}
+
 export function formatDate(
   date: Date | string | number,
   options: Intl.DateTimeFormatOptions = {

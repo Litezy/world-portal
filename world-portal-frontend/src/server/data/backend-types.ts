@@ -11,6 +11,7 @@ export type VisaStatus = (typeof visaStatusValues)[number];
 
 export const passportStatusValues = [
   "SUBMITTED",
+  "EVALUATED",
   "UNDER_REVIEW",
   "APPROVED",
   "REJECTED",

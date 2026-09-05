@@ -26,6 +26,16 @@ export function formatReviewerName(nameOrEmail?: string): string {
     .join(' ');
 }
 
+export function formatAmountWithCommas(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined) return '0.00';
+  const num = typeof amount === 'number' ? amount : Number(amount);
+  if (isNaN(num)) return '0.00';
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: num % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export interface SendCostEvaluatedEmailOptions {
   to: string;
   recipientName: string;
@@ -433,7 +443,10 @@ export class SendGridService {
       let foundPath = possiblePaths.find((p) => fs.existsSync(p));
 
       if (foundPath) {
-        return await ejs.renderFile(foundPath, data);
+        return await ejs.renderFile(foundPath, {
+          formatAmount: formatAmountWithCommas,
+          ...data,
+        });
       }
 
       this.logger.warn(`EJS template ${templateName} not found on disk, using inline fallback`);

@@ -66,9 +66,9 @@
 
       <div class="price-card">
         <div class="price-label">Total Processing Fee</div>
-        <div class="price-val"><%= currency %> <%= total_amount %></div>
+        <div class="price-val"><%= currency %> <%= formatAmount(total_amount) %></div>
         <% if (allow_installment) { %>
-          <p style="font-size: 12px; color: #0284c7; margin-top: 6px; font-weight: 600;">50% Upfront Installment Option Available (<%= currency %> <%= (total_amount / 2).toFixed(2) %>)</p>
+          <p style="font-size: 12px; color: #0284c7; margin-top: 6px; font-weight: 600;">50% Upfront Installment Option Available (<%= currency %> <%= formatAmount(total_amount / 2) %>)</p>
         <% } %>
       </div>
 

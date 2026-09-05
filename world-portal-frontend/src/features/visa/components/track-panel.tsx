@@ -518,6 +518,11 @@ const passportStatusCopy: Record<
     description:
       "We have received your e-Passport application and uploaded documents. An immigration officer is reviewing your file.",
   },
+  EVALUATED: {
+    label: "Evaluated",
+    description:
+      "Cost evaluation is complete. Please review the processing fee and complete payment to advance your application.",
+  },
   UNDER_REVIEW: {
     label: "Under Review",
     description:

@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatWithCommas } from "@/lib/utils";
 import { useConfirmBankPayment } from "../api/use-confirm-bank-payment";
 
 type Props = {
@@ -194,12 +194,16 @@ export function ConfirmBankPaymentModal({
                 <Label htmlFor="amount">Confirmed Amount Received ({currency || "USD"}) *</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={balanceDue}
-                  value={amountStr}
-                  onChange={(e) => setAmountStr(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={formatWithCommas(amountStr)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/,/g, "");
+                    if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+                      setAmountStr(raw);
+                    }
+                  }}
                   className="font-mono text-sm font-semibold"
                   required
                 />
