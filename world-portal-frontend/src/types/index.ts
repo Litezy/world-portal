@@ -146,15 +146,44 @@ export type PassportApplication = {
   reference: string;
   applicant: Applicant;
   category: string;
+  sex: string;
+  ninNumber: string;
+  dateOfBirth: string;
+  placeOfBirth: string;
+  existingPassportNumber?: string | null;
+  homeTown: string;
+  stateOfOrigin: string;
+  permanentAddress: string;
+  occupation: string;
+  maritalStatus: string;
+  colourOfEyes?: string | null;
+  colourOfHair?: string | null;
+  height?: string | null;
+  maidenName?: string | null;
+  nextOfKin: {
+    name: string;
+    phone: string;
+    relationship: string;
+    address: string;
+  };
   validity: string;
   bookletType: string;
-  stateOfOrigin: string;
+  paymentStatus: BackendPaymentStatus;
+  totalAmount: number;
+  currency: string;
+  amountPaid: number;
+  balanceDue: number;
+  allowInstallment: boolean;
   status: PassportStatus;
   verificationNotes: string | null;
   rejectionReason: string | null;
   reviewedBy: string | null;
+  evaluatedBy?: string | null;
+  evaluatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  timeline: ApplicationEvent[];
+  documents: SubmittedDocument[];
 };
 
 export type TeamMember = {
@@ -185,7 +214,13 @@ export type DashboardStats = {
   visas: { total: number; active: number; approved: number };
   passports: { total: number; active: number };
   customers: { total: number };
-  revenue: { collected: number; outstanding: number; currency: string };
+  revenue: {
+    collected: number;
+    outstanding: number;
+    currency: string;
+    revenueByCurrency?: Record<string, number>;
+    outstandingByCurrency?: Record<string, number>;
+  };
   visaPipeline: { status: VisaStatus; count: number }[];
   visasByCategory: { category: BackendVisaCategory; count: number }[];
   weekly: { label: string; visas: number; passports: number }[];

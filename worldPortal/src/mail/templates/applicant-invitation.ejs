@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <title>Admin Team Invitation</title>
+  <title>Appointment Invitation</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -14,36 +14,38 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px; }
     .container { max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05); }
     .header { text-align: center; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0; }
-    .logo { font-size: 20px; font-weight: 700; color: #9333ea; letter-spacing: -0.02em; text-transform: uppercase; }
+    .logo { font-size: 20px; font-weight: 700; color: #2563eb; letter-spacing: -0.02em; text-transform: uppercase; }
     .title { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 16px; margin-bottom: 8px; }
     .subtitle { font-size: 14px; color: #64748b; margin: 0; }
     .content { padding: 24px 0; }
     .text-greeting { font-size: 15px; color: #1e293b; font-weight: 600; }
     .text-body { font-size: 14px; color: #475569; line-height: 1.6; }
-    .invite-card { background-color: #faf5ff; border: 1.5px solid #a855f7; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }
-    .role-badge { display: inline-block; background-color: rgba(168, 85, 247, 0.15); color: #7e22ce; font-weight: 700; font-size: 13px; padding: 4px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .invite-card { background-color: #eff6ff; border: 1.5px solid #3b82f6; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }
+    .invite-title { font-size: 18px; font-weight: 800; color: #1d4ed8; }
     .info-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
     .info-table td { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
     .info-label { color: #64748b; }
     .info-value { color: #0f172a; font-weight: 600; text-align: right; }
+    .note-box { background-color: #f1f5f9; border-left: 4px solid #3b82f6; padding: 14px; border-radius: 6px; font-size: 13.5px; color: #334155; margin-top: 16px; }
     .btn-container { text-align: center; margin-top: 28px; }
-    .btn { display: inline-block; background-color: #9333ea; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 14px; padding: 14px 32px; border-radius: 9999px; }
+    .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 14px; padding: 14px 32px; border-radius: 9999px; }
     .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
 
     @media (prefers-color-scheme: dark) {
       body { background-color: #0f172a !important; color: #f8fafc !important; }
       .container { background-color: #1e293b !important; border-color: #334155 !important; }
       .header { border-bottom-color: #334155 !important; }
-      .logo { color: #c084fc !important; }
+      .logo { color: #60a5fa !important; }
       .title { color: #ffffff !important; }
       .subtitle { color: #94a3b8 !important; }
       .text-greeting { color: #f8fafc !important; }
       .text-body { color: #94a3b8 !important; }
-      .invite-card { background-color: #0f172a !important; border-color: #a855f7 !important; }
-      .role-badge { background-color: rgba(168, 85, 247, 0.25) !important; color: #c084fc !important; }
+      .invite-card { background-color: #1e293b !important; border-color: #3b82f6 !important; }
+      .invite-title { color: #60a5fa !important; }
       .info-table td { border-bottom-color: #334155 !important; }
       .info-label { color: #94a3b8 !important; }
       .info-value { color: #ffffff !important; }
+      .note-box { background-color: #0f172a !important; border-left-color: #3b82f6 !important; color: #cbd5e1 !important; }
       .footer { color: #64748b !important; border-top-color: #334155 !important; }
     }
   </style>
@@ -52,36 +54,61 @@
   <div class="container">
     <div class="header">
       <div class="logo">
-        <img src="<%= locals.logo_url || 'https://res.cloudinary.com/m7fltb77/image/upload/v1788638860/world-portal-brand/e-embassy-logo.png' %>" alt="E-Embassy Console" style="height: 38px; width: auto; max-width: 220px; border: 0; display: inline-block; vertical-align: middle;" />
+        <img src="<%= locals.logo_url || 'https://thetradefactor.com/images/logo.png' %>" alt="E-Embassy" style="height: 38px; width: auto; max-width: 220px; border: 0; display: inline-block; vertical-align: middle;" />
       </div>
-      <h1 class="title">You're Invited!</h1>
-      <p class="subtitle">You have been invited to join the E-Embassy Console team.</p>
+      <h1 class="title">Appointment Invitation</h1>
+      <p class="subtitle">You have been invited for an appointment regarding your application.</p>
     </div>
 
     <div class="content">
-      <p class="text-greeting">Hello <%= recipient_name %>,</p>
+      <p class="text-greeting">Dear <%= recipient_name %>,</p>
       <p class="text-body">
-        An administrator has invited you to join the E-Embassy Console team as a <strong><%= role %></strong>.
+        An appointment has been scheduled for your application <strong><%= application_no %></strong> (<%= target_country %>). Please review the details below.
       </p>
 
       <div class="invite-card">
-        <div style="font-size: 12px; text-transform: uppercase; color: #6b21a8; font-weight: 600; margin-bottom: 8px;">Assigned System Role</div>
-        <div class="role-badge"><%= role %></div>
+        <div class="invite-title">📅 <%= purpose %></div>
+        <p style="font-size: 13px; color: #1e40af; margin-top: 6px;">Please arrive 15 minutes prior to your scheduled time.</p>
       </div>
 
       <table class="info-table">
         <tr>
-          <td class="info-label">Account Email</td>
-          <td class="info-value"><%= to_email %></td>
+          <td class="info-label">Application Reference</td>
+          <td class="info-value" style="font-family: monospace;"><%= application_no %></td>
         </tr>
+        <tr>
+          <td class="info-label">Purpose</td>
+          <td class="info-value"><%= purpose %></td>
+        </tr>
+        <tr>
+          <td class="info-label">Date</td>
+          <td class="info-value"><%= date %></td>
+        </tr>
+        <tr>
+          <td class="info-label">Time</td>
+          <td class="info-value"><%= time %></td>
+        </tr>
+        <tr>
+          <td class="info-label">Location</td>
+          <td class="info-value"><%= location %></td>
+        </tr>
+        <% if (locals.inviter_name || locals.inviter_email) { %>
         <tr>
           <td class="info-label">Invited By</td>
           <td class="info-value"><%= locals.inviter_name || inviter_email %></td>
         </tr>
+        <% } %>
       </table>
 
+      <% if (locals.note && note.trim()) { %>
+      <div class="note-box">
+        <strong>Important Note / Instructions:</strong>
+        <p style="margin: 6px 0 0 0;"><%= note %></p>
+      </div>
+      <% } %>
+
       <div class="btn-container">
-        <a href="<%= login_url %>" class="btn">Accept Invitation & Access Console</a>
+        <a href="<%= tracking_url %>" class="btn">View Application Status</a>
       </div>
     </div>
 

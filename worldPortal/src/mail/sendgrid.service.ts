@@ -26,6 +26,15 @@ export function formatReviewerName(nameOrEmail?: string): string {
     .join(' ');
 }
 
+export function formatAmountWithCommas(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined) return '0.00';
+  const num = typeof amount === 'number' ? amount : parseFloat(String(amount));
+  if (isNaN(num)) return '0.00';
+  const parts = num.toFixed(num % 1 === 0 ? 0 : 2).split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
 export interface SendCostEvaluatedEmailOptions {
   to: string;
   recipientName: string;
@@ -55,6 +64,7 @@ export interface SendPaymentConfirmedEmailOptions {
   amountPaid: number;
   balanceDue: number;
   paymentOption: string;
+  currency?: string;
 }
 
 export interface SendStatusUpdateEmailOptions {
@@ -75,12 +85,28 @@ export interface SendTeamInviteEmailOptions {
   inviterName?: string;
 }
 
+export interface SendApplicantInvitationEmailOptions {
+  to: string;
+  recipientName: string;
+  applicationNo: string;
+  targetCountry: string;
+  purpose: string;
+  date: string;
+  time: string;
+  location: string;
+  note?: string;
+  inviterEmail: string;
+  inviterName?: string;
+}
+
+
 @Injectable()
 export class SendGridService {
   private readonly logger = new Logger(SendGridService.name);
   private readonly fromEmail: string;
   private readonly fromName: string;
   private readonly frontendUrl: string;
+  private readonly emailLogoUrl: string;
   private readonly isConfigured: boolean = false;
 
   constructor(private readonly configService: ConfigService) {
@@ -100,6 +126,11 @@ export class SendGridService {
       process.env.FRONTEND_URL ||
       'https://thetradefactor.com';
     this.frontendUrl = rawFrontendUrl.replace(/\/+$/, '');
+
+    this.emailLogoUrl =
+      this.configService.get<string>('EMAIL_LOGO_URL') ||
+      process.env.EMAIL_LOGO_URL ||
+      'https://res.cloudinary.com/m7fltb77/image/upload/v1788638860/world-portal-brand/e-embassy-logo.png';
 
     if (apiKey) {
       sgMail.setApiKey(apiKey);
@@ -162,6 +193,8 @@ export class SendGridService {
       application_no: applicationNo,
       target_country: targetCountry,
       total_amount: totalAmount,
+      formatted_total_amount: formatAmountWithCommas(totalAmount),
+      formatted_installment_amount: formatAmountWithCommas(totalAmount / 2),
       currency: currency || 'USD',
       allow_installment: allowInstallment,
       evaluator_email: evaluatorEmail,
@@ -186,13 +219,16 @@ export class SendGridService {
    * 3. Payment Confirmed & In Review Email
    */
   async sendPaymentConfirmedEmail(options: SendPaymentConfirmedEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, amountPaid, balanceDue, paymentOption } = options;
+    const { to, recipientName, applicationNo, amountPaid, balanceDue, paymentOption, currency } = options;
 
     const data = {
       recipient_name: recipientName,
       application_no: applicationNo,
       amount_paid: amountPaid,
       balance_due: balanceDue,
+      currency: currency || 'USD',
+      formatted_amount_paid: formatAmountWithCommas(amountPaid),
+      formatted_balance_due: formatAmountWithCommas(balanceDue),
       payment_option: paymentOption,
       tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
       from_email: this.fromEmail,
@@ -298,6 +334,59 @@ export class SendGridService {
   }
 
   /**
+   * 7. Applicant Appointment Invitation Email
+   */
+  async sendApplicantInvitationEmail(
+    options: SendApplicantInvitationEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      targetCountry,
+      purpose,
+      date,
+      time,
+      location,
+      note,
+      inviterEmail,
+      inviterName,
+    } = options;
+
+    const formattedInviterName =
+      inviterName || formatReviewerName(inviterEmail);
+
+    const data = {
+      recipient_name: recipientName,
+      application_no: applicationNo,
+      target_country: targetCountry,
+      purpose,
+      date,
+      time,
+      location,
+      note: note || '',
+      inviter_email: inviterEmail,
+      inviter_name: formattedInviterName,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
+      from_email: this.fromEmail,
+      year: new Date().getFullYear(),
+    };
+
+    const html = await this.renderEjsTemplate(
+      'applicant-invitation.ejs',
+      data,
+    );
+
+    return this.dispatchMail({
+      to,
+      subject: `Appointment Invitation: ${purpose} - ${applicationNo}`,
+      html,
+      ref: `INVITE-APP-${applicationNo}`,
+    });
+  }
+
+
+  /**
    * 7. OTP Email Verification
    */
   async sendOtpEmail(to: string, otpCode: string): Promise<boolean> {
@@ -357,15 +446,20 @@ export class SendGridService {
   private async renderEjsTemplate(templateName: string, data: Record<string, any>): Promise<string> {
     try {
       const possiblePaths = [
-        path.join(__dirname, 'templates', templateName),
         path.join(process.cwd(), 'src', 'mail', 'templates', templateName),
+        path.join(__dirname, 'templates', templateName),
         path.join(process.cwd(), 'dist', 'mail', 'templates', templateName),
       ];
 
       let foundPath = possiblePaths.find((p) => fs.existsSync(p));
 
       if (foundPath) {
-        return await ejs.renderFile(foundPath, data);
+        return await ejs.renderFile(foundPath, {
+          formatAmount: formatAmountWithCommas,
+          logo_url: this.emailLogoUrl,
+          logo_light_url: 'https://res.cloudinary.com/m7fltb77/image/upload/v1788638868/world-portal-brand/e-embassy-logo-light.png',
+          ...data,
+        });
       }
 
       this.logger.warn(`EJS template ${templateName} not found on disk, using inline fallback`);

@@ -25,7 +25,9 @@ import {
 import { toast } from "@/components/ui/toaster";
 import { applications as copy } from "@/content/admin";
 import { useEvaluateApplication } from "@/features/applications/api/use-evaluate-application";
+import { useEvaluatePassport } from "@/features/passports/api/use-evaluate-passport";
 import { ApiError } from "@/lib/api-client";
+import { formatWithCommas } from "@/lib/utils";
 import { evaluateVisaFormSchema, type EvaluateVisaInput } from "@/validations/admin";
 
 const CURRENCIES = [
@@ -43,13 +45,17 @@ export function EvaluateCostForm({
   totalAmount,
   currency = "USD",
   allowInstallment,
+  type = "visa",
 }: {
   id: string;
   totalAmount: number;
   currency?: string;
   allowInstallment: boolean;
+  type?: "visa" | "passport";
 }) {
-  const evaluate = useEvaluateApplication(id);
+  const evaluateVisa = useEvaluateApplication(id);
+  const evaluatePassport = useEvaluatePassport(id);
+  const evaluate = type === "passport" ? evaluatePassport : evaluateVisa;
   const form = useForm<EvaluateVisaInput>({
     resolver: zodResolver(evaluateVisaFormSchema),
     defaultValues: { totalAmount, currency: currency || "USD", allowInstallment },
@@ -106,21 +112,26 @@ export function EvaluateCostForm({
                 <FormLabel required>{copy.detail.amountLabel}</FormLabel>
                 <FormControl>
                   <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
+                    type="text"
                     inputMode="decimal"
+                    placeholder="0.00"
                     name={field.name}
                     ref={field.ref}
                     onBlur={field.onBlur}
-                    value={Number.isFinite(field.value) ? field.value : ""}
-                    onChange={(event) =>
-                      field.onChange(
-                        event.target.value === ""
-                          ? Number.NaN
-                          : event.target.valueAsNumber,
-                      )
+                    value={
+                      Number.isFinite(field.value) ? formatWithCommas(field.value) : ""
                     }
+                    onChange={(event) => {
+                      const raw = event.target.value.replace(/,/g, "");
+                      if (raw === "") {
+                        field.onChange(Number.NaN);
+                        return;
+                      }
+                      if (/^\d*\.?\d*$/.test(raw)) {
+                        const num = parseFloat(raw);
+                        field.onChange(isNaN(num) ? Number.NaN : num);
+                      }
+                    }}
                     className="font-mono text-sm font-semibold"
                   />
                 </FormControl>

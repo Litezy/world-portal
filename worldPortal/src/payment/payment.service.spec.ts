@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { VisaDocumentationService } from '../visa-documentation/visa-documentation.service';
+import { PassportApplicationService } from '../passport-application/passport-application.service';
 import {
   PaymentOption,
   PaymentTransactionStatus,
@@ -47,6 +48,11 @@ describe('PaymentService', () => {
   const mockFindVisaApplicationById = jest.fn();
   const mockHandlePaymentConfirmed = jest.fn();
 
+  const mockPassportAppService: Partial<PassportApplicationService> = {
+    findApplicationById: jest.fn(),
+    handlePaymentConfirmed: jest.fn(),
+  };
+
   const mockPaymentTransactionCreate = jest.fn();
   const mockPaymentTransactionFindUnique = jest.fn();
   const mockPaymentTransactionUpdate = jest.fn();
@@ -84,6 +90,7 @@ describe('PaymentService', () => {
         PaymentService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: VisaDocumentationService, useValue: mockVisaDocService },
+        { provide: PassportApplicationService, useValue: mockPassportAppService },
       ],
     }).compile();
 
