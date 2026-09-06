@@ -22,6 +22,8 @@ import { ApplicationTimeline } from "@/features/applications/components/applicat
 import { ConfirmBankPaymentModal } from "@/features/applications/components/confirm-bank-payment-modal";
 import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
 import { EvaluateCostForm } from "@/features/applications/components/evaluate-cost-form";
+import { InviteApplicantModal } from "@/features/applications/components/invite-applicant-modal";
+
 
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -190,11 +192,19 @@ export function ApplicationDetail({ id }: { id: string }) {
             currency={application.currency}
             allowInstallment={application.allowInstallment}
           />
+
+          <InviteApplicantModal
+            id={id}
+            applicantName={application.applicant.name}
+            applicantEmail={application.applicant.email}
+            status={application.status}
+          />
         </div>
       </div>
     </div>
   );
 }
+
 
 function DetailSkeleton() {
   return (

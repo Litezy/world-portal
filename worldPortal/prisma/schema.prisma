@@ -69,6 +69,7 @@ enum BookletType {
 
 enum PassportApplicationStatus {
   SUBMITTED
+  EVALUATED
   UNDER_REVIEW
   APPROVED
   REJECTED
@@ -210,6 +211,17 @@ model PassportApplication {
   ninDocumentUrl      String
   passportPhotoUrl    String
 
+  // Admin Cost Evaluation & Payment Allocation
+  totalAmount           Decimal?       @db.Decimal(10, 2)
+  currency              String         @default("USD")
+  amountPaid            Decimal        @default(0.00) @db.Decimal(10, 2)
+  balanceDue            Decimal        @default(0.00) @db.Decimal(10, 2)
+  allowInstallment      Boolean        @default(false)
+  selectedPaymentOption PaymentOption?
+  paymentStatus         PaymentStatus  @default(PENDING_EVALUATION)
+  evaluatedBy           String?
+  evaluatedAt           DateTime?
+
   // Processing Lifecycle & Audit
   status            PassportApplicationStatus @default(SUBMITTED)
   verificationNotes String?
@@ -219,10 +231,12 @@ model PassportApplication {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  profile Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  profile             Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  paymentTransactions PaymentTransaction[]
 
   @@index([profileId])
   @@index([status])
+  @@index([paymentStatus])
   @@index([ninNumber])
   @@index([applicationNo])
   @@index([email])
@@ -253,25 +267,28 @@ model PaymentConfig {
 }
 
 model PaymentTransaction {
-  id                  String                   @id @default(uuid())
-  transactionRef      String                   @unique
-  visaDocumentationId String?
-  profileId           String?
-  amount              Decimal                  @db.Decimal(10, 2)
-  paymentOption       PaymentOption
-  status              PaymentTransactionStatus @default(INITIATED)
-  paymentMethod       String?                  @default("CARD")
-  initiatedBy         String
-  confirmedAt         DateTime?
-  refundedAt          DateTime?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  id                    String                   @id @default(uuid())
+  transactionRef        String                   @unique
+  visaDocumentationId   String?
+  passportApplicationId String?
+  profileId             String?
+  amount                Decimal                  @db.Decimal(10, 2)
+  paymentOption         PaymentOption
+  status                PaymentTransactionStatus @default(INITIATED)
+  paymentMethod         String?                  @default("CARD")
+  initiatedBy           String
+  confirmedAt           DateTime?
+  refundedAt            DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
 
-  visaDocumentation VisaDocumentation? @relation(fields: [visaDocumentationId], references: [id], onDelete: SetNull)
-  profile           Profile?           @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  refunds           PaymentRefund[]
+  visaDocumentation   VisaDocumentation?   @relation(fields: [visaDocumentationId], references: [id], onDelete: SetNull)
+  passportApplication PassportApplication? @relation(fields: [passportApplicationId], references: [id], onDelete: SetNull)
+  profile             Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  refunds             PaymentRefund[]
 
   @@index([visaDocumentationId])
+  @@index([passportApplicationId])
   @@index([profileId])
   @@index([status])
   @@index([transactionRef])

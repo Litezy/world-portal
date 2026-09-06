@@ -12,10 +12,15 @@ import {
   PassportApplicationStatus,
   PassportValidity,
   BookletType,
+  PaymentStatus,
+  PaymentOption,
   Prisma,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
-import { SendGridService } from 'src/mail/sendgrid.service';
+import { SendGridService } from '../mail/sendgrid.service';
+import { OtpService } from '../otp/otp.service';
+import { InviteApplicantDto } from '../visa-documentation/dto/invite-applicant.dto';
+import { EvaluateVisaCostDto } from '../visa-documentation/dto/evaluate-visa-cost.dto';
 
 @Injectable()
 export class PassportApplicationService {
@@ -24,6 +29,7 @@ export class PassportApplicationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sendGridService: SendGridService,
+    private readonly otpService: OtpService,
   ) {}
 
 
@@ -31,9 +37,19 @@ export class PassportApplicationService {
     dto: CreatePassportApplicationDto,
     creatorIdentifier?: string,
   ) {
+    if (!this.otpService.isEmailVerified(dto.email)) {
+      this.logger.warn(
+        `Attempted passport application submission with unverified email=${dto.email}`,
+      );
+      throw new BadRequestException(
+        `Email address '${dto.email}' has not been verified via OTP. Please verify your email before submitting.`,
+      );
+    }
+
     const maskedNin = dto.ninNumber
       ? dto.ninNumber.replace(/^(.{2}).*(.{2})$/, '$1****$2')
       : 'N/A';
+
 
     this.logger.log(
       `Creating passport application for applicant email=${dto.email}, category=${dto.passportCategory}, nin=${maskedNin}`,
@@ -217,6 +233,183 @@ export class PassportApplicationService {
     return updated;
   }
 
+  async inviteApplicant(
+    id: string,
+    dto: InviteApplicantDto,
+    inviterEmail: string,
+  ) {
+    const record = await this.findApplicationById(id);
+    const inviterName = await this.resolveReviewerDisplayName(inviterEmail);
+
+    if (
+      record.status !== PassportApplicationStatus.UNDER_REVIEW &&
+      record.status !== PassportApplicationStatus.APPROVED
+    ) {
+      throw new BadRequestException(
+        `Appointment invitations can only be issued for applications under review or approved. Current status is ${record.status}.`,
+      );
+    }
+
+    const updated = await this.prisma.passportApplication.update({
+      where: { id: record.id },
+      data: {
+        verificationNotes: `[INVITATION SENT ${new Date().toISOString().split('T')[0]}] Purpose: ${dto.purpose} on ${dto.date} at ${dto.time} (${dto.location})${dto.note ? ` - Note: ${dto.note}` : ''}${record.verificationNotes ? `\n\n${record.verificationNotes}` : ''}`,
+      },
+    });
+
+    this.sendGridService
+      .sendApplicantInvitationEmail({
+        to: record.email,
+        recipientName: `${record.firstName} ${record.surname}`,
+        applicationNo: record.applicationNo,
+        targetCountry: 'Nigeria (Passport)',
+        purpose: dto.purpose,
+        date: dto.date,
+        time: dto.time,
+        location: dto.location,
+        note: dto.note,
+        inviterEmail,
+        inviterName,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `SendGrid passport applicant invitation email error: ${err?.message}`,
+        );
+      });
+
+    return updated;
+  }
+
+  async evaluateCost(
+    id: string,
+    dto: EvaluateVisaCostDto,
+    evaluatorEmail: string,
+  ) {
+    const record = await this.findApplicationById(id);
+    const evaluatorName = await this.resolveReviewerDisplayName(evaluatorEmail);
+
+    if (
+      record.status !== PassportApplicationStatus.SUBMITTED &&
+      record.status !== PassportApplicationStatus.EVALUATED
+    ) {
+      throw new BadRequestException(
+        `Cost evaluation can only be updated for applications in SUBMITTED or EVALUATED status. Current status is ${record.status}.`,
+      );
+    }
+
+    const totalAmount = new Prisma.Decimal(dto.totalAmount);
+    const currentAmountPaid = record.amountPaid || new Prisma.Decimal(0);
+    const balanceDue = Prisma.Decimal.max(
+      new Prisma.Decimal(0),
+      totalAmount.sub(currentAmountPaid),
+    );
+
+    let paymentStatus: PaymentStatus = PaymentStatus.AWAITING_PAYMENT;
+    if (currentAmountPaid.gte(totalAmount)) {
+      paymentStatus = PaymentStatus.FULLY_PAID;
+    } else if (currentAmountPaid.gt(0)) {
+      paymentStatus = PaymentStatus.PARTIALLY_PAID;
+    }
+
+    this.logger.log(
+      `Evaluating cost for passport application id=${id}, totalAmount=${dto.totalAmount}, currency=${dto.currency || 'USD'}, allowInstallment=${dto.allowInstallment ?? false} by evaluator=${evaluatorEmail} (${evaluatorName})`,
+    );
+
+    const updated = await this.prisma.passportApplication.update({
+      where: { id: record.id },
+      data: {
+        totalAmount,
+        currency: dto.currency || 'USD',
+        balanceDue,
+        allowInstallment: dto.allowInstallment ?? false,
+        paymentStatus,
+        status: PassportApplicationStatus.EVALUATED,
+        evaluatedBy: evaluatorName,
+        evaluatedAt: new Date(),
+      },
+    });
+
+    try {
+      await this.sendGridService.sendCostEvaluatedEmail({
+        to: updated.email,
+        recipientName: `${updated.firstName} ${updated.surname}`,
+        applicationNo: updated.applicationNo,
+        targetCountry: 'Nigeria (Passport)',
+        totalAmount: Number(updated.totalAmount),
+        currency: updated.currency,
+        allowInstallment: updated.allowInstallment,
+        evaluatorEmail,
+        evaluatorName,
+        bankAccounts: [],
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `SendGrid passport cost evaluation email error for applicationNo=${updated.applicationNo}: ${err?.message}`,
+      );
+    }
+
+    return updated;
+  }
+
+  async handlePaymentConfirmed(
+    passportId: string,
+    amount: Prisma.Decimal,
+    paymentOption: PaymentOption,
+  ) {
+    const record = await this.findApplicationById(passportId);
+
+    const currentTotal = Number(record.totalAmount || 0);
+    const currentPaid = Number(record.amountPaid || 0);
+    const addedAmount = Number(amount);
+
+    const newAmountPaid = currentPaid + addedAmount;
+    const newBalanceDue = Math.max(0, currentTotal - newAmountPaid);
+
+    let newPaymentStatus: PaymentStatus;
+    if (newBalanceDue === 0 || newAmountPaid >= currentTotal) {
+      newPaymentStatus = PaymentStatus.FULLY_PAID;
+    } else {
+      newPaymentStatus = PaymentStatus.PARTIALLY_PAID;
+    }
+
+    let newStatus = record.status;
+    if (
+      record.status === PassportApplicationStatus.SUBMITTED ||
+      record.status === PassportApplicationStatus.EVALUATED
+    ) {
+      newStatus = PassportApplicationStatus.UNDER_REVIEW;
+    }
+
+    const updated = await this.prisma.passportApplication.update({
+      where: { id: record.id },
+      data: {
+        amountPaid: new Prisma.Decimal(newAmountPaid),
+        balanceDue: new Prisma.Decimal(newBalanceDue),
+        paymentStatus: newPaymentStatus,
+        status: newStatus,
+        selectedPaymentOption: paymentOption,
+      },
+    });
+
+    try {
+      await this.sendGridService.sendPaymentConfirmedEmail({
+        to: updated.email,
+        recipientName: `${updated.firstName} ${updated.surname}`,
+        applicationNo: updated.applicationNo,
+        amountPaid: Number(amount),
+        balanceDue: Number(updated.balanceDue),
+        paymentOption,
+        currency: updated.currency,
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `SendGrid passport payment confirmation email error for applicationNo=${updated.applicationNo}: ${err?.message}`,
+      );
+    }
+
+    return updated;
+  }
+
 
   async findAllApplications(query: QueryPassportApplicationDto) {
     const where: Prisma.PassportApplicationWhereInput = {};
@@ -250,11 +443,17 @@ export class PassportApplicationService {
     });
   }
 
-  async findApplicationById(idOrAppNo: string) {
+  async findApplicationById(idOrAppNo: string, email?: string) {
+    const where: Prisma.PassportApplicationWhereInput = {
+      OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
+    };
+
+    if (email && email.trim()) {
+      where.email = { equals: email.trim(), mode: 'insensitive' };
+    }
+
     const record = await this.prisma.passportApplication.findFirst({
-      where: {
-        OR: [{ id: idOrAppNo }, { applicationNo: idOrAppNo }],
-      },
+      where,
       include: {
         profile: {
           select: {
@@ -270,7 +469,7 @@ export class PassportApplicationService {
 
     if (!record) {
       this.logger.warn(
-        `Passport application not found for identifier=${idOrAppNo}`,
+        `Passport application not found for identifier=${idOrAppNo}${email ? ` and email=${email}` : ''}`,
       );
       throw new NotFoundException(
         `Passport application record with identifier '${idOrAppNo}' not found.`,

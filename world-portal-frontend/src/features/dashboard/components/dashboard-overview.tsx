@@ -16,7 +16,7 @@ import { BarList } from "@/features/dashboard/components/bar-list";
 import { ShareBar } from "@/features/dashboard/components/share-bar";
 import { StatCard } from "@/features/dashboard/components/stat-card";
 import { WeeklyChart } from "@/features/dashboard/components/weekly-chart";
-import { formatCurrency, formatRelative } from "@/lib/utils";
+import { formatCurrency, formatMultiCurrencyInline, formatRelative } from "@/lib/utils";
 
 export function DashboardOverview() {
   const { data, isPending, isError, error, refetch } = useDashboard();
@@ -62,8 +62,16 @@ export function DashboardOverview() {
         <StatCard
           icon={TrendingUp}
           label={overview.stats.revenue}
-          value={formatCurrency(stats.revenue.collected, stats.revenue.currency)}
-          hint={`${formatCurrency(stats.revenue.outstanding, stats.revenue.currency)} outstanding`}
+          value={formatMultiCurrencyInline(
+            stats.revenue.revenueByCurrency,
+            stats.revenue.currency,
+            stats.revenue.collected,
+          )}
+          hint={`${formatMultiCurrencyInline(
+            stats.revenue.outstandingByCurrency,
+            stats.revenue.currency,
+            stats.revenue.outstanding,
+          )} outstanding`}
         />
       </div>
 

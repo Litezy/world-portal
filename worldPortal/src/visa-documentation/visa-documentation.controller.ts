@@ -21,6 +21,8 @@ import { CreateVisaDocumentationDto } from './dto/create-visa-documentation.dto'
 import { EvaluateVisaCostDto } from './dto/evaluate-visa-cost.dto';
 import { UpdateVisaStatusDto } from './dto/update-visa-status.dto';
 import { QueryVisaDocumentationDto } from './dto/query-visa-documentation.dto';
+import { InviteApplicantDto } from './dto/invite-applicant.dto';
+
 import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
@@ -134,4 +136,29 @@ export class VisaDocumentationController {
       typeof user?.email === 'string' ? user.email : 'staff@worldportal.com';
     return this.visaDocumentationService.updateStatus(id, dto, reviewer);
   }
+
+  @Post(':id/invite')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'Invite applicant for appointment / biometrics / interview',
+    description:
+      'Dispatches an appointment invitation email to applicant with purpose, date, time, location, and optional instructions. Requires UNDER_REVIEW status or later.',
+  })
+  @ApiParam({ name: 'id', description: 'Visa application ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Applicant invitation email dispatched and notes updated.',
+  })
+  async inviteApplicant(
+    @Param('id') id: string,
+    @Body() dto: InviteApplicantDto,
+    @CurrentUser() user: { email?: string } | undefined,
+  ) {
+    const inviter =
+      typeof user?.email === 'string' ? user.email : 'admin@worldportal.com';
+    return this.visaDocumentationService.inviteApplicant(id, dto, inviter);
+  }
 }
+
