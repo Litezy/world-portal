@@ -15,6 +15,14 @@ const clientSchema = z.object({
   /** World Portal API origin, including its `/api` prefix. */
   NEXT_PUBLIC_API_URL: z.url().optional(),
   NEXT_PUBLIC_GA_ID: z.string().optional(),
+  /**
+   * WorldSpace — the sister social platform under the same parent (Tsion).
+   * Public origin only: it is where a post card sends the visitor.
+   *
+   * The default is an obvious placeholder, not a guess at the real domain.
+   * Set this to the real WorldSpace origin before launch.
+   */
+  NEXT_PUBLIC_WORLDSPACE_URL: z.url().default("https://worldspace.example"),
 });
 
 const serverSchema = z
@@ -34,6 +42,13 @@ const serverSchema = z
     ADMIN_EMAIL: z.email().default("admin@worldportal.travel"),
     ADMIN_PASSWORD: z.string().min(8).default(DEV_ADMIN_PASSWORD),
     SESSION_SECRET: z.string().min(16).default(DEV_SESSION_SECRET),
+    /**
+     * The future WorldSpace posts API origin. Optional on purpose: absent
+     * means the feed falls back to the curated placeholder posts, which is a
+     * supported state, not a misconfiguration. Server-side only so any key the
+     * API eventually needs never reaches the browser.
+     */
+    WORLDSPACE_API_URL: z.url().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
@@ -60,6 +75,7 @@ const clientEnv = clientSchema.safeParse({
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
+  NEXT_PUBLIC_WORLDSPACE_URL: process.env.NEXT_PUBLIC_WORLDSPACE_URL,
 });
 
 if (!clientEnv.success) {

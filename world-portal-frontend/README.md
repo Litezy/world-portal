@@ -21,6 +21,17 @@ The page sells three things, each with its own section and its own CTA:
 **How It Works** sits between them and describes the one process behind all
 three. **Contact** routes on which service you pick.
 
+## The hero
+
+Two columns over the hero photograph: the pitch on the left — badge, two-tone
+heading, lead paragraph and the two CTAs — with a destination forecast card at
+the bottom right. The photograph carries a displacement shader; nothing else in
+the hero is WebGL.
+
+**That card is placeholder copy, not a weather feed.** It reads from
+`hero.forecast` in `src/content/landing.ts` — there is no weather API here and
+the numbers never refresh. Reword it like any other line on the page.
+
 ## Quick start
 
 ```bash
@@ -34,6 +45,9 @@ pnpm dev
 | `/`                   | The landing page — every section, in reading order |
 | `/apply`              | The visa application form                          |
 | `/track`              | Track an application by reference                  |
+| `/start`              | Trip planner — origin, destination, what you hold  |
+| `/passport`           | Passport enquiry                                   |
+| `/hire`               | Hire a pro at your destination                     |
 | `/admin/login`        | Console sign-in                                    |
 | `/admin`              | Dashboard — KPIs, activity, pipeline               |
 | `/admin/enquiries`    | Enquiry list and detail                            |
@@ -69,6 +83,7 @@ First Playwright run on a fresh machine needs browsers:
 src/
 ├─ app/
 │  ├─ (site)/             # The page — shares the header/footer layout
+│  ├─ (app)/              # Standalone pages — apply, start, passport, hire
 │  ├─ (admin)/            # The console — login + the signed-in shell
 │  ├─ api/                # Route handlers (booking, health, admin)
 │  ├─ layout.tsx          # Root layout: fonts, metadata, providers
@@ -149,25 +164,22 @@ Two libraries, each doing the job it is actually good at.
 | ---------------- | --------------------------------------------------------- |
 | Every image      | `ParallaxImage` — drifts against the scroll               |
 | Section content  | `Reveal` — slides up on entry, optionally staggered       |
-| Hero             | Intro timeline, then the wordmark drifts                  |
+| Hero             | Intro timeline: copy column staggers, then the card       |
 | How It Works     | Per-step arrival + a rail that fills with scroll progress |
 | Flights & Hotels | Two rows sliding opposite ways, scrubbed to scroll        |
 | FAQ              | Height, word cascade and the brand rule wipe              |
 | Logo             | The plane's departure and return loop                     |
 
-**Three.js** does two things, both in the hero:
+**Three.js** does two things:
 
 - `hero-webgl.tsx` — a scroll- and pointer-reactive displacement shader over
   the hero photograph.
-- `webgl-wordmark.tsx` — the oversized DISCOVER. The word is rasterised into a
-  2D canvas using the real Playfair webfont, then revealed through a shader:
-  a bottom-up wipe, liquid displacement that is violent at the wipe front and
-  settles to an idle drift, and a chromatic split that scales with it.
+- `journey-webgl.tsx` — the route trail drawn behind How It Works.
 
 Both are dynamically imported, mounted on idle, paused off-screen, and skipped
-without WebGL. The wordmark renders twice on purpose — a real text node that is
-always correct, plus the WebGL plate that fades over it once its texture is
-ready — so no-WebGL, reduced motion and pre-hydration all show real type.
+without WebGL. Everything they draw is decoration layered over markup that is
+already correct, so no-WebGL, reduced motion and pre-hydration all render the
+real page.
 
 Images deliberately stay real `<img>` tags rather than WebGL planes: parallax
 via transforms is GPU-cheap and keeps LCP, SEO and alt text intact, which
@@ -290,6 +302,63 @@ order and validated for colourblind separation, lightness band and contrast in
 both modes. Slot 1 is the brand ramp, which sits below 3:1 on white — so every
 chart labels its values, and status is always a tone plus a word, never colour
 on its own.
+
+## Hire a pro
+
+`/hire` lists vetted professionals at the destination. The data is
+`src/content/professionals.ts`; portraits live in `public/images/pros`, one
+`<id>.jpg` per listing.
+
+> **The portraits are stock photographs standing in for the real
+> professionals.** Replace each one with a photo of the actual person, taken or
+> supplied with their consent, before listing anyone genuinely bookable.
+
+## Posts from WorldSpace
+
+Between Experiences and Contact the page shows a wall of posts from
+**WorldSpace**, the sister social platform under the same parent company
+(Tsion), where travellers post about trips they have taken. Clicking a post
+leaves for WorldSpace in a new tab — the cards are outbound links, not a
+lightbox.
+
+> **The posts are placeholders.** WorldSpace has no public API yet, so
+> `getWorldSpaceFeed()` in `src/server/worldspace/client.ts` serves the curated
+> fixtures in `src/features/worldspace/fixtures.ts` — invented people, captions
+> and permalinks over stock photographs already in `public/images`. Set
+> `WORLDSPACE_API_URL` and the same function fetches the live feed instead;
+> nothing else changes. It never throws and never returns nothing, so a
+> WorldSpace outage costs a section of sample photos rather than the home page,
+> and the section says so on its face while the posts are placeholders.
+
+## The trip basket
+
+Anything with a price can be put in a basket that follows the traveller across
+the site — today that is a hired professional, and the same store already types
+flights, stays, cars, attractions, visas and passports.
+
+```
+src/features/basket/
+├─ store.ts                     # zustand + persist, generic over item type
+└─ components/
+   ├─ basket-button.tsx         # header entry point + count badge
+   └─ basket-drawer.tsx         # line items, running total, "turn this into a trip"
+```
+
+Add a line from anywhere:
+
+```ts
+useBasketStore.getState().add({
+  id: `flight:${offer.id}`, // namespaced — features cannot collide
+  type: "flight",
+  title: "LOS → NRT · Nov 4",
+  price: 940, // null when it is quoted after review
+});
+```
+
+The drawer, the total and the header badge pick it up with no further work.
+It persists to `localStorage`, degrading to memory when that is unavailable
+(SSR, tests, Safari private mode), and it is code-split — the chunk loads the
+first time someone opens the basket.
 
 ## Environment variables
 

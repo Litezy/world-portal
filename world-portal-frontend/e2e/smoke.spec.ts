@@ -73,10 +73,24 @@ test.describe("landing page", () => {
     await page.goto("/");
     // The reveal starts from autoAlpha:0 — this is the regression guard that it
     // always finishes, whatever the ticker does.
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByText(/we sort out the passport/i)).toBeVisible();
     await expect(
       page.getByRole("link", { name: /start my trip/i }).first(),
     ).toBeVisible();
+  });
+
+  test("the hero forecast card renders beside the copy", async ({ page }) => {
+    await page.goto("/");
+    // Found by structure rather than by copy: the card holds placeholder data
+    // that will be reworded, but it is revealed from autoAlpha:0 like the copy
+    // column and the tween must always finish.
+    const card = page.locator("[data-hero-forecast]");
+    await expect(card).toBeVisible();
+    // The destination and its temperature are the two things the card exists to
+    // show. Matched loosely so a copy edit does not fail the suite.
+    await expect(card).toContainText(/mal[eé]/i);
+    await expect(card).toContainText(/\d+\s*°/);
   });
 
   test("header nav jumps to the visas section", async ({ page }) => {

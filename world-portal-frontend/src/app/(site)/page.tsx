@@ -8,6 +8,7 @@ import { Journey } from "@/components/sections/journey";
 import { Passports } from "@/components/sections/passports";
 import { Visas } from "@/components/sections/visas";
 import { WhyUs } from "@/components/sections/why-us";
+import { WorldSpace } from "@/components/sections/worldspace";
 import { buildMetadata } from "@/lib/seo";
 
 // Parked, not deleted — the components still live in src/components/sections.
@@ -35,6 +36,9 @@ export default function HomePage() {
       {/* <Packages /> */}
       {/* <Testimonials /> */}
       <Experiences />
+
+      {/* Real trips posted on WorldSpace, our sister platform */}
+      <WorldSpace />
 
       <Contact />
       <Faq />

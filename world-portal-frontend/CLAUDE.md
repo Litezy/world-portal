@@ -30,6 +30,7 @@ out in `app/(site)/page.tsx`.
 | `/`      | `(site)`  | overlay, scrolls away with hero |
 | `/apply` | `(app)`   | solid sticky ink bar            |
 | `/track` | `(app)`   | solid sticky ink bar            |
+| `/hire`  | `(app)`   | solid sticky ink bar            |
 | `/admin` | `(admin)` | console shell — ink sidebar     |
 
 `SiteHeader` takes `variant="overlay" | "solid"`. The overlay variant's type is
@@ -127,6 +128,97 @@ same two-tone headings — a console, not a second design language.
 - **List state lives in the URL** (`useListParams`) so a filtered view can be
   shared and survives a refresh.
 
+## Hiring a pro, and the basket
+
+`/hire` lists vetted professionals at the destination — photographers, chefs,
+barbers, interpreters, fixers. `src/content/professionals.ts` is the data;
+`HireBrowser` filters it; a card opens `ProModal` with the full profile.
+
+The basket (`src/features/basket/store.ts`) is deliberately **generic**, not a
+"hired pros" list:
+
+```ts
+type BasketItemType =
+  "pro" | "flight" | "stay" | "car" | "attraction" | "visa" | "passport";
+```
+
+Only `pro` can be added today. When flights and stays open, they add a line with
+their own `type` and the drawer, the total and the header count all work with no
+change. Ids are namespaced (`pro:kenji-watanabe`) so two features can never
+collide, and adding an existing id **replaces** rather than duplicates.
+
+- `price: null` means "quoted after review". `basketTotal` skips those rather
+  than producing `NaN`, and the drawer says the figure will change.
+- Persistence is `localStorage` via zustand `persist`, behind `safeStorage()` —
+  it is absent during SSR and in tests, and merely touching it throws in
+  Safari's private mode. The basket falls back to memory rather than crashing.
+- Anything reading the store must gate on `useMounted()`. The store rehydrates
+  after mount, so painting a count during SSR flashes the wrong number.
+- The drawer is `next/dynamic`, mounted only once the basket is first opened.
+  It sits in the header on every page, and the landing page already has a
+  Three.js hero competing for the main thread — pulling vaul and the whole
+  line-item UI into the first bundle delayed hydration enough that the FAQ
+  accordion was still dead to clicks. Keep it lazy.
+
+**The portraits in `public/images/pros` are stock photographs** — Unsplash
+models, cast one per listing to match the name, city and trade. They are
+placeholders exactly like the names and the rates. Before this page lists
+anyone genuinely bookable, swap in a photograph of that person, taken or
+supplied with their consent: a stranger's face on a real, chargeable listing is
+the one thing here that is not merely placeholder data. `photo` is optional and
+`ProAvatar` falls back to a hashed monogram tile without it, so a listing with
+no cleared photograph still renders. A unit test asserts every `photo` path
+resolves to a file, because a typo'd slug is otherwise a silently broken image.
+
+## WorldSpace — other travellers' posts on the landing page
+
+WorldSpace is the sister platform under the same parent company (Tsion): a
+social feed where travellers post about the trips they have taken. The section
+between Experiences and Contact borrows a wall of those posts as evidence that
+people actually go. Every card is an outbound link that opens the post on
+WorldSpace — the section hands the visitor to the other product rather than
+trying to keep them here, so do not build a lightbox or a detail route for it.
+
+**There is no WorldSpace API yet.** The whole feature hangs off one seam,
+`getWorldSpaceFeed()` in `src/server/worldspace/client.ts`. With
+`WORLDSPACE_API_URL` unset it serves the curated posts in
+`src/features/worldspace/fixtures.ts`; set it and it fetches the live feed.
+Nothing else changes — not the section, not the cards, not the route handler.
+The zod schema in that file is the contract with a service nobody has written
+yet, so it is the thing that must be reconciled with the real payload. Adapt it
+_there_; never widen `WorldSpacePost`, which several places are written against.
+
+**The adapter never throws and never returns an empty feed.** That is a
+decision, not an oversight. It renders on the landing page, so an unreachable
+WorldSpace, a 500, or a payload that has drifted would otherwise take down
+E-Embassy's home page for the sake of a marketing section. Every failure path
+warns to the server log and falls back to the fixtures. Do not "improve" it
+into a thrown error or an empty state.
+
+`feed.source` (`"live" | "placeholder"`) rides out to the section root as
+`data-worldspace-source`, and the placeholder notice is rendered from it — so
+the page can never quietly present sample posts as a real feed. That attribute
+and `data-worldspace-post` on the cards are what `e2e/worldspace.spec.ts`
+locates by; the copy is expected to be rewritten and is not asserted on.
+
+**The photographs are stock images already in this repo, and the people are
+invented** — the names, handles, captions and like counts are made up, exactly
+like the portraits in `public/images/pros` above, and under the same standing
+rule. Before this section shows anything presented as a real person's post, it
+must _be_ a real post: the live feed, that person's own photograph, their own
+permalink. A unit test asserts every `imageUrl` and every non-null `avatarUrl`
+resolves to a file, because a typo'd path is a silently broken image and this
+section is nothing but images.
+
+`src/app/api/worldspace/posts/route.ts` is a seam, not dead code. The section
+is a Server Component and calls the adapter directly, but a client-side "load
+more" needs a same-origin endpoint, and the day WorldSpace requires a key that
+key has to stay off the browser — the same BFF rule as the admin console.
+
+Every card links to another origin with `target="_blank"` and
+`rel="noopener noreferrer"`. Without `noopener` the opened tab can reach back
+through `window.opener`, and there is no reason to hand another origin that.
+
 ## Non-negotiables
 
 - **The app is light-only and forces it.** `ThemeProvider` sets
@@ -144,8 +236,9 @@ same two-tone headings — a console, not a second design language.
 - **Copy lives in `src/content`**, not in components — `landing.ts` for the
   site, `admin.ts` for the console (including every status label).
 - **Server Components by default.** `"use client"` only where it is needed —
-  the header, hero, journey, flights-hotels, FAQ, logo, and the motion
-  primitives.
+  the header, hero, journey, flights-hotels, FAQ, and the motion primitives.
+  The logo used to be one and no longer is — its idle animation was removed,
+  and with the hooks went the directive.
 - **One schema per form.** The zod schema in `src/validations` is used by both
   the client form and the API route.
 - **`cn()` for every className.**
@@ -180,6 +273,29 @@ JPEG entry can refresh while the **AVIF** one stays stale — and browsers ask f
 AVIF. The result is maddening: `curl` returns the new picture, the page shows
 the old one, and nothing looks broken. `rm -rf .next/cache` is not enough with a
 server running; stop every dev server, `rm -rf .next`, then start one.
+
+## The hero is two columns, and the forecast card is not a feed
+
+The hero was one centred column beneath an oversized WebGL EXPLORE. It is now
+side by side: the copy column on the left — badge, a two-tone `SectionHeading`
+`h1`, the lead, the two CTAs — carrying `data-hero-stack`, whose children GSAP
+staggers; and `HeroForecastCard` (`sections/hero-forecast-card.tsx`) at the
+bottom right. `HeroWebgl`, the displacement shader over the photograph, stays.
+The wordmark shader does not, so the hero now has **one** canvas rather than
+two; `e2e/motion.spec.ts` asserts that count, because a second one reappearing
+means a layer got mounted that nobody meant to ship.
+
+**`hero.forecast` is static copy in `src/content/landing.ts`, not weather.**
+There is no weather API behind this app and the numbers never refresh — the
+place, the temperature, the three metrics and the five-day strip are all
+placeholder lines, edited exactly like the rest of the copy. Do not wire the
+card to a fetch, a hook or an `/api` route that does not exist, and do not
+describe it anywhere as live.
+
+The card is revealed from `autoAlpha: 0`, so the usual rule binds it: it must
+already be correct in its final state, because reduced motion and a hidden tab
+both mean the tween never runs. Its root carries `data-hero-forecast` — that is
+how the e2e guard finds it, so keep the attribute if you restyle the card.
 
 ## The journey panel is layered, not a single gradient
 
@@ -248,6 +364,8 @@ anchor has just moved.
 | A backend call the console needs | `src/server/data/store.ts`              |
 | Copy or an image reference       | `src/content/landing.ts`                |
 | A query or mutation              | `src/features/<feature>/api`            |
+| Something bookable, with a price | a `BasketItem` — see the basket section |
+| Anything that reads WorldSpace   | `src/server/worldspace/client.ts`       |
 
 ## Layout widths
 
@@ -279,9 +397,9 @@ pattern rather than disabling the rule.
 - `ParallaxImage` always uses `fill`; passing `width`/`height` makes next/image
   size to its intrinsic box inside the absolutely-positioned inner wrapper and
   the tiles come out ragged.
-- The hero DISCOVER is WebGL (`webgl-wordmark.tsx`) layered over a real text
-  node that stays correct without it. The footer's still uses `leading-[0.8]`,
-  which puts a Playfair cap baseline exactly on the line-box bottom edge.
+- The footer's ghosted DISCOVER uses `leading-[0.8]`, which puts a Playfair cap
+  baseline exactly on the line-box bottom edge. It is the last of the oversized
+  wordmarks: the hero's went when `webgl-wordmark.tsx` was deleted.
 - `Button` with `asChild` forwards a _single_ child, so `leftIcon`/`rightIcon`
   are dropped — put the icon inside the child element instead.
 - `buildMetadata()` omits `title` entirely when a page has none, so the root
@@ -296,5 +414,14 @@ pattern rather than disabling the rule.
 - Anything that toggles a list in state (the planner's extras) must use a
   functional `setState` — two clicks inside one React batch otherwise both read
   the same stale array and the second discards the first.
+- A `<button>` vertically centres its own contents, and `display: block` does
+  **not** stop it. In a stretched card (`flex-1` inside `h-full`) a short
+  profile floats down the middle while its neighbours sit at the top. Give the
+  button a flex formatting context — `ProCard` does.
+- Nav section links are root-relative (`/#visas`, not `#visas`). A bare hash on
+  a page under `(app)` only rewrites the URL, because the section it names
+  lives on the landing page.
+- `scroll-padding-top` has to clear the **taller** header (6rem from lg up), or
+  an anchored element lands under the fixed bar and cannot be clicked.
 - `next typegen` runs as part of `pnpm typecheck`, so a clean checkout
   typechecks without a build. Next 16 removed `next lint`.

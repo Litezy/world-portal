@@ -9,6 +9,7 @@ import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
 import { hero } from "@/content/landing";
+import { BasketButton } from "@/features/basket/components/basket-button";
 import { useScroll } from "@/hooks/use-scroll";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="inline-flex h-9 items-center rounded-full px-4 text-[13px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white"
+                  className="inline-flex h-9 items-center rounded-full px-3 text-[13px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white xl:px-4"
                 >
                   {item.title}
                 </a>
@@ -66,11 +67,12 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             asChild
             variant="ghost"
             size="md"
-            className="hidden lg:inline-flex text-white/90 hover:bg-white/10 hover:text-white"
+            className="hidden text-white/90 hover:bg-white/10 hover:text-white lg:inline-flex"
           >
             <Link href="/track">Track application</Link>
           </Button>
 
+          <BasketButton />
           <Button asChild variant="solid" size="md" className="hidden lg:inline-flex">
             <Link href={hero.navCta.href}>{hero.navCta.label}</Link>
           </Button>

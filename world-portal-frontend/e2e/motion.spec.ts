@@ -8,16 +8,17 @@ import { expect, test } from "@playwright/test";
 test.describe("motion", () => {
   test("the WebGL layers mount once the browser is idle", async ({ page }) => {
     await page.goto("/");
-    // Hero: the photograph shader and the EXPLORE wordmark are separate layers.
-    await expect(page.locator("section").first().locator("canvas")).toHaveCount(2, {
+    // Hero: one layer only — the displacement shader over the photograph.
+    await expect(page.locator("section").first().locator("canvas")).toHaveCount(1, {
       timeout: 15000,
     });
   });
 
-  test("the EXPLORE wordmark keeps a real text node underneath", async ({ page }) => {
+  test("the hero forecast card survives the intro animation", async ({ page }) => {
     await page.goto("/");
-    // The shader is decoration; the word must exist as text regardless.
-    await expect(page.getByText("EXPLORE", { exact: true }).first()).toBeAttached();
+    // The card is revealed from autoAlpha:0 — this guards that the tween always
+    // finishes, whatever the ticker does.
+    await expect(page.locator("[data-hero-forecast]")).toBeVisible();
   });
 
   test("journey steps play forwards and rewind on the way back up", async ({

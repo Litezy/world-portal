@@ -237,8 +237,10 @@
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
-    /* Clears the fixed header when jumping to an in-page anchor. */
-    scroll-padding-top: 5.5rem;
+    /* Clears the fixed header when jumping to an in-page anchor. The bar is
+       5rem tall, 6rem from lg up, so this has to clear the taller of the two
+       or anchored content lands underneath it and cannot be clicked. */
+    scroll-padding-top: 7rem;
   }
 
   body {
