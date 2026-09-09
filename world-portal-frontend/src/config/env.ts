@@ -4,6 +4,38 @@ const DEV_ADMIN_PASSWORD = "worldportal";
 const DEV_SESSION_SECRET = "world-portal-dev-session-secret";
 
 /**
+ * A variable that is *declared* but left blank arrives as `""`, not as absent —
+ * this is what Vercel and most CI do, and it is the difference between a build
+ * that works locally and one that dies on deploy. zod's `.default()` and
+ * `.optional()` only fire on `undefined`, so `""` skips the fallback and then
+ * fails `z.url()` instead. Normalise blanks to absent before parsing.
+ *
+ * This is not hypothetical: an empty NEXT_PUBLIC_SITE_URL reached
+ * `new URL(siteConfig.url)` in the root layout and failed a Vercel build with
+ * ERR_INVALID_URL.
+ */
+function withoutBlanks(source: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(source).map(([key, value]) => [
+      key,
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    ]),
+  );
+}
+
+/**
+ * Where the site is served from. Explicit configuration wins; on Vercel we can
+ * infer the deployment's own origin, so a preview or a first deploy works with
+ * nothing set at all; localhost is the last resort.
+ *
+ * `NEXT_PUBLIC_VERCEL_URL` carries a bare host with no scheme.
+ */
+function defaultSiteUrl() {
+  const vercel = process.env.NEXT_PUBLIC_VERCEL_URL?.trim();
+  return vercel ? `https://${vercel}` : "http://localhost:3000";
+}
+
+/**
  * Fail the build loudly on a missing/invalid env var instead of failing at
  * runtime in front of a user. Add new vars here, not scattered across the app.
  *
@@ -11,7 +43,7 @@ const DEV_SESSION_SECRET = "world-portal-dev-session-secret";
  * as full literals (`process.env.NEXT_PUBLIC_X`) — never computed.
  */
 const clientSchema = z.object({
-  NEXT_PUBLIC_SITE_URL: z.url().default("http://localhost:3000"),
+  NEXT_PUBLIC_SITE_URL: z.url().default(defaultSiteUrl),
   /** World Portal API origin, including its `/api` prefix. */
   NEXT_PUBLIC_API_URL: z.url().optional(),
   NEXT_PUBLIC_GA_ID: z.string().optional(),
@@ -36,7 +68,11 @@ const serverSchema = z
      */
     WORLD_PORTAL_API_URL: z
       .url()
-      .default(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api"),
+      // Same blank trap as above: a declared-but-empty NEXT_PUBLIC_API_URL
+      // would otherwise become an empty default and fail `z.url()`.
+      .default(
+        () => process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:4000/api",
+      ),
     // Console credentials. The defaults exist so a fresh clone runs, and are
     // refused in production below — shipping them would publish the password.
     ADMIN_EMAIL: z.email().default("admin@worldportal.travel"),
@@ -71,12 +107,14 @@ const serverSchema = z
     }
   });
 
-const clientEnv = clientSchema.safeParse({
-  NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
-  NEXT_PUBLIC_WORLDSPACE_URL: process.env.NEXT_PUBLIC_WORLDSPACE_URL,
-});
+const clientEnv = clientSchema.safeParse(
+  withoutBlanks({
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
+    NEXT_PUBLIC_WORLDSPACE_URL: process.env.NEXT_PUBLIC_WORLDSPACE_URL,
+  }),
+);
 
 if (!clientEnv.success) {
   console.error(
@@ -90,7 +128,7 @@ export const env = clientEnv.data;
 
 /** Server-only. Importing this from a client component is a build error. */
 export function serverEnv() {
-  const parsed = serverSchema.safeParse(process.env);
+  const parsed = serverSchema.safeParse(withoutBlanks(process.env));
   if (!parsed.success) {
     console.error(
       "Invalid server environment variables:",

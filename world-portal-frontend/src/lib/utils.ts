@@ -1,6 +1,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+import { env } from "@/config/env";
+
 /**
  * Merge conditional class names and let later Tailwind utilities win.
  * `cn("px-2", condition && "px-4")` -> "px-4"
@@ -9,10 +11,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Absolute URL against the configured site origin — needed for OG tags and canonicals. */
+/**
+ * Absolute URL against the configured site origin — needed for OG tags and
+ * canonicals.
+ *
+ * The origin comes from the validated `env` rather than raw `process.env`: a
+ * declared-but-empty NEXT_PUBLIC_SITE_URL is `""`, which `??` happily passes
+ * through to `new URL()` as an invalid base and fails the production build.
+ */
 export function absoluteUrl(path = "/") {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return new URL(path, base).toString();
+  return new URL(path, env.NEXT_PUBLIC_SITE_URL).toString();
 }
 
 export function formatCurrency(amount: number, currency = "NGN", locale = "en-US") {
