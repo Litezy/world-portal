@@ -14,6 +14,9 @@ export const mainNav: NavItem[] = [
   { title: "Tours", href: "/#experiences" },
   { title: "Hire a pro", href: "/hire" },
   { title: "How it works", href: "/#journey" },
+  // Last on purpose: the six links above are addressed to a traveller, and
+  // this one is not — it is the door for the agencies that staff the trip.
+  { title: "Agency", href: "/#agency" },
 ];
 
 export const locales = [

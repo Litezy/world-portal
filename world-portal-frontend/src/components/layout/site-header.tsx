@@ -44,7 +44,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
         <nav
           aria-label="Main"
           className={cn(
-            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 lg:flex",
+            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 xl:flex",
             filled ? "bg-white/8" : "glass-dark",
           )}
         >
@@ -67,7 +67,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             asChild
             variant="ghost"
             size="md"
-            className="hidden text-white/90 hover:bg-white/10 hover:text-white lg:inline-flex"
+            className="hidden text-white/90 hover:bg-white/10 hover:text-white 2xl:inline-flex"
           >
             <Link href="/track">Track application</Link>
           </Button>
@@ -83,7 +83,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="text-white lg:hidden"
+            className="text-white xl:hidden"
           >
             {open ? <X className="size-7" /> : <Menu className="size-7" />}
           </button>
@@ -94,7 +94,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
       <div
         id="mobile-nav"
         hidden={!open}
-        className="glass-dark mx-4 mb-4 rounded-3xl p-5 lg:hidden"
+        className="glass-dark mx-4 mb-4 rounded-3xl p-5 xl:hidden"
       >
         <ul className="flex flex-col gap-1">
           {mainNav.map((item) => (
@@ -110,7 +110,12 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
           ))}
         </ul>
         <div className="mt-4 grid gap-2">
-          <Button asChild variant="outline" size="block" className="border-white/20 text-white hover:bg-white/10">
+          <Button
+            asChild
+            variant="outline"
+            size="block"
+            className="border-white/20 text-white hover:bg-white/10"
+          >
             <Link href="/track" onClick={() => setOpen(false)}>
               Track application
             </Link>

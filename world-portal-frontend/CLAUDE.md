@@ -25,13 +25,14 @@ out in `app/(site)/page.tsx`.
 
 ## Routes and layouts
 
-| Route    | Layout    | Header                          |
-| -------- | --------- | ------------------------------- |
-| `/`      | `(site)`  | overlay, scrolls away with hero |
-| `/apply` | `(app)`   | solid sticky ink bar            |
-| `/track` | `(app)`   | solid sticky ink bar            |
-| `/hire`  | `(app)`   | solid sticky ink bar            |
-| `/admin` | `(admin)` | console shell — ink sidebar     |
+| Route     | Layout     | Header                          |
+| --------- | ---------- | ------------------------------- |
+| `/`       | `(site)`   | overlay, scrolls away with hero |
+| `/apply`  | `(app)`    | solid sticky ink bar            |
+| `/track`  | `(app)`    | solid sticky ink bar            |
+| `/hire`   | `(app)`    | solid sticky ink bar            |
+| `/admin`  | `(admin)`  | console shell — ink sidebar     |
+| `/agency` | `(agency)` | console shell — its own session |
 
 `SiteHeader` takes `variant="overlay" | "solid"`. The overlay variant's type is
 white for photography — never pin it over a light page.
@@ -219,6 +220,70 @@ Every card links to another origin with `target="_blank"` and
 `rel="noopener noreferrer"`. Without `noopener` the opened tab can reach back
 through `window.opener`, and there is no reason to hand another origin that.
 
+## The agency side — the businesses that staff the trip
+
+`/hire` sells one professional. `/agency` is the other end of that: a whole
+service business — a security firm, a caterer, a driver, a cleaning company —
+lists itself on the platform and staffs the jobs travellers book. It is a third
+audience on a site that already has two, which is why `#agency` on the landing
+page is a pitch to a business owner and reads differently from everything
+around it: the traveller is not the reader of that band.
+
+End to end, one job goes:
+
+1. the agency lists itself — profile, the services it sells, the paperwork;
+2. a traveller adds one of those services to their package and pays for the
+   whole trip up front;
+3. the booking lands in the agency's dashboard as an `AgencyAssignment`;
+4. the agency puts its own `AgencyStaff` against it before the start date —
+   the traveller's contact details are released only at that point;
+5. the job completes, and the platform settles the agency on a fixed run
+   through an `AgencyPayout`, minus the commission agreed on the listing.
+
+Money is never typed in twice: `platformFee + netToAgency === gross` on every
+assignment, and a payout's totals are the sums over the assignments it batches.
+A unit test asserts both, so add a job by giving it a `gross` and let the
+fixture builders derive the rest.
+
+**There is no agency API.** Like WorldSpace, the whole feature hangs off one
+seam — `src/server/agency/store.ts` — and every screen goes through the route
+handlers rather than talking to anything directly. The catch is that the store's
+writes are **in memory**: assigning staff, uploading a document or submitting a
+listing survives navigation and dies on the next `next dev` restart. That is
+fine for a demo and a trap in a bug report, so check whether the server was
+restarted before chasing a "lost" assignment. Swap the store, not the screens,
+when a real service exists.
+
+**The agency session is a different cookie from the admin one, and the two must
+never cross.** `/admin` is E-Embassy staff; `/agency` is an outside business
+that must not see the admin desk or another agency's assignments. `src/proxy.ts`
+guards both prefixes in two independent branches — each reads only its own
+cookie and verifies it with only its own verifier, so an admin cookie cannot
+authenticate `/agency/*` and an agency cookie cannot authenticate `/admin/*`.
+Do not merge those branches into one "is there a session" check, and do not let
+either fall through into the other. `/agency/login` and `/agency/signup` are
+public by necessity — an agency that has not listed yet has no session — and
+both bounce a signed-in agency to `/agency`, exactly as `/admin/login` does.
+
+**The required documents are derived, never hardcoded.** What an agency must
+file is a function of the categories it picked:
+`documentsForCategories()` in `src/features/agency/catalog.ts` unions
+`baseDocuments` with each category's extras, de-duplicates them (a guide, a
+childcare provider and a medic all want `first_aid_certificate`, and it is
+asked for once) and returns them in catalog order so the checklist never
+reshuffles between renders. `requiredDocumentsFor()` is the subset that blocks
+submission. A screen that lists document kinds of its own goes stale the moment
+a category is added — ask the catalog.
+
+**The fixture agencies are invented, under the same standing rule as
+`public/images/pros`.** The trading names, legal names, registration numbers,
+licence numbers, staff, travellers and jobs in
+`src/features/agency/fixtures.ts` are all made up for design. No real company's
+registration number and no real person's name or licence belongs in that file.
+The two portraits it uses are stock images already shipped here, reused only
+for the name they were already cast against. When real agencies sign up they
+arrive through the store, and that file is deleted rather than edited.
+
 ## Non-negotiables
 
 - **The app is light-only and forces it.** `ThemeProvider` sets
@@ -366,6 +431,8 @@ anchor has just moved.
 | A query or mutation              | `src/features/<feature>/api`            |
 | Something bookable, with a price | a `BasketItem` — see the basket section |
 | Anything that reads WorldSpace   | `src/server/worldspace/client.ts`       |
+| Anything the agency side reads   | `src/server/agency/store.ts`            |
+| A document an agency must file   | `src/features/agency/catalog.ts`        |
 
 ## Layout widths
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const DEV_ADMIN_PASSWORD = "worldportal";
+const DEV_AGENCY_PASSWORD = "worldportal-agency";
 const DEV_SESSION_SECRET = "world-portal-dev-session-secret";
 
 /**
@@ -79,6 +80,12 @@ const serverSchema = z
     ADMIN_PASSWORD: z.string().min(8).default(DEV_ADMIN_PASSWORD),
     SESSION_SECRET: z.string().min(16).default(DEV_SESSION_SECRET),
     /**
+     * The agency console (/agency). One shared password against the fixture
+     * agencies — the same stop-gap as ADMIN_PASSWORD, and refused in
+     * production below for the same reason. See src/server/agency/auth.ts.
+     */
+    AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
+    /**
      * The future WorldSpace posts API origin. Optional on purpose: absent
      * means the feed falls back to the curated placeholder posts, which is a
      * supported state, not a misconfiguration. Server-side only so any key the
@@ -95,6 +102,14 @@ const serverSchema = z
         path: ["ADMIN_PASSWORD"],
         message:
           "Set ADMIN_PASSWORD in production — the development default is public.",
+      });
+    }
+    if (env.AGENCY_PASSWORD === DEV_AGENCY_PASSWORD) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["AGENCY_PASSWORD"],
+        message:
+          "Set AGENCY_PASSWORD in production — the development default is public.",
       });
     }
     if (env.SESSION_SECRET === DEV_SESSION_SECRET) {

@@ -41,11 +41,23 @@ describe("server env", () => {
     expect(() => serverEnv()).toThrow(/Invalid server environment variables/);
   });
 
+  it("refuses the development agency password in production", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const serverEnv = await loadServerEnv({
+      NODE_ENV: "production",
+      ADMIN_PASSWORD: "a-real-production-password",
+      SESSION_SECRET: "a-real-production-secret-value",
+      AGENCY_PASSWORD: "worldportal-agency",
+    });
+    expect(() => serverEnv()).toThrow(/Invalid server environment variables/);
+  });
+
   it("accepts real production values", async () => {
     const serverEnv = await loadServerEnv({
       NODE_ENV: "production",
       ADMIN_PASSWORD: "a-real-production-password",
       SESSION_SECRET: "a-real-production-secret-value",
+      AGENCY_PASSWORD: "a-real-agency-password",
     });
     expect(serverEnv().SESSION_SECRET).toBe("a-real-production-secret-value");
   });

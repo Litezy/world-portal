@@ -1,9 +1,16 @@
 import { expect, type Page, test } from "@playwright/test";
 
-/** "$1,280" -> 1280. Cards and drawer both render via formatCurrency. */
+/** "₦1,280" -> 1280. Cards and drawer both render via formatCurrency. */
 function toNumber(money: string) {
   return Number(money.replace(/[^0-9.]/g, ""));
 }
+
+/**
+ * Any currency symbol followed by digits. Deliberately not `$`: formatCurrency
+ * defaults to NGN, and hardcoding a symbol here made this test silently match
+ * nothing when the default changed.
+ */
+const MONEY = /^\D{1,3}[\d,]+$/;
 
 const cards = (page: Page) => page.getByRole("article");
 const basketButton = (page: Page) => page.getByRole("button", { name: /trip basket/i });
@@ -112,9 +119,7 @@ test.describe("hire a pro", () => {
     await expect(drawer).toBeVisible();
 
     // Every money figure in the panel: one per line, then the total last.
-    const money = (await drawer.getByText(/^\$[\d,]+$/).allTextContents()).map(
-      toNumber,
-    );
+    const money = (await drawer.getByText(MONEY).allTextContents()).map(toNumber);
     const total = money.at(-1)!;
     const lines = money.slice(0, -1);
 
@@ -129,10 +134,7 @@ test.describe("hire a pro", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
 
     const after = (
-      await page
-        .getByRole("dialog")
-        .getByText(/^\$[\d,]+$/)
-        .allTextContents()
+      await page.getByRole("dialog").getByText(MONEY).allTextContents()
     ).map(toNumber);
     expect(after.at(-1)).toBe(total);
   });
