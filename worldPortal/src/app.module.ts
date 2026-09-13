@@ -12,6 +12,8 @@ import { PaymentModule } from './payment/payment.module';
 import { PassportApplicationModule } from './passport-application/passport-application.module';
 import { BankAccountModule } from './bank-account/bank-account.module';
 import { OtpModule } from './otp/otp.module';
+import { AgencyModule } from './agency/agency.module';
+import { HireModule } from './hire/hire.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { OtpModule } from './otp/otp.module';
     PassportApplicationModule,
     BankAccountModule,
     OtpModule,
+    AgencyModule,
+    HireModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -439,4 +439,38 @@ export class PaymentService {
       currency: t.visaDocumentation?.currency || 'NGN',
     }));
   }
+
+  /**
+   * Multi-item basket checkout transaction creation
+   */
+  async createPackageCheckout(dto: {
+    email: string;
+    items: Array<{ type: string; title: string; entityId?: string; amount: number }>;
+    totalAmount: number;
+    currency?: string;
+  }) {
+    const transactionRef = `TXN-PKG-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const transaction = await this.prisma.paymentTransaction.create({
+      data: {
+        transactionRef,
+        amount: new Prisma.Decimal(dto.totalAmount),
+        paymentOption: PaymentOption.FULL,
+        status: PaymentTransactionStatus.INITIATED,
+        paymentMethod: 'CARD',
+        initiatedBy: dto.email,
+        packageItemsJson: dto.items as any,
+      },
+    });
+
+    this.logger.log(`Created package checkout transactionRef=${transactionRef} for email=${dto.email}`);
+    return {
+      transactionRef: transaction.transactionRef,
+      amount: Number(transaction.amount),
+      currency: dto.currency || 'USD',
+      status: transaction.status,
+      items: dto.items,
+    };
+  }
 }
+

@@ -26,10 +26,24 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
+import { CreateCheckoutPackageDto } from './dto/create-checkout-package.dto';
+
 @ApiTags('Payment Management')
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
+
+  @Post('checkout-package')
+  @ApiOperation({
+    summary: 'Initiate package checkout transaction for bundled cart items',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Package checkout transaction initiated successfully',
+  })
+  checkoutPackage(@Body() dto: CreateCheckoutPackageDto) {
+    return this.paymentService.createPackageCheckout(dto);
+  }
 
   @Post('initiate')
   @ApiOperation({
