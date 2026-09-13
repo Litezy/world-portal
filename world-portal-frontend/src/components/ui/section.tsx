@@ -12,8 +12,8 @@ const sectionVariants = cva("relative w-full", {
     },
     tone: {
       default: "bg-background",
-      /** The soft grey behind Testimonials and FAQ. */
-      muted: "bg-ink-100",
+      /** The soft surface behind Testimonials, WorldSpace, and FAQ. */
+      muted: "bg-muted/60 dark:bg-muted/30",
       ink: "bg-ink-950 text-white",
       none: "",
     },

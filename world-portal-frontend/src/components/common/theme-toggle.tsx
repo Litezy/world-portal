@@ -6,7 +6,9 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMounted } from "@/hooks/use-mounted";
 
-export function ThemeToggle() {
+import { cn } from "@/lib/utils";
+
+export function ThemeToggle({ className }: { className?: string } = {}) {
   const { setTheme, theme } = useTheme();
   const mounted = useMounted();
 
@@ -24,7 +26,10 @@ export function ThemeToggle() {
       size="sm"
       onClick={handleToggle}
       aria-label="Toggle theme"
-      className="gap-2 px-3 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      className={cn(
+        "gap-2 px-3 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors",
+        className
+      )}
     >
       {currentTheme === "light" && (
         <>

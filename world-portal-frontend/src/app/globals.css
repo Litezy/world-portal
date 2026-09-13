@@ -112,11 +112,21 @@
 }
 
 .dark {
-  --background: var(--ink-950);
+  --ink-950: #0b0c0e;
+  --ink-900: #f4f5f6;
+  --ink-800: #e4e7eb;
+  --ink-700: #cbd5e1;
+  --ink-500: #94a3b8;
+  --ink-400: #64748b;
+  --ink-200: rgb(255 255 255 / 16%);
+  --ink-100: #1d2024;
+  --ink-50: #141619;
+
+  --background: #0b0c0e;
   --foreground: #f4f5f6;
-  --card: var(--ink-900);
+  --card: #141619;
   --card-foreground: #f4f5f6;
-  --popover: var(--ink-900);
+  --popover: #141619;
   --popover-foreground: #f4f5f6;
 
   /* Lightened for legibility as text/icon/border color directly on the dark
@@ -126,10 +136,10 @@
    * rather than pairing with this lightened value. */
   --primary: #4d8ae0;
   --primary-foreground: #071f45;
-  --secondary: var(--ink-800);
+  --secondary: #1d2024;
   --secondary-foreground: #f4f5f6;
-  --muted: var(--ink-800);
-  --muted-foreground: var(--ink-400);
+  --muted: #1d2024;
+  --muted-foreground: #9aa0a6;
   --accent: var(--cyan-400);
   --accent-foreground: #04263a;
 
@@ -137,8 +147,8 @@
   --input: rgb(255 255 255 / 16%);
   --ring: var(--primary);
 
-  --field: var(--ink-800);
-  --field-focus: var(--ink-900);
+  --field: #1d2024;
+  --field-focus: #141619;
 
   --glass-tint: 30 33 38;
   --glass-edge: 255 255 255;

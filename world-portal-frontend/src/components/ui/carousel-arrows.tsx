@@ -30,8 +30,8 @@ export function CarouselArrows({
     "disabled:cursor-not-allowed disabled:opacity-35",
     "not-disabled:hover:-translate-y-0.5 not-disabled:active:translate-y-px",
     variant === "glass"
-      ? "glass text-ink-900"
-      : "bg-white text-ink-900 shadow-[0_2px_6px_-2px_rgba(12,14,18,0.20),0_12px_24px_-14px_rgba(12,14,18,0.45)]",
+      ? "glass text-foreground"
+      : "bg-white text-ink-950 shadow-[0_2px_6px_-2px_rgba(12,14,18,0.20),0_12px_24px_-14px_rgba(12,14,18,0.45)]",
   );
 
   return (

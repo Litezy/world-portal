@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Menu, X } from "lucide-react";
 
+import { ThemeToggle } from "@/components/common/theme-toggle";
 import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
@@ -72,6 +73,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             <Link href="/track">Track application</Link>
           </Button>
 
+          <ThemeToggle className="text-white/90 hover:bg-white/10 hover:text-white" />
           <BasketButton />
           <Button asChild variant="solid" size="md" className="hidden lg:inline-flex">
             <Link href={hero.navCta.href}>{hero.navCta.label}</Link>
@@ -109,7 +111,11 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             </li>
           ))}
         </ul>
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-2">
+            <span className="text-sm font-medium text-white/80">Theme</span>
+            <ThemeToggle className="text-white/90 hover:bg-white/10 hover:text-white" />
+          </div>
           <Button
             asChild
             variant="outline"
