@@ -26,7 +26,7 @@ import { AssignStaffDto } from './dto/assign-staff.dto';
 export class AgencyController {
   private readonly logger = new Logger(AgencyController.name);
 
-  constructor(private readonly agencyService: AgencyService) {}
+  constructor(private readonly agencyService: AgencyService) { }
 
   @Post()
   @ApiOperation({ summary: 'Register a new agency listing' })
@@ -36,11 +36,33 @@ export class AgencyController {
     return this.agencyService.createAgency(dto);
   }
 
+  @Get()
+  @ApiOperation({ summary: 'List all agencies for admin management (with search & filters)' })
+  async findAllAgencies(
+    @Query('status') status?: string,
+    @Query('verification') verification?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.agencyService.findAllAgencies({ status, verification, search, page, limit });
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get agency details by ID' })
   @ApiParam({ name: 'id', description: 'Agency ID' })
   async getAgency(@Param('id') id: string) {
     return this.agencyService.getAgencyById(id);
+  }
+
+  @Patch(':id/verify')
+  @ApiOperation({ summary: 'Update agency verification status (admin action)' })
+  @ApiParam({ name: 'id', description: 'Agency ID' })
+  async updateVerification(
+    @Param('id') id: string,
+    @Body('verification') verification: string,
+  ) {
+    return this.agencyService.updateVerification(id, verification);
   }
 
   @Get(':id/overview')

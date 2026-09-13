@@ -10,13 +10,21 @@ import { UpdateAgencyListingDto } from './dto/update-agency-listing.dto';
 import { AddAgencyStaffDto, UpdateAgencyStaffDto } from './dto/add-agency-staff.dto';
 import { UploadAgencyDocumentDto, UpdateDocumentStatusDto } from './dto/upload-agency-document.dto';
 import { AssignStaffDto } from './dto/assign-staff.dto';
-import { AgencyDocumentKind, AgencyDocumentStatus, AgencyStaffStatus, AssignmentStatus, AgencyPayoutStatus } from '@prisma/client';
+import {
+  AgencyDocumentKind,
+  AgencyDocumentStatus,
+  AgencyStaffStatus,
+  AssignmentStatus,
+  AgencyPayoutStatus,
+  AgencyVerificationStatus,
+  AgencyListingStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class AgencyService {
   private readonly logger = new Logger(AgencyService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /** Create slug from agency name */
   private slugify(name: string): string {
@@ -365,4 +373,112 @@ export class AgencyService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  /**
+   * List all agencies for administrative management (with pagination, filters, and search)
+   */
+  async findAllAgencies(query: {
+    status?: string;
+    verification?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Number(query.limit) || 20);
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (query.verification) {
+      where.verification = query.verification;
+    }
+    if (query.status) {
+      where.listingStatus = query.status;
+    }
+
+    if (query.search) {
+      const q = query.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { legalName: { contains: q, mode: 'insensitive' } },
+        { registrationNumber: { contains: q, mode: 'insensitive' } },
+        { country: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, data] = await Promise.all([
+      this.prisma.agency.count({ where }),
+      this.prisma.agency.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          documents: true,
+          staff: true,
+          offerings: true,
+          _count: {
+            select: {
+              assignments: true,
+              users: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Update agency verification status (unverified, pending, verified, suspended)
+   */
+  async updateVerification(id: string, verification: string) {
+    const agency = await this.prisma.agency.findUnique({ where: { id } });
+    if (!agency) {
+      throw new NotFoundException(`Agency with ID "${id}" not found`);
+    }
+
+    const vUpper = verification.toUpperCase();
+    const verificationEnum =
+      vUpper === 'VERIFIED'
+        ? AgencyVerificationStatus.VERIFIED
+        : vUpper === 'PENDING'
+          ? AgencyVerificationStatus.PENDING
+          : vUpper === 'SUSPENDED' || vUpper === 'REJECTED'
+            ? AgencyVerificationStatus.SUSPENDED
+            : AgencyVerificationStatus.UNVERIFIED;
+
+    const listingStatusEnum: AgencyListingStatus =
+      verificationEnum === AgencyVerificationStatus.VERIFIED
+        ? AgencyListingStatus.LIVE
+        : verificationEnum === AgencyVerificationStatus.SUSPENDED
+          ? AgencyListingStatus.REJECTED
+          : agency.listingStatus;
+
+    const updated = await this.prisma.agency.update({
+      where: { id },
+      data: {
+        verification: verificationEnum,
+        listingStatus: listingStatusEnum,
+      },
+      include: {
+        documents: true,
+        staff: true,
+      },
+    });
+
+    this.logger.log(`Updated agency id=${id} verification=${verificationEnum} listingStatus=${listingStatusEnum}`);
+    return updated;
+  }
 }
+

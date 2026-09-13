@@ -25,6 +25,9 @@ All major technical decisions, architectural patterns, data model definitions, a
 - **0009 Hire & Professional Services Backend Architecture**: [Technical ADR](./0009-hire-professional-services-backend-architecture.md) | [ADR for Dummies](./0009-hire-professional-services-backend-architecture.dummies.md)
 - **0010 Unified Basket & Package Checkout Payment Engine**: [Technical ADR](./0010-basket-checkout-payment-engine.md) | [ADR for Dummies](./0010-basket-checkout-payment-engine.dummies.md)
 - **0011 WorldSpace API Integration & Proxy Seam**: [Technical ADR](./0011-worldspace-api-proxy-integration.md) | [ADR for Dummies](./0011-worldspace-api-proxy-integration.dummies.md)
+- **0012 Frontend Seam Integration with NestJS Backend Services**: [Technical ADR](./0012-frontend-seam-integration.md) | [ADR for Dummies](./0012-frontend-seam-integration.dummies.md)
+- **0013 Admin Catalog Oversight for Agencies & Professional Services**: [Technical ADR](./0013-admin-catalog-oversight.md) | [ADR for Dummies](./0013-admin-catalog-oversight.dummies.md)
+
 
 
 

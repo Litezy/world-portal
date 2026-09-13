@@ -115,4 +115,78 @@ export class HireService {
     this.logger.log(`Created hire booking ref=${booking.reference} for pro=${dto.professionalId}`);
     return booking;
   }
+
+  /**
+   * List all professionals for administrative management
+   */
+  async findAllProfessionalsAdmin(dto: QueryProfessionalsDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (dto.category) {
+      where.category = dto.category;
+    }
+    if (dto.countryCode) {
+      where.countryCode = dto.countryCode;
+    }
+    if (dto.search) {
+      const q = dto.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { title: { contains: q, mode: 'insensitive' } },
+        { bio: { contains: q, mode: 'insensitive' } },
+        { city: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.professionalProfile.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          bookings: true,
+          _count: {
+            select: {
+              ratings: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.professionalProfile.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Toggle professional verification status
+   */
+  async toggleVerification(id: string, isVerified?: boolean) {
+    const pro = await this.prisma.professionalProfile.findUnique({ where: { id } });
+    if (!pro) {
+      throw new NotFoundException(`Professional with ID "${id}" not found`);
+    }
+
+    const nextVerified = isVerified !== undefined ? isVerified : !pro.isVerified;
+
+    const updated = await this.prisma.professionalProfile.update({
+      where: { id },
+      data: { isVerified: nextVerified },
+    });
+
+    this.logger.log(`Toggled professional id=${id} isVerified=${nextVerified}`);
+    return updated;
+  }
 }

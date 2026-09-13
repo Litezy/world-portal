@@ -146,9 +146,18 @@ function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
  * The agency, and its listing
  * ------------------------------------------------------------------------- */
 
-export function getAgency(agencyId: string): Agency | null {
-  const agency = agencyRecord(agencyId);
-  return agency ? clone(agency) : null;
+const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
+
+export async function getAgency(agencyId: string): Promise<Agency | null> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /** The currency an agency trades in — taken from what it actually sells. */
@@ -164,82 +173,27 @@ function isExpired(document: AgencyDocument, at: Date) {
  * Everything on the dashboard is derived here and nothing is stored, so a
  * figure can never drift from the rows it is meant to summarise.
  */
-export function getOverview(agencyId: string): AgencyOverview {
-  const agency = agencyRecord(agencyId);
-  const assignments = assignmentsOf(agencyId);
-  const staff = staffOf(agencyId);
-
-  if (!agency) {
-    // A session for an agency that no longer exists. An empty console beats a
-    // thrown error on a dashboard.
-    return {
-      openAssignments: 0,
-      staffOnDuty: 0,
-      staffTotal: 0,
-      completedThisMonth: 0,
-      earnedThisMonth: 0,
-      pendingPayout: 0,
-      currency: "NGN",
-      outstandingDocuments: 0,
-      verification: "unverified",
-      listingStatus: "draft",
-    };
+export async function getOverview(agencyId: string): Promise<AgencyOverview> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/overview`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Return empty overview default if backend is unavailable
   }
 
-  const now = new Date();
-  const month = now.getUTCMonth();
-  const year = now.getUTCFullYear();
-
-  const completedThisMonth = assignments.filter((assignment) => {
-    if (assignment.status !== "completed") return false;
-    const finished = new Date(assignment.endsAt);
-    return finished.getUTCFullYear() === year && finished.getUTCMonth() === month;
-  });
-
-  // Anything settled in a payout that has actually been paid is off the books.
-  const settled = new Set(
-    payoutsOf(agencyId)
-      .filter((payout) => payout.status === "paid")
-      .flatMap((payout) => payout.assignmentIds),
-  );
-
-  const pendingPayout = assignments
-    .filter(
-      (assignment) => assignment.status === "completed" && !settled.has(assignment.id),
-    )
-    .reduce((total, assignment) => total + assignment.netToAgency, 0);
-
-  const required = new Set(requiredDocumentsFor(agency.categories));
-  const outstandingDocuments = agency.documents.filter(
-    (document) =>
-      required.has(document.kind) &&
-      // A lapsed licence is as good as a missing one — the type says so.
-      (document.status !== "approved" || isExpired(document, now)),
-  ).length;
-
   return {
-    openAssignments: assignments.filter((assignment) =>
-      ["requested", "assigned", "in_progress"].includes(assignment.status),
-    ).length,
-    // "On duty" is anyone the agency could put on a job today: off-duty and
-    // inactive people are on the books but not available to the desk.
-    staffOnDuty: staff.filter(
-      (member) => member.status === "available" || member.status === "assigned",
-    ).length,
-    staffTotal: staff.length,
-    completedThisMonth: completedThisMonth.length,
-    earnedThisMonth:
-      Math.round(
-        completedThisMonth.reduce(
-          (total, assignment) => total + assignment.netToAgency,
-          0,
-        ) * 100,
-      ) / 100,
-    pendingPayout: Math.round(pendingPayout * 100) / 100,
-    currency: currencyOf(agency, assignments),
-    outstandingDocuments,
-    verification: agency.verification,
-    listingStatus: agency.listingStatus,
+    openAssignments: 0,
+    staffOnDuty: 0,
+    staffTotal: 0,
+    completedThisMonth: 0,
+    earnedThisMonth: 0,
+    pendingPayout: 0,
+    currency: "NGN",
+    outstandingDocuments: 0,
+    verification: "unverified",
+    listingStatus: "draft",
   };
 }
 
