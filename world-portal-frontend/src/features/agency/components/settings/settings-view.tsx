@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Landmark, Pause, Play, Users } from "lucide-react";
+import { Landmark, LogOut, Pause, Play, Users } from "lucide-react";
 
 import { DetailItem, DetailList, UserAvatar } from "@/components/admin";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agencyPayouts, agencySettings as copy } from "@/content/agency";
+import { useAgencyLogout } from "@/features/agency/api/use-agency-auth";
 import { useAgencyOverview } from "@/features/agency/api/use-overview";
 import { useAgencyPayouts } from "@/features/agency/api/use-payouts";
 import {
@@ -27,6 +28,7 @@ import { formatCurrency } from "@/lib/utils";
 export function AgencySettingsView({ user }: { user?: AgencyUser }) {
   const overviewQuery = useAgencyOverview();
   const payoutsQuery = useAgencyPayouts({ perPage: 50 });
+  const logout = useAgencyLogout();
 
   const overview = overviewQuery.data;
   const paused = overview?.listingStatus === "paused";
@@ -100,14 +102,26 @@ export function AgencySettingsView({ user }: { user?: AgencyUser }) {
         <CardDescription className="text-[13px]">{copy.team.body}</CardDescription>
 
         {user ? (
-          <div className="mt-6 flex items-center gap-3">
-            <UserAvatar user={{ name: user.name }} size="sm" className="ring-border" />
-            <div className="min-w-0">
-              <p className="truncate text-[13.5px] font-medium">{user.name}</p>
-              <p className="truncate text-[12.5px] text-muted-foreground">
-                {user.email}
-              </p>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <UserAvatar user={{ name: user.name }} size="sm" className="ring-border" />
+              <div className="min-w-0">
+                <p className="truncate text-[13.5px] font-medium">{user.name}</p>
+                <p className="truncate text-[12.5px] text-muted-foreground">
+                  {user.email}
+                </p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+              className="text-destructive hover:bg-destructive/10"
+              leftIcon={<LogOut className="size-3.5" />}
+            >
+              Sign out
+            </Button>
           </div>
         ) : (
           <EmptyState
@@ -123,9 +137,6 @@ export function AgencySettingsView({ user }: { user?: AgencyUser }) {
         <CardTitle className="text-base">{copy.danger.title}</CardTitle>
         <CardDescription className="text-[13px]">{copy.danger.body}</CardDescription>
 
-        {/* Pausing is a change to the listing, and the listing flow owns that
-            write — this sends the owner to it rather than opening a second
-            path to the same record. */}
         <Button asChild variant="outline" size="sm" className="mt-6 w-fit">
           <Link href="/agency/listing">
             {paused ? <Play className="size-4" /> : <Pause className="size-4" />}

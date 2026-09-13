@@ -237,7 +237,21 @@ function reconcileDocuments(
   );
 }
 
-export function updateListing(agencyId: string, patch: ListingPatch): Agency | null {
+export async function updateListing(agencyId: string, patch: ListingPatch): Promise<Agency | null> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/listing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const agency = agencyRecord(agencyId);
   if (!agency) return null;
 
@@ -255,11 +269,25 @@ export function updateListing(agencyId: string, patch: ListingPatch): Agency | n
  * categories do not ask for — there is nowhere to put the latter, and silently
  * inventing a checklist row would make the wizard disagree with the catalog.
  */
-export function setDocument(
+export async function setDocument(
   agencyId: string,
   kind: AgencyDocumentKind,
   file: { fileName: string; fileUrl: string; expiresAt?: string },
-): Agency | null {
+): Promise<Agency | null> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/documents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, fileName: file.fileName, fileUrl: file.fileUrl, expiresAt: file.expiresAt }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const agency = agencyRecord(agencyId);
   if (!agency) return null;
 
@@ -337,10 +365,41 @@ export function submitListing(agencyId: string): {
  * Assignments
  * ------------------------------------------------------------------------- */
 
-export function listAssignments(
+export async function listAssignments(
   agencyId: string,
   params: ListParams,
-): Paginated<AgencyAssignment> {
+): Promise<Paginated<AgencyAssignment>> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      const rows: AgencyAssignment[] = Array.isArray(data) ? data : (data.data || []);
+      const needle = needleOf(params);
+      const status = statusOf(params);
+
+      const filtered = rows
+        .filter((assignment) => !status || assignment.status === status)
+        .filter(
+          (assignment) =>
+            !needle ||
+            matches(
+              needle,
+              assignment.reference,
+              assignment.offeringTitle,
+              assignment.traveller?.name,
+              assignment.destination?.city,
+              assignment.destination?.country,
+            ),
+        )
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+        .map((assignment) => withContactRule(clone(assignment)));
+
+      return paginate(filtered, params.page, params.perPage);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const needle = needleOf(params);
   const status = statusOf(params);
 
@@ -353,9 +412,9 @@ export function listAssignments(
           needle,
           assignment.reference,
           assignment.offeringTitle,
-          assignment.traveller.name,
-          assignment.destination.city,
-          assignment.destination.country,
+          assignment.traveller?.name,
+          assignment.destination?.city,
+          assignment.destination?.country,
         ),
     )
     // Soonest first, so the job that needs staffing today is at the top.
@@ -377,11 +436,25 @@ export function getAssignment(agencyId: string, id: string): AgencyAssignment | 
  * them is something the coordinator can fix on the screen they are looking at,
  * and a 500 would say nothing useful.
  */
-export function assignStaff(
+export async function assignStaff(
   agencyId: string,
   assignmentId: string,
   staffIds: string[],
-): { assignment: AgencyAssignment | null; message: string | null } {
+): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${assignmentId}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedStaffIds: staffIds }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      return { assignment: withContactRule(clone(updated)), message: null };
+    }
+  } catch {
+    // Fallback to local store
+  }
   const assignment = assignmentsOf(agencyId).find(
     (record) => record.id === assignmentId,
   );
@@ -486,10 +559,32 @@ export function completeAssignment(
  * Staff
  * ------------------------------------------------------------------------- */
 
-export function listStaff(
+export async function listStaff(
   agencyId: string,
   params: ListParams,
-): Paginated<AgencyStaff> {
+): Promise<Paginated<AgencyStaff>> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      const rows: AgencyStaff[] = Array.isArray(data) ? data : (data.data || []);
+      const needle = needleOf(params);
+      const status = statusOf(params);
+      const filtered = rows
+        .filter((member) => !status || member.status === status)
+        .filter(
+          (member) =>
+            !needle || matches(needle, member.name, member.role, ...(member.languages || [])),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(clone);
+
+      return paginate(filtered, params.page, params.perPage);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const needle = needleOf(params);
   const status = statusOf(params);
 
@@ -497,7 +592,7 @@ export function listStaff(
     .filter((member) => !status || member.status === status)
     .filter(
       (member) =>
-        !needle || matches(needle, member.name, member.role, ...member.languages),
+        !needle || matches(needle, member.name, member.role, ...(member.languages || [])),
     )
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(clone);
@@ -521,7 +616,21 @@ export type NewStaffInput = {
  * Adds someone to the books. They start `available` and unrated — a rating is
  * something travellers give, not something an agency types in about itself.
  */
-export function addStaff(agencyId: string, input: NewStaffInput): AgencyStaff {
+export async function addStaff(agencyId: string, input: NewStaffInput): Promise<AgencyStaff> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const member: AgencyStaff = {
     id: nextId("stf"),
     agencyId,
@@ -544,10 +653,32 @@ export function addStaff(agencyId: string, input: NewStaffInput): AgencyStaff {
  * Payouts
  * ------------------------------------------------------------------------- */
 
-export function listPayouts(
+export async function listPayouts(
   agencyId: string,
   params: ListParams,
-): Paginated<AgencyPayout> {
+): Promise<Paginated<AgencyPayout>> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/payouts`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      const rows: AgencyPayout[] = Array.isArray(data) ? data : (data.data || []);
+      const needle = needleOf(params);
+      const status = statusOf(params);
+      const filtered = rows
+        .filter((payout) => !status || payout.status === status)
+        .filter(
+          (payout) =>
+            !needle || matches(needle, payout.reference, payout.destinationAccount),
+        )
+        .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
+        .map(clone);
+
+      return paginate(filtered, params.page, params.perPage);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const needle = needleOf(params);
   const status = statusOf(params);
 
