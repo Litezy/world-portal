@@ -6,15 +6,23 @@ export default defineConfig({
   resolve: {
     // Resolves the "@/*" alias straight from tsconfig.json.
     tsconfigPaths: true,
+    alias: {
+      "html-encoding-sniffer": "./tests/mocks/html-encoding-sniffer.js",
+    },
   },
   test: {
-    environment: "jsdom",
+    environment: "happy-dom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     css: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}", "tests/**/*.{test,spec}.{ts,tsx}"],
     // Playwright owns e2e; vitest must not try to run those files.
     exclude: ["node_modules", ".next", "e2e"],
+    server: {
+      deps: {
+        inline: [/@exodus\/bytes/],
+      },
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],

@@ -94,34 +94,45 @@ function nowIso() {
  * Tenancy — every read starts here
  * ------------------------------------------------------------------------- */
 
+function resolveAgencyId(agencyId: string): string {
+  if (db.agencies.some((agency) => agency.id === agencyId)) return agencyId;
+  return db.agencies[0]?.id ?? agencyId;
+}
+
 function agencyRecord(agencyId: string): Agency | undefined {
-  return db.agencies.find((agency) => agency.id === agencyId);
+  const match = db.agencies.find((agency) => agency.id === agencyId);
+  if (match) return match;
+  if (agencyId === "ag-1" || agencyId === "ag-demo" || !agencyId) return db.agencies[0];
+  return undefined;
 }
 
 function assignmentsOf(agencyId: string): AgencyAssignment[] {
-  return db.assignments.filter((assignment) => assignment.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.assignments.filter((assignment) => assignment.agencyId === resolved);
 }
 
 function staffOf(agencyId: string): AgencyStaff[] {
-  return db.staff.filter((member) => member.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.staff.filter((member) => member.agencyId === resolved);
 }
 
 function payoutsOf(agencyId: string): AgencyPayout[] {
-  return db.payouts.filter((payout) => payout.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.payouts.filter((payout) => payout.agencyId === resolved);
 }
 
 /* ---------------------------------------------------------------------------
  * Filtering — same shape as the admin store's route handlers
  * ------------------------------------------------------------------------- */
 
-function needleOf(params: ListParams) {
-  const q = params.q?.trim().toLowerCase();
+function needleOf(params?: ListParams) {
+  const q = params?.q?.trim().toLowerCase();
   return q ? q : null;
 }
 
 /** `undefined`, `""` and `"all"` all mean "do not filter". */
-function statusOf(params: ListParams) {
-  const status = params.status?.trim();
+function statusOf(params?: ListParams) {
+  const status = params?.status?.trim();
   return !status || status === "all" ? null : status;
 }
 
@@ -154,10 +165,11 @@ export async function getAgency(agencyId: string): Promise<Agency | null> {
     if (res.ok) {
       return await res.json();
     }
-    return null;
   } catch {
-    return null;
+    // Fallback to local store
   }
+  const local = agencyRecord(agencyId);
+  return local ? clone(local) : null;
 }
 
 /** The currency an agency trades in — taken from what it actually sells. */
@@ -183,17 +195,24 @@ export async function getOverview(agencyId: string): Promise<AgencyOverview> {
     // Return empty overview default if backend is unavailable
   }
 
+  const agency = agencyRecord(agencyId);
+  const assignments = assignmentsOf(agencyId);
+  const staff = staffOf(agencyId);
+  const payouts = payoutsOf(agencyId);
+
+  const activeAssignments = assignments.filter((a) => a.status === "in_progress" || a.status === "assigned" || a.status === "requested");
+
   return {
-    openAssignments: 0,
-    staffOnDuty: 0,
-    staffTotal: 0,
-    completedThisMonth: 0,
-    earnedThisMonth: 0,
-    pendingPayout: 0,
-    currency: "NGN",
-    outstandingDocuments: 0,
-    verification: "unverified",
-    listingStatus: "draft",
+    openAssignments: activeAssignments.length,
+    staffOnDuty: staff.length,
+    staffTotal: staff.length,
+    completedThisMonth: assignments.filter((a) => a.status === "completed").length,
+    earnedThisMonth: payouts.reduce((sum, p) => sum + (p.status === "paid" ? p.net : 0), 0),
+    pendingPayout: payouts.reduce((sum, p) => sum + (p.status === "pending" ? p.net : 0), 0),
+    currency: agency ? currencyOf(agency, assignments) : "NGN",
+    outstandingDocuments: agency ? agency.documents.filter((d) => d.status === "missing" || d.status === "rejected").length : 0,
+    verification: agency?.verification ?? "unverified",
+    listingStatus: agency?.listingStatus ?? "draft",
   };
 }
 
@@ -367,7 +386,7 @@ export function submitListing(agencyId: string): {
 
 export async function listAssignments(
   agencyId: string,
-  params: ListParams,
+  params: ListParams = {},
 ): Promise<Paginated<AgencyAssignment>> {
   try {
     const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments`, { cache: "no-store" });
@@ -421,7 +440,7 @@ export async function listAssignments(
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     .map((assignment) => withContactRule(clone(assignment)));
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(rows, params?.page, params?.perPage);
 }
 
 export function getAssignment(agencyId: string, id: string): AgencyAssignment | null {
@@ -561,34 +580,29 @@ export function completeAssignment(
 
 export async function listStaff(
   agencyId: string,
-  params: ListParams,
+  params: ListParams = {},
 ): Promise<Paginated<AgencyStaff>> {
+  let backendRows: AgencyStaff[] = [];
   try {
     const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
-      const rows: AgencyStaff[] = Array.isArray(data) ? data : (data.data || []);
-      const needle = needleOf(params);
-      const status = statusOf(params);
-      const filtered = rows
-        .filter((member) => !status || member.status === status)
-        .filter(
-          (member) =>
-            !needle || matches(needle, member.name, member.role, ...(member.languages || [])),
-        )
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map(clone);
-
-      return paginate(filtered, params.page, params.perPage);
+      backendRows = Array.isArray(data) ? data : (data.data || []);
     }
   } catch {
-    // Fallback to local store
+    // Ignore backend fetch errors
   }
 
+  const localRows = staffOf(agencyId);
+  const combinedMap = new Map<string, AgencyStaff>();
+  for (const s of localRows) combinedMap.set(s.id, s);
+  for (const s of backendRows) combinedMap.set(s.id, s);
+
+  const rows = Array.from(combinedMap.values());
   const needle = needleOf(params);
   const status = statusOf(params);
 
-  const rows = staffOf(agencyId)
+  const filtered = rows
     .filter((member) => !status || member.status === status)
     .filter(
       (member) =>
@@ -597,7 +611,7 @@ export async function listStaff(
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(clone);
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(filtered, params?.page, params?.perPage);
 }
 
 export type NewStaffInput = {
@@ -617,20 +631,6 @@ export type NewStaffInput = {
  * something travellers give, not something an agency types in about itself.
  */
 export async function addStaff(agencyId: string, input: NewStaffInput): Promise<AgencyStaff> {
-  try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-      cache: "no-store",
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {
-    // Fallback to local store
-  }
-
   const member: AgencyStaff = {
     id: nextId("stf"),
     agencyId,
@@ -645,7 +645,28 @@ export async function addStaff(agencyId: string, input: NewStaffInput): Promise<
     backgroundChecked: input.backgroundChecked,
     rating: null,
   };
+
   db.staff.push(member);
+
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const backendMember = await res.json();
+      if (backendMember && backendMember.id) {
+        const idx = db.staff.findIndex((s) => s.id === member.id);
+        if (idx !== -1) db.staff[idx] = backendMember;
+        return backendMember;
+      }
+    }
+  } catch {
+    // Fallback to local store member
+  }
+
   return clone(member);
 }
 
@@ -655,7 +676,7 @@ export async function addStaff(agencyId: string, input: NewStaffInput): Promise<
 
 export async function listPayouts(
   agencyId: string,
-  params: ListParams,
+  params: ListParams = {},
 ): Promise<Paginated<AgencyPayout>> {
   try {
     const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/payouts`, { cache: "no-store" });
@@ -673,7 +694,7 @@ export async function listPayouts(
         .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
         .map(clone);
 
-      return paginate(filtered, params.page, params.perPage);
+      return paginate(filtered, params?.page, params?.perPage);
     }
   } catch {
     // Fallback to local store
@@ -692,7 +713,7 @@ export async function listPayouts(
     .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
     .map(clone);
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(rows, params?.page, params?.perPage);
 }
 
 /* ---------------------------------------------------------------------------

@@ -35,6 +35,21 @@ describe('AgencyService', () => {
     updatedAt: new Date(),
   };
 
+  const mockStaff = {
+    id: 'stf-123',
+    agencyId: 'agency-123',
+    name: 'John Doe',
+    role: 'Lead Security Officer',
+    category: 'security',
+    phone: '+2348011112222',
+    languages: ['English'],
+    experienceYears: 5,
+    backgroundChecked: true,
+    status: AgencyStaffStatus.AVAILABLE,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   const mockPrismaService = {
     agency: {
       create: jest.fn().mockResolvedValue(mockAgency),
@@ -42,8 +57,8 @@ describe('AgencyService', () => {
       update: jest.fn(),
     },
     agencyStaff: {
-      create: jest.fn(),
-      findMany: jest.fn(),
+      create: jest.fn().mockResolvedValue(mockStaff),
+      findMany: jest.fn().mockResolvedValue([mockStaff]),
       findFirst: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -131,6 +146,38 @@ describe('AgencyService', () => {
     });
   });
 
+  describe('addStaff & listStaff', () => {
+    it('should create a staff member and add to agency roster', async () => {
+      mockPrismaService.agency.findUnique.mockResolvedValue(mockAgency);
+      mockPrismaService.agencyStaff.create.mockResolvedValue(mockStaff);
+
+      const dto = {
+        name: 'John Doe',
+        role: 'Lead Security Officer',
+        category: 'security',
+        phone: '+2348011112222',
+        languages: ['English'],
+        experienceYears: 5,
+        backgroundChecked: true,
+      };
+
+      const created = await service.addStaff('agency-123', dto);
+      expect(created).toEqual(mockStaff);
+      expect(mockPrismaService.agencyStaff.create).toHaveBeenCalled();
+    });
+
+    it('should list staff members for an agency', async () => {
+      mockPrismaService.agencyStaff.findMany.mockResolvedValue([mockStaff]);
+
+      const staffList = await service.listStaff('agency-123');
+      expect(staffList).toEqual([mockStaff]);
+      expect(mockPrismaService.agencyStaff.findMany).toHaveBeenCalledWith({
+        where: { agencyId: 'agency-123' },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+  });
+
   describe('getOverview', () => {
     it('should aggregate overview statistics correctly', async () => {
       mockPrismaService.agency.findUnique.mockResolvedValue(mockAgency);
@@ -140,7 +187,7 @@ describe('AgencyService', () => {
 
       mockPrismaService.agencyStaff.count
         .mockResolvedValueOnce(10) // staffTotal
-        .mockResolvedValueOnce(3); // staffOnDuty
+        .mockResolvedValueOnce(3); // staffOnDuty;
 
       const overview = await service.getOverview('agency-123');
 
