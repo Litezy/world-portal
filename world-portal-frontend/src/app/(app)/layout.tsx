@@ -10,7 +10,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
     <>
       <SiteHeader variant="solid" />
       {/* The bar is fixed, so pages have to clear it themselves. */}
-      <main id="main" className="flex-1 pt-[72px] lg:pt-20">
+      <main id="main" className="flex-1 pt-20 lg:pt-24">
         {children}
       </main>
       <SiteFooter />

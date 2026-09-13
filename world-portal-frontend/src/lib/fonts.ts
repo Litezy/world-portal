@@ -10,7 +10,7 @@ export const fontSans = Plus_Jakarta_Sans({
 
 /**
  * Display serif. Only ever used in italic, for the second half of a heading
- * ("Visas, without the *guesswork.*") and the oversized DISCOVER wordmarks.
+ * ("Visas, without the *guesswork.*") and the footer's oversized DISCOVER wordmark.
  */
 export const fontDisplay = Playfair_Display({
   subsets: ["latin"],

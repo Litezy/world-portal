@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+
 import { Download, ExternalLink, Eye, FileText, Loader2, ShieldCheck } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import {

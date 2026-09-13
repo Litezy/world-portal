@@ -1,3 +1,4 @@
+import { Agency } from "@/components/sections/agency";
 import { Contact } from "@/components/sections/contact";
 import { Experiences } from "@/components/sections/experiences";
 import { Faq } from "@/components/sections/faq";
@@ -8,6 +9,7 @@ import { Journey } from "@/components/sections/journey";
 import { Passports } from "@/components/sections/passports";
 import { Visas } from "@/components/sections/visas";
 import { WhyUs } from "@/components/sections/why-us";
+import { WorldSpace } from "@/components/sections/worldspace";
 import { buildMetadata } from "@/lib/seo";
 
 // Parked, not deleted — the components still live in src/components/sections.
@@ -35,6 +37,16 @@ export default function HomePage() {
       {/* <Packages /> */}
       {/* <Testimonials /> */}
       <Experiences />
+
+      {/* Real trips posted on WorldSpace, our sister platform */}
+      <WorldSpace />
+
+      {/* The other side of the product — addressed to the agencies that staff
+          the trip, not to the traveller. It sits here because the traveller's
+          argument is already finished: WorldSpace has handed them sideways to
+          the sister platform, so the page has widened past the funnel by this
+          point, and Contact still closes it for them underneath. */}
+      <Agency />
 
       <Contact />
       <Faq />

@@ -9,8 +9,13 @@
  *   3. Experiences & tours — curation and quality
  */
 
+/** The five weather glyphs the hero forecast card knows how to draw. */
+export type ForecastIcon = "sun" | "cloud-sun" | "cloud" | "rain" | "storm";
+
 export const hero = {
   badge: "Passports · Visas · Flights · Stays",
+  headingLead: "The world is closer",
+  headingAccent: "than you think.",
   lead: "Tell us where you want to go. We sort out the passport, the visa, the flights and the hotel — so you just pack.",
   cta: { label: "Start my trip", href: "/start" },
   navCta: { label: "Get started", href: "/start" },
@@ -19,7 +24,35 @@ export const hero = {
     src: "/images/hero.jpg",
     alt: "Islands scattered across a turquoise lagoon seen from above",
   },
-  wordmark: "EXPLORE",
+  /**
+   * Static placeholder copy for the hero forecast card — a hand-written sample
+   * of the destination it pictures, not a live weather feed. Nothing here is
+   * fetched, and no API is wired up behind it. If a real forecast service ever
+   * lands, replace this object with the response rather than assuming these
+   * figures update themselves.
+   */
+  forecast: {
+    eyebrow: "Right now in",
+    place: "Malé",
+    region: "Maldives",
+    condition: "Clear skies",
+    temperature: 29,
+    unit: "°C",
+    local: "14:20 local",
+    metrics: [
+      { label: "Humidity", value: "78%" },
+      { label: "Wind", value: "14 km/h" },
+      { label: "UV", value: "11 · Extreme" },
+    ],
+    days: [
+      { day: "Mon", icon: "sun", high: 31, low: 27 },
+      { day: "Tue", icon: "cloud-sun", high: 31, low: 27 },
+      { day: "Wed", icon: "rain", high: 30, low: 26 },
+      { day: "Thu", icon: "storm", high: 29, low: 26 },
+      { day: "Fri", icon: "cloud-sun", high: 30, low: 27 },
+    ],
+    note: "January to April is the dry season — calm water, and far fewer afternoon showers.",
+  },
 } as const;
 
 export const intro = {
@@ -315,6 +348,27 @@ export const experiences = {
       span: "small",
     },
   ],
+} as const;
+
+/**
+ * Posts from WorldSpace, the sister platform under the same parent company.
+ * The section is fed by `getWorldSpaceFeed()`, and falls back to curated
+ * placeholder posts until the live feed exists — which is when
+ * `placeholderNotice` is shown.
+ *
+ * The CTA carries a label and no href on purpose: WorldSpace lives at its own
+ * origin, which differs per environment, so the URL is read from
+ * `WORLDSPACE.exploreUrl` in `src/features/worldspace/config.ts` rather than
+ * being written into copy.
+ */
+export const worldspace = {
+  eyebrow: "From WorldSpace",
+  headingLead: "Places other people",
+  headingAccent: "have already been.",
+  body: "WorldSpace is our sister platform, where travellers write up the trips they have actually taken. Open any post to read the whole thing over there.",
+  cta: { label: "See more on WorldSpace" },
+  placeholderNotice:
+    "These are sample posts, standing in until the WorldSpace feed is connected.",
 } as const;
 
 export const contact = {

@@ -29,12 +29,24 @@ test.describe("glass", () => {
     }
   });
 
-  test("the shared .glass surface blurs too", async ({ page }) => {
+  test("the shared .glass utility blurs too", async ({ page }) => {
     await page.goto("/apply");
-    const backdrop = await page
-      .locator(".glass")
-      .first()
-      .evaluate((node) => getComputedStyle(node).backdropFilter);
+
+    // `.glass` is defined in globals.css but nothing currently uses it — the
+    // rebrand moved every surface onto a variant. Asserting against a page
+    // element therefore made this guard vacuous (it passed by never finding
+    // one). Probe the utility itself instead, so the -webkit- prefix bug
+    // cannot come back through a rule no screen happens to use today.
+    const backdrop = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.className = "glass";
+      document.body.append(probe);
+      const value = getComputedStyle(probe).backdropFilter;
+      probe.remove();
+      return value;
+    });
+
+    expect(backdrop).not.toBe("none");
     expect(backdrop).toMatch(/blur\(\d/);
   });
 
@@ -58,7 +70,7 @@ test.describe("glass", () => {
     const primary = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
     );
-    // #0050c1 — the deep blue swoosh.
-    expect(primary.toLowerCase()).toBe("#0050c1");
+    // #0050c0 — the deep blue swoosh, `--brand-600` in globals.css.
+    expect(primary.toLowerCase()).toBe("#0050c0");
   });
 });

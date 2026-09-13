@@ -9,6 +9,7 @@ import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
 import { hero } from "@/content/landing";
+import { BasketButton } from "@/features/basket/components/basket-button";
 import { useScroll } from "@/hooks/use-scroll";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
         <nav
           aria-label="Main"
           className={cn(
-            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 lg:flex",
+            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 xl:flex",
             filled ? "bg-white/8" : "glass-dark",
           )}
         >
@@ -52,7 +53,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="inline-flex h-9 items-center rounded-full px-4 text-[13px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white"
+                  className="inline-flex h-9 items-center rounded-full px-3 text-[13px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white xl:px-4"
                 >
                   {item.title}
                 </a>
@@ -66,11 +67,12 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             asChild
             variant="ghost"
             size="md"
-            className="hidden lg:inline-flex text-white/90 hover:bg-white/10 hover:text-white"
+            className="hidden text-white/90 hover:bg-white/10 hover:text-white 2xl:inline-flex"
           >
             <Link href="/track">Track application</Link>
           </Button>
 
+          <BasketButton />
           <Button asChild variant="solid" size="md" className="hidden lg:inline-flex">
             <Link href={hero.navCta.href}>{hero.navCta.label}</Link>
           </Button>
@@ -81,7 +83,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="text-white lg:hidden"
+            className="text-white xl:hidden"
           >
             {open ? <X className="size-7" /> : <Menu className="size-7" />}
           </button>
@@ -92,7 +94,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
       <div
         id="mobile-nav"
         hidden={!open}
-        className="glass-dark mx-4 mb-4 rounded-3xl p-5 lg:hidden"
+        className="glass-dark mx-4 mb-4 rounded-3xl p-5 xl:hidden"
       >
         <ul className="flex flex-col gap-1">
           {mainNav.map((item) => (
@@ -108,7 +110,12 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
           ))}
         </ul>
         <div className="mt-4 grid gap-2">
-          <Button asChild variant="outline" size="block" className="border-white/20 text-white hover:bg-white/10">
+          <Button
+            asChild
+            variant="outline"
+            size="block"
+            className="border-white/20 text-white hover:bg-white/10"
+          >
             <Link href="/track" onClick={() => setOpen(false)}>
               Track application
             </Link>

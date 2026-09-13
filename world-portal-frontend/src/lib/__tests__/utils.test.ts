@@ -20,12 +20,18 @@ describe("cn", () => {
 });
 
 describe("formatCurrency", () => {
+  // The default currency is NGN, so an amount with no explicit currency
+  // formats in naira. Pass a currency to get anything else.
   it("hides decimals on whole amounts", () => {
-    expect(formatCurrency(450)).toBe("$450");
+    expect(formatCurrency(450)).toBe("\u20a6450");
   });
 
   it("keeps decimals when they matter", () => {
-    expect(formatCurrency(450.5)).toBe("$450.50");
+    expect(formatCurrency(450.5)).toBe("\u20a6450.50");
+  });
+
+  it("still honours an explicit currency", () => {
+    expect(formatCurrency(450, "USD")).toBe("$450");
   });
 });
 

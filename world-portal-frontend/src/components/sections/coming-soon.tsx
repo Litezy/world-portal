@@ -10,12 +10,11 @@ import { cn } from "@/lib/utils";
 export function ComingSoonNotice({
   notice,
   className,
-}: {
-  notice: string;
-  className?: string;
-}) {
+  ...props
+}: React.ComponentProps<"p"> & { notice: string }) {
   return (
     <p
+      {...props}
       className={cn(
         "mt-5 inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/12 px-3.5 py-1.5 text-[12.5px] font-medium text-ink-900",
         className,

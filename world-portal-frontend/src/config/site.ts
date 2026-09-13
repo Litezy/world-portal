@@ -1,3 +1,5 @@
+import { env } from "@/config/env";
+
 export const siteConfig = {
   name: "E-Embassy",
   /** Shown in the logo lockup as "by Worldstreet". */
@@ -6,7 +8,7 @@ export const siteConfig = {
   tagline: "Visas, flights and journeys worth the trip",
   description:
     "Licensed visa consultants, flights and hotels booked in hours, and curated travel experiences — handled end to end by one team.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  url: env.NEXT_PUBLIC_SITE_URL,
   locale: "en_US",
   contact: {
     phone: "+1 980 971-24-19",
