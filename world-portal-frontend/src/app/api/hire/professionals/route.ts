@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { type Professional, type Profession } from "@/content/professionals";
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
+import type { Agency } from "@/features/agency/types";
+import { listAgencies } from "@/server/agency/store";
 
 const categoryToProfession: Record<string, Profession> = {
   photographer: "photographer",
@@ -16,37 +16,59 @@ const categoryToProfession: Record<string, Profession> = {
   childcare: "childcare",
   event: "event",
   driving: "freelancer",
+  tour_guide: "freelancer",
   freelancer: "freelancer",
 };
 
-function mapBackendProToFrontend(item: any): Professional {
-  const profession = categoryToProfession[item.category] || "freelancer";
-  const price = parseFloat(item.hourlyRate) || 80;
+function mapAgencyToProfessional(agency: Agency): Professional {
+  const city = agency.cities?.[0] || agency.country || "Lagos";
+  const country = agency.country || "Nigeria";
+  const vLower = (agency.verification || "").toLowerCase();
+  const lLower = (agency.listingStatus || "").toLowerCase();
+  const isVerified = vLower === "verified" || lLower === "live";
+
+  const primaryCategory = agency.categories?.[0] || "freelancer";
+  const profession = categoryToProfession[primaryCategory] || "freelancer";
+
+  const firstOffering = agency.offerings?.[0];
+  const price = firstOffering?.price ? Number(firstOffering.price) : 150;
+  const unit = firstOffering?.unit || "per service";
+
+  const packages = (agency.offerings || []).map((offering) => ({
+    name: offering.title,
+    description: offering.description || `${offering.title} service package by ${agency.name}`,
+    price: Number(offering.price) || 150,
+  }));
+
+  if (packages.length === 0) {
+    packages.push({
+      name: `${agency.name} Service Package`,
+      description: agency.summary || "Full agency service package",
+      price: 150,
+    });
+  }
 
   return {
-    id: item.slug || item.id,
-    photo: item.avatarUrl || undefined,
-    name: item.name,
-    tagline: item.title || item.bio || "Vetted Professional",
+    id: `agency-${agency.id}`,
+    photo: agency.logoUrl || undefined,
+    name: agency.name,
+    tagline: agency.summary || `${agency.name} Agency`,
     profession,
-    city: item.city || "Athens",
-    country: item.country || "Greece",
-    languages: Array.isArray(item.languages) ? item.languages : ["English"],
-    rating: parseFloat(item.rating) || 4.9,
-    jobs: item.completedJobs || 24,
-    years: 5,
-    price: price,
-    unit: "per hour",
-    about: item.bio || "Vetted local professional ready for hire.",
-    availability: "Daily availability on request",
-    packages: [
-      { name: "Standard Session", description: "Half-day service", price: price * 4 },
-      { name: "Full Day Package", description: "Full day on-call service", price: price * 8 },
-    ],
-    included: ["Service delivery", "Direct communication", "Quality guarantee"],
-    skills: Array.isArray(item.skills) && item.skills.length > 0 ? item.skills : [item.title || profession],
+    city,
+    country,
+    languages: agency.languages && agency.languages.length > 0 ? agency.languages : ["English"],
+    rating: agency.rating ? Number(agency.rating) : 4.9,
+    jobs: agency.completedJobs || 0,
+    years: Math.max(1, new Date().getFullYear() - (agency.yearFounded || 2020)),
+    price,
+    unit,
+    about: agency.about || agency.summary || "Verified agency listing",
+    availability: "Available for booking",
+    packages,
+    included: ["Vetted agency team", "Quality guarantee", "Direct agency support"],
+    skills: agency.categories || [profession],
     cancellation: "Flexible 48-hour cancellation policy",
-    verified: Boolean(item.isVerified),
+    verified: isVerified,
   };
 }
 
@@ -56,29 +78,38 @@ export async function GET(request: Request) {
   const search = searchParams.get("search");
   const city = searchParams.get("city");
 
-  try {
-    const url = new URL(`${BACKEND_API_URL}/hire/professionals`);
-    url.searchParams.set("page", "1");
-    url.searchParams.set("limit", "100");
-    if (category && category !== "all") url.searchParams.set("category", category);
-    if (search) url.searchParams.set("search", search);
-    if (city && city !== "all") url.searchParams.set("city", city);
+  const results: Professional[] = [];
 
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    if (res.ok) {
-      const json = await res.json();
-      const rawList = json?.data?.data || json?.data || [];
-      if (Array.isArray(rawList)) {
-        let mapped = rawList.map(mapBackendProToFrontend);
-        if (city && city !== "all") {
-          mapped = mapped.filter((item) => item.city.toLowerCase() === city.toLowerCase());
-        }
-        return NextResponse.json(mapped);
+  try {
+    const paginatedAgencies = await listAgencies({ verification: "VERIFIED", perPage: 100 });
+    const agencies = paginatedAgencies?.data || (paginatedAgencies as any)?.items || [];
+    for (const agency of agencies) {
+      const pro = mapAgencyToProfessional(agency);
+      if (pro.verified) {
+        results.push(pro);
       }
     }
   } catch {
-    // Return empty if backend call fails
+    // Continue if agency list fails
   }
 
-  return NextResponse.json([]);
+  let filtered = results;
+  if (category && category !== "all") {
+    filtered = filtered.filter((item) => item.profession === category);
+  }
+  if (city && city !== "all") {
+    filtered = filtered.filter((item) => item.city.toLowerCase() === city.toLowerCase());
+  }
+  if (search) {
+    const needle = search.toLowerCase();
+    filtered = filtered.filter(
+      (item) =>
+        item.name.toLowerCase().includes(needle) ||
+        item.tagline.toLowerCase().includes(needle) ||
+        item.about.toLowerCase().includes(needle) ||
+        item.skills.some((s) => s.toLowerCase().includes(needle)),
+    );
+  }
+
+  return NextResponse.json(filtered);
 }

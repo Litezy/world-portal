@@ -54,6 +54,7 @@ describe('AgencyService', () => {
     agency: {
       create: jest.fn().mockResolvedValue(mockAgency),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     agencyStaff: {
@@ -132,6 +133,7 @@ describe('AgencyService', () => {
   describe('getAgencyById', () => {
     it('should return agency if found', async () => {
       mockPrismaService.agency.findUnique.mockResolvedValue(mockAgency);
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
 
       const result = await service.getAgencyById('agency-123');
       expect(result).toEqual(mockAgency);
@@ -139,6 +141,7 @@ describe('AgencyService', () => {
 
     it('should throw NotFoundException if agency is missing', async () => {
       mockPrismaService.agency.findUnique.mockResolvedValue(null);
+      mockPrismaService.agency.findFirst.mockResolvedValue(null);
 
       await expect(service.getAgencyById('invalid-id')).rejects.toThrow(
         NotFoundException,
@@ -149,6 +152,7 @@ describe('AgencyService', () => {
   describe('addStaff & listStaff', () => {
     it('should create a staff member and add to agency roster', async () => {
       mockPrismaService.agency.findUnique.mockResolvedValue(mockAgency);
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
       mockPrismaService.agencyStaff.create.mockResolvedValue(mockStaff);
 
       const dto = {
@@ -181,6 +185,7 @@ describe('AgencyService', () => {
   describe('getOverview', () => {
     it('should aggregate overview statistics correctly', async () => {
       mockPrismaService.agency.findUnique.mockResolvedValue(mockAgency);
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
       mockPrismaService.agencyAssignment.count
         .mockResolvedValueOnce(2) // openAssignments
         .mockResolvedValueOnce(5); // completedThisMonth

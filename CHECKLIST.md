@@ -84,3 +84,34 @@
   - [x] Admin Agencies Management Hub (`/admin/agencies`)
   - [x] Admin Professionals Management Hub (`/admin/professionals`)
   - [x] Navigation sidebar links added to desktop and mobile drawer
+
+---
+
+## Phase 7: End-to-End Backend Integration Checklist (Missing Seams) — **COMPLETED**
+
+### 7.1 Agency Console & Auth Seams (`/api/agency/*`) — **COMPLETED**
+- [x] **7.1.1 Agency Registration & Login (`/api/agency/auth/*`)**
+  - Connect `registerAgency` to NestJS `POST /api/agency`
+  - Connect `authenticateAgency` to query NestJS Agency database
+- [x] **7.1.2 Agency Dashboard Overview (`/api/agency/overview`)**
+  - Proxy headline overview metrics to NestJS `GET /api/agency/:id/overview`
+- [x] **7.1.3 Staff Roster (`/api/agency/staff`)**
+  - Proxy staff list & add staff to NestJS `GET/POST /api/agency/:id/staff`
+- [x] **7.1.4 Compliance Documents (`/api/agency/listing/documents`)**
+  - Proxy document uploads to NestJS `POST /api/agency/:id/documents`
+- [x] **7.1.5 Booking Assignments (`/api/agency/assignments`)**
+  - Proxy assignments & staff allocation to NestJS `GET /api/agency/:id/assignments` & `POST /api/agency/:id/assignments/:assignmentId/assign`
+- [x] **7.1.6 Payout History (`/api/agency/payouts`)**
+  - Proxy payouts list to NestJS `GET /api/agency/:id/payouts`
+
+### 7.2 Visa & Passport Applications Admin Seams (`/admin/applications` & `/admin/passports`) — **COMPLETED**
+- [x] **7.2.1 Visa Applications Management**
+  - Verify proxy to NestJS `GET /visa-documentation` & application decision evaluation
+- [x] **7.2.2 Passport Applications Management**
+  - Verify proxy to NestJS `GET /passport-application` & bank transfer payment confirmation
+
+### 7.3 OTP Verification Seam (`/api/otp/*`) — **COMPLETED**
+- [x] **7.3.1 Mobile OTP Proxy**
+  - Connect OTP send & verify routes to NestJS API
+
+

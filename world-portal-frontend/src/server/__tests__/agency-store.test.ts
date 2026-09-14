@@ -8,14 +8,24 @@ import {
   getOverview,
   listAssignments,
   listStaff,
+  listAgencies,
 } from "../agency/store";
 
 describe("Agency Store", () => {
-  it("retrieves a seed agency by ID", async () => {
-    const agency = await getAgency("ag-sentinel-ridge");
+  it("retrieves a created agency by ID", async () => {
+    const created = createAgency({
+      agencyName: "Test Agency One",
+      contactName: "Owner One",
+      email: "owner1@test.com",
+      phone: "+15550111",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const agency = await getAgency(created.agency.id);
     expect(agency).not.toBeNull();
-    expect(agency?.id).toBe("ag-sentinel-ridge");
-    expect(agency?.name).toContain("Sentinel Ridge");
+    expect(agency?.id).toBe(created.agency.id);
+    expect(agency?.name).toBe("Test Agency One");
   });
 
   it("returns null for non-existent agency ID", async () => {
@@ -24,16 +34,34 @@ describe("Agency Store", () => {
   });
 
   it("retrieves overview stats for agency", async () => {
-    const overview = await getOverview("ag-sentinel-ridge");
+    const created = createAgency({
+      agencyName: "Test Agency Two",
+      contactName: "Owner Two",
+      email: "owner2@test.com",
+      phone: "+15550222",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const overview = await getOverview(created.agency.id);
     expect(overview.openAssignments).toBeGreaterThanOrEqual(0);
     expect(overview.staffTotal).toBeGreaterThanOrEqual(0);
   });
 
   it("lists staff for an agency and allows adding new staff", async () => {
-    const initialStaff = await listStaff("ag-sentinel-ridge");
+    const created = createAgency({
+      agencyName: "Test Agency Three",
+      contactName: "Owner Three",
+      email: "owner3@test.com",
+      phone: "+15550333",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const initialStaff = await listStaff(created.agency.id);
     const initialCount = initialStaff.data.length;
 
-    const newStaff = await addStaff("ag-sentinel-ridge", {
+    const newStaff = await addStaff(created.agency.id, {
       name: "Jane Test Staff",
       role: "Immigration Specialist",
       category: "tour_guide",
@@ -47,15 +75,24 @@ describe("Agency Store", () => {
     expect(newStaff.name).toBe("Jane Test Staff");
     expect(newStaff.role).toBe("Immigration Specialist");
 
-    const updatedStaff = await listStaff("ag-sentinel-ridge");
+    const updatedStaff = await listStaff(created.agency.id);
     expect(updatedStaff.data.length).toBe(initialCount + 1);
     expect(updatedStaff.data.some((s) => s.id === newStaff.id)).toBe(true);
   });
 
   it("finds agency user by email", () => {
-    const user = findAgencyUserByEmail("adaeze@sentinelridge.example");
+    const created = createAgency({
+      agencyName: "Test Agency Four",
+      contactName: "Owner Four",
+      email: "owner4@test.com",
+      phone: "+15550444",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const user = findAgencyUserByEmail("owner4@test.com");
     expect(user).not.toBeNull();
-    expect(user?.agencyId).toBe("ag-sentinel-ridge");
+    expect(user?.agencyId).toBe(created.agency.id);
     expect(user?.role).toBe("owner");
   });
 
@@ -79,18 +116,33 @@ describe("Agency Store", () => {
   });
 
   it("lists assignments and allows assigning staff", async () => {
-    const assignments = await listAssignments("ag-sentinel-ridge");
+    const created = createAgency({
+      agencyName: "Test Agency Five",
+      contactName: "Owner Five",
+      email: "owner5@test.com",
+      phone: "+15550555",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const assignments = await listAssignments(created.agency.id);
     expect(assignments.data).toBeDefined();
 
     if (assignments.data.length > 0) {
       const targetAssignment = assignments.data[0];
-      const staffList = await listStaff("ag-sentinel-ridge");
+      const staffList = await listStaff(created.agency.id);
       if (staffList.data.length > 0) {
         const staffMember = staffList.data[0];
-        const updated = await assignStaff("ag-sentinel-ridge", targetAssignment.id, [staffMember.id]);
+        const updated = await assignStaff(created.agency.id, targetAssignment.id, [staffMember.id]);
         expect(updated).not.toBeNull();
         expect(updated?.assignment?.assignedStaffIds).toContain(staffMember.id);
       }
     }
   });
+
+  it("lists all agencies for admin management", async () => {
+    const res = await listAgencies({ perPage: 100 });
+    expect(res.data).toBeDefined();
+    expect(Array.isArray(res.data)).toBe(true);
+  }, 15000);
 });

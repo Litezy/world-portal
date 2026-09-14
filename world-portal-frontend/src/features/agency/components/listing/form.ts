@@ -95,11 +95,16 @@ export function toFormValues(agency: Agency): ListingFormValues {
  * always sent, because emptying one is a real edit.
  */
 export function toPatch(values: ListingFormValues): ListingPatchInput {
+  const selectedCategories = new Set(values.categories);
+  const activeOfferings = (values.offerings ?? []).filter((o) =>
+    selectedCategories.has(o.category),
+  );
+
   const patch: Record<string, unknown> = {
     cities: values.cities,
     categories: values.categories,
     languages: values.languages,
-    offerings: values.offerings,
+    offerings: activeOfferings,
   };
 
   const text = {
@@ -148,7 +153,6 @@ export function missingProfileFields(values: ListingFormValues): string[] {
 
   if (!values.name.trim()) missing.push(copy.name);
   if (!values.legalName.trim()) missing.push(copy.legalName);
-  if (!values.registrationNumber.trim()) missing.push(copy.registrationNumber);
   if (!values.countryCode) missing.push(copy.country);
   if (values.cities.length === 0) missing.push(copy.cities);
   if (!values.summary.trim()) missing.push(copy.summary);

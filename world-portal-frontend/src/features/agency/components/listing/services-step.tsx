@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { useFieldArray, type UseFormReturn, useWatch } from "react-hook-form";
 
@@ -55,19 +56,37 @@ export function ServicesStep({
     name: "offerings",
   });
 
-  /**
-   * Toggling reads the live value out of the form's ref rather than a value
-   * captured during render — the functional-setState rule in the same clothes.
-   * Two clicks inside one React batch otherwise both read the same stale array
-   * and the second discards the first.
-   */
   function toggleCategory(category: AgencyCategory) {
     const current = form.getValues("categories");
-    const next = current.includes(category)
-      ? current.filter((c) => c !== category)
-      : [...current, category];
+    const isSelecting = !current.includes(category);
+    const next = isSelecting
+      ? [...current, category]
+      : current.filter((c) => c !== category);
     form.setValue("categories", next, { shouldDirty: true, shouldValidate: true });
+
+    if (isSelecting) {
+      const currentOfferings = form.getValues("offerings") || [];
+      const exists = currentOfferings.some((o) => o.category === category);
+      if (!exists) {
+        append(newOffering(category));
+      }
+    } else {
+      const currentOfferings = form.getValues("offerings") || [];
+      const remainingOfferings = currentOfferings.filter((o) => o.category !== category);
+      form.setValue("offerings", remainingOfferings, { shouldDirty: true, shouldValidate: true });
+    }
   }
+
+  React.useEffect(() => {
+    const currentOfferings = form.getValues("offerings") || [];
+    const currentCategories = form.getValues("categories") || [];
+    for (const cat of currentCategories) {
+      const exists = currentOfferings.some((o) => o.category === cat);
+      if (!exists) {
+        append(newOffering(cat));
+      }
+    }
+  }, []);
 
   const documentCount = documentsForCategories(categories).length;
 

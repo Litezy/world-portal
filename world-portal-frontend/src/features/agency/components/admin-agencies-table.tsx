@@ -19,6 +19,8 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "@/components/admin/data-table";
+import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -80,15 +83,28 @@ export function AdminAgenciesTable() {
   const [verification, setVerification] = React.useState("ALL");
   const [loading, setLoading] = React.useState(true);
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
+  const [updatingVerificationAction, setUpdatingVerificationAction] = React.useState<"verify" | "suspend" | null>(null);
+  const [updatingDocAction, setUpdatingDocAction] = React.useState<{ docId: string; action: "approve" | "reject" } | null>(null);
   const [selectedAgency, setSelectedAgency] = React.useState<AgencyRecord | null>(null);
+  const [rejectingDoc, setRejectingDoc] = React.useState<{ agencyId: string; docId: string; label: string } | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const [perPage] = React.useState(6);
+  const [meta, setMeta] = React.useState({ page: 1, perPage: 6, total: 0, totalPages: 1 });
 
   const debouncedSearch = useDebounce(search, 250);
 
-  const fetchAgencies = React.useCallback(() => {
-    setLoading(true);
+  React.useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, verification]);
+
+  const fetchAgencies = React.useCallback((showLoading = true) => {
+    if (showLoading) setLoading(true);
     const params = new URLSearchParams();
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (verification !== "ALL") params.set("verification", verification);
+    params.set("page", page.toString());
+    params.set("perPage", perPage.toString());
 
     const url = `/api/admin/agencies${params.toString() ? `?${params.toString()}` : ""}`;
 
@@ -97,36 +113,115 @@ export function AdminAgenciesTable() {
       .then((resData) => {
         const extracted = extractArray(resData);
         setAgencies(extracted);
-        if (selectedAgency) {
-          const match = extracted.find((a) => a.id === selectedAgency.id);
-          if (match) setSelectedAgency(match);
+        if (resData && resData.meta) {
+          setMeta(resData.meta);
+        } else {
+          setMeta({ page, perPage, total: extracted.length, totalPages: Math.max(1, Math.ceil(extracted.length / perPage)) });
         }
       })
       .catch(() => setAgencies([]))
       .finally(() => setLoading(false));
-  }, [debouncedSearch, verification, selectedAgency?.id]);
+  }, [debouncedSearch, verification, page, perPage]);
 
   React.useEffect(() => {
     fetchAgencies();
-  }, [debouncedSearch, verification]);
+  }, [fetchAgencies]);
 
   const handleUpdateStatus = async (id: string, newVerification: string) => {
     setUpdatingId(id);
+    const targetVerificationUpper = newVerification.toUpperCase();
+    const action = targetVerificationUpper === "VERIFIED" ? "verify" : "suspend";
+    setUpdatingVerificationAction(action);
+
+    const targetListingStatus =
+      targetVerificationUpper === "VERIFIED"
+        ? "LIVE"
+        : targetVerificationUpper === "SUSPENDED"
+        ? "REJECTED"
+        : "DRAFT";
+
+    const patchAgency = (a: AgencyRecord): AgencyRecord => ({
+      ...a,
+      verification: targetVerificationUpper,
+      listingStatus: targetListingStatus,
+    });
+
+    // Real-time optimistic state update
+    setAgencies((prev) => prev.map((a) => (a.id === id ? patchAgency(a) : a)));
+    setSelectedAgency((prev) => (prev && prev.id === id ? patchAgency(prev) : prev));
+
     try {
       const res = await fetch(`/api/admin/agencies?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verification: newVerification }),
+        body: JSON.stringify({ verification: targetVerificationUpper }),
       });
       if (res.ok) {
-        if (selectedAgency && selectedAgency.id === id) {
-          setSelectedAgency({ ...selectedAgency, verification: newVerification });
+        const resJson = await res.json();
+        const updated = resJson.data;
+        if (updated) {
+          setAgencies((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+          setSelectedAgency((prev) => (prev && prev.id === id ? { ...prev, ...updated } : prev));
         }
-        fetchAgencies();
+        fetchAgencies(false);
       }
     } finally {
       setUpdatingId(null);
+      setUpdatingVerificationAction(null);
     }
+  };
+
+  const handleUpdateDocStatus = async (
+    agencyId: string,
+    docId: string,
+    docStatus: string,
+    note?: string
+  ) => {
+    const action = docStatus.toUpperCase() === "APPROVED" ? "approve" : "reject";
+    setUpdatingDocAction({ docId, action });
+
+    const updatedStatusUpper = docStatus.toUpperCase();
+    const updateDocList = (docs: any[]) =>
+      (docs || []).map((d) =>
+        d.id === docId || d.kind === docId || d.kind?.toUpperCase() === docId.toUpperCase()
+          ? { ...d, status: updatedStatusUpper, ...(note ? { note } : {}) }
+          : d
+      );
+
+    try {
+      const res = await fetch(`/api/admin/agencies?id=${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docId, docStatus: updatedStatusUpper, note }),
+      });
+
+      // Apply document status update after response completes so the spinner displays inside the clicked button during request
+      setAgencies((prev) =>
+        prev.map((a) =>
+          a.id === agencyId ? { ...a, documents: updateDocList(a.documents || []) } : a
+        )
+      );
+      setSelectedAgency((prev) =>
+        prev && prev.id === agencyId
+          ? { ...prev, documents: updateDocList(prev.documents || []) }
+          : prev
+      );
+
+      if (res.ok) {
+        fetchAgencies(false);
+      }
+    } finally {
+      setUpdatingDocAction(null);
+    }
+  };
+
+  const confirmRejection = async () => {
+    if (!rejectingDoc) return;
+    const { agencyId, docId } = rejectingDoc;
+    const note = rejectionReason.trim() || "Document does not meet compliance requirements.";
+    setRejectingDoc(null);
+    setRejectionReason("");
+    await handleUpdateDocStatus(agencyId, docId, "REJECTED", note);
   };
 
   const safeAgencies = Array.isArray(agencies) ? agencies : [];
@@ -159,7 +254,8 @@ export function AdminAgenciesTable() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Showing <span className="font-semibold text-foreground">{safeAgencies.length}</span> agencies
+          Showing <span className="font-semibold text-foreground">{safeAgencies.length}</span> of{" "}
+          <span className="font-semibold text-foreground">{meta.total}</span> agencies
         </p>
       </div>
 
@@ -189,104 +285,130 @@ export function AdminAgenciesTable() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-          {safeAgencies.map((agency) => {
-            const isVerified = agency.verification === "VERIFIED";
-            const isPending = agency.verification === "PENDING";
-            const isSuspended = agency.verification === "SUSPENDED";
-            const isUpdating = updatingId === agency.id;
+        <>
+          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+            {safeAgencies.map((agency) => {
+              const vUpper = (agency.verification || "").toUpperCase();
+              const isVerified = vUpper === "VERIFIED";
+              const isPending = vUpper === "PENDING";
+              const isSuspended = vUpper === "SUSPENDED";
+              const isUpdating = updatingId === agency.id;
 
-            return (
-              <div
-                key={agency.id}
-                onClick={() => setSelectedAgency(agency)}
-                className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-border bg-card p-5 shadow-card transition-all hover:border-primary/50 hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                      <h3 className="text-base font-semibold text-ink-900 leading-tight group-hover:text-primary transition-colors">
-                        {agency.name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {agency.legalName} · Reg #{agency.registrationNumber}
-                      </p>
+              const docs = agency.documents || [];
+              const submittedDocs = docs.filter(
+                (d) => d.status && d.status.toUpperCase() !== "MISSING"
+              );
+              const approvedDocs = docs.filter(
+                (d) => (d.status || "").toUpperCase() === "APPROVED" || (d.status || "").toUpperCase() === "VERIFIED"
+              );
+              const submittedCount = Math.max(submittedDocs.length, docs.length);
+              const approvedCount = approvedDocs.length;
+
+              return (
+                <div
+                  key={agency.id}
+                  onClick={() => setSelectedAgency(agency)}
+                  className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-border bg-card p-5 shadow-card transition-all hover:border-primary/50 hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <h3 className="text-base font-semibold text-ink-900 leading-tight group-hover:text-primary transition-colors">
+                          {agency.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {agency.legalName} · Reg #{agency.registrationNumber}
+                        </p>
+                      </div>
+
+                      <Badge
+                        variant={isVerified ? "solid" : isPending ? "softWarning" : isSuspended ? "destructive" : "muted"}
+                        size="sm"
+                        className="shrink-0 uppercase text-[10px] tracking-wider"
+                      >
+                        {agency.verification}
+                      </Badge>
                     </div>
 
-                    <Badge
-                      variant={isVerified ? "solid" : isPending ? "softWarning" : isSuspended ? "destructive" : "muted"}
+                    <div className="flex flex-wrap items-center gap-2 my-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 font-medium text-foreground">
+                        <MapPin className="size-3.5 text-primary" />
+                        {agency.country} ({agency.cities.join(", ")})
+                      </span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1">
+                        <Users className="size-3.5 text-primary" />
+                        {agency.staffCount} Staff
+                      </span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1 font-medium text-foreground">
+                        <FileCheck2 className="size-3.5 text-primary" />
+                        Paperwork: {approvedCount}/{submittedCount} Approved
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {agency.categories.map((cat) => (
+                        <Badge key={cat} variant="muted" size="sm" className="capitalize text-[11px]">
+                          {cat}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-border pt-4 mt-2">
+                    <Button
+                      variant="ghost"
                       size="sm"
-                      className="shrink-0 uppercase text-[10px] tracking-wider"
+                      className="text-xs text-muted-foreground group-hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAgency(agency);
+                      }}
+                      leftIcon={<Eye className="size-3.5" />}
                     >
-                      {agency.verification}
-                    </Badge>
-                  </div>
+                      View Full Details
+                    </Button>
 
-                  <div className="flex flex-wrap items-center gap-2 my-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1 font-medium text-foreground">
-                      <MapPin className="size-3.5 text-primary" />
-                      {agency.country} ({agency.cities.join(", ")})
-                    </span>
-                    <span>·</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="size-3.5" />
-                      {agency.staffCount} Staff
-                    </span>
-                  </div>
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {!isVerified && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={isUpdating}
+                          isLoading={isUpdating}
+                          onClick={() => handleUpdateStatus(agency.id, "VERIFIED")}
+                          leftIcon={<CheckCircle2 className="size-3.5" />}
+                        >
+                          Verify
+                        </Button>
+                      )}
 
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {agency.categories.map((cat) => (
-                      <Badge key={cat} variant="muted" size="sm" className="capitalize text-[11px]">
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-border pt-4 mt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground group-hover:text-primary"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAgency(agency);
-                    }}
-                    leftIcon={<Eye className="size-3.5" />}
-                  >
-                    View Full Details
-                  </Button>
-
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    {!isVerified && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={isUpdating}
-                        onClick={() => handleUpdateStatus(agency.id, "VERIFIED")}
-                        leftIcon={<CheckCircle2 className="size-3.5" />}
-                      >
-                        Verify
-                      </Button>
-                    )}
-
-                    {!isSuspended && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isUpdating}
-                        onClick={() => handleUpdateStatus(agency.id, "SUSPENDED")}
-                        leftIcon={<XCircle className="size-3.5 text-destructive" />}
-                      >
-                        Suspend
-                      </Button>
-                    )}
+                      {!isSuspended && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isUpdating}
+                          isLoading={isUpdating}
+                          onClick={() => handleUpdateStatus(agency.id, "SUSPENDED")}
+                          leftIcon={<XCircle className="size-3.5 text-destructive" />}
+                        >
+                          Suspend
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          <DataTablePagination
+            meta={meta}
+            onPage={(newPage) => setPage(newPage)}
+            noun="agencies"
+          />
+        </>
       )}
 
       {/* Agency Details Modal */}
@@ -401,13 +523,20 @@ export function AdminAgenciesTable() {
               )}
 
               {/* Compliance Documents */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                  <span>Compliance Paperwork</span>
-                  <span className="normal-case text-muted-foreground font-normal">
-                    {selectedAgency.documents?.length || 0} Documents uploaded
-                  </span>
-                </h4>
+              {(() => {
+                const modalDocs = selectedAgency.documents || [];
+                const modalSubmitted = modalDocs.filter((d) => d.status && d.status.toUpperCase() !== "MISSING");
+                const modalApproved = modalDocs.filter((d) => (d.status || "").toUpperCase() === "APPROVED" || (d.status || "").toUpperCase() === "VERIFIED");
+                const modalSubmittedCount = Math.max(modalSubmitted.length, modalDocs.length);
+
+                return (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                      <span>Compliance Paperwork</span>
+                      <span className="normal-case text-primary font-semibold text-xs">
+                        {modalApproved.length}/{modalSubmittedCount} Approved
+                      </span>
+                    </h4>
 
                 {!selectedAgency.documents || selectedAgency.documents.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic bg-muted/20 p-3 rounded-lg border border-dashed border-border">
@@ -416,42 +545,93 @@ export function AdminAgenciesTable() {
                 ) : (
                   <div className="space-y-2">
                     {selectedAgency.documents.map((doc) => {
-                      const docVerified = doc.status === "VERIFIED";
-                      const docMissing = doc.status === "MISSING";
+                      const docStatusUpper = (doc.status || "MISSING").toUpperCase();
+                      const docApproved = docStatusUpper === "APPROVED" || docStatusUpper === "VERIFIED";
+                      const docRejected = docStatusUpper === "REJECTED";
+                      const docMissing = docStatusUpper === "MISSING";
+                      const docIdOrKind = doc.kind || doc.id;
+
                       return (
                         <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-3 rounded-lg border border-border bg-card text-xs"
+                          key={doc.id || doc.kind}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card text-xs"
                         >
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
                             <FileCheck2 className="size-4 text-primary shrink-0" />
-                            <div>
-                              <p className="font-medium text-foreground">{formatKindLabel(doc.kind)}</p>
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate">{formatKindLabel(doc.kind)}</p>
                               {doc.fileUrl && (
-                                <a
-                                  href={doc.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-[11px] text-primary hover:underline flex items-center gap-1 mt-0.5"
-                                >
-                                  View File <ExternalLink className="size-2.5" />
-                                </a>
+                                <div className="mt-1">
+                                  <DocumentViewerModal
+                                    label={formatKindLabel(doc.kind)}
+                                    url={doc.fileUrl}
+                                  />
+                                </div>
+                              )}
+                              {docRejected && doc.note && (
+                                <div className="mt-1.5 text-[11px] text-destructive bg-destructive/10 p-2 rounded-md border border-destructive/20 leading-tight">
+                                  <span className="font-semibold">Rejection Reason:</span> {doc.note}
+                                </div>
                               )}
                             </div>
                           </div>
-                          <Badge
-                            variant={docVerified ? "solid" : docMissing ? "destructive" : "softWarning"}
-                            size="sm"
-                            className="uppercase text-[10px]"
-                          >
-                            {doc.status}
-                          </Badge>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge
+                              variant={docApproved ? "solid" : docRejected || docMissing ? "destructive" : "softWarning"}
+                              size="sm"
+                              className="uppercase text-[10px]"
+                            >
+                              {docStatusUpper}
+                            </Badge>
+
+                            {!docMissing && (
+                              <div className="flex items-center gap-1">
+                                {!docApproved && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px] hover:border-emerald-500 hover:text-emerald-600"
+                                    disabled={updatingId === selectedAgency.id || !!updatingDocAction}
+                                    isLoading={updatingDocAction?.docId === docIdOrKind && updatingDocAction?.action === "approve"}
+                                    onClick={() => handleUpdateDocStatus(selectedAgency.id, docIdOrKind, "APPROVED")}
+                                  >
+                                    <CheckCircle2 className="size-3 text-emerald-600 mr-1" />
+                                    Approve
+                                  </Button>
+                                )}
+
+                                {!docRejected && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px] hover:border-destructive hover:text-destructive"
+                                    disabled={updatingId === selectedAgency.id || !!updatingDocAction}
+                                    isLoading={updatingDocAction?.docId === docIdOrKind && updatingDocAction?.action === "reject"}
+                                    onClick={() => {
+                                      setRejectionReason(doc.note || "");
+                                      setRejectingDoc({
+                                        agencyId: selectedAgency.id,
+                                        docId: docIdOrKind,
+                                        label: formatKindLabel(doc.kind),
+                                      });
+                                    }}
+                                  >
+                                    <XCircle className="size-3 text-destructive mr-1" />
+                                    Reject
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
+                );
+              })()}
 
               {/* Staff Overview */}
               {selectedAgency.staff && selectedAgency.staff.length > 0 && (
@@ -478,11 +658,13 @@ export function AdminAgenciesTable() {
               </div>
 
               <div className="flex items-center gap-2">
-                {selectedAgency.verification !== "VERIFIED" && (
+                {(selectedAgency.verification || "").toUpperCase() !== "VERIFIED" && (
                   <Button
                     variant="primary"
                     size="sm"
                     disabled={updatingId === selectedAgency.id}
+                    isLoading={updatingVerificationAction === "verify"}
+                    loadingText="Verifying..."
                     onClick={() => handleUpdateStatus(selectedAgency.id, "VERIFIED")}
                     leftIcon={<CheckCircle2 className="size-3.5" />}
                   >
@@ -490,11 +672,13 @@ export function AdminAgenciesTable() {
                   </Button>
                 )}
 
-                {selectedAgency.verification !== "SUSPENDED" && (
+                {(selectedAgency.verification || "").toUpperCase() !== "SUSPENDED" && (
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={updatingId === selectedAgency.id}
+                    isLoading={updatingVerificationAction === "suspend"}
+                    loadingText="Suspending..."
                     onClick={() => handleUpdateStatus(selectedAgency.id, "SUSPENDED")}
                     leftIcon={<XCircle className="size-3.5 text-destructive" />}
                   >
@@ -502,6 +686,58 @@ export function AdminAgenciesTable() {
                   </Button>
                 )}
               </div>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Rejection Reason Modal */}
+      <Dialog open={!!rejectingDoc} onOpenChange={(open) => !open && setRejectingDoc(null)}>
+        {rejectingDoc && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-ink-900">
+                Reject Compliance Paperwork
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Provide a reason for rejecting <span className="font-semibold text-foreground">{rejectingDoc.label}</span>. This reason will be displayed in the agency portal so they can re-upload a corrected file.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Reason for Rejection *</label>
+                <Textarea
+                  placeholder="e.g. Image is blurry, tax certificate is expired, or document is missing stamp..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="text-xs min-h-[100px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRejectingDoc(null);
+                  setRejectionReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                disabled={!rejectionReason.trim() || !!updatingDocAction}
+                isLoading={updatingDocAction?.action === "reject"}
+                loadingText="Rejecting..."
+                onClick={confirmRejection}
+              >
+                Confirm Rejection
+              </Button>
             </div>
           </DialogContent>
         )}

@@ -20,6 +20,21 @@ export class UpdateAgencyListingDto {
   @IsString()
   legalName?: string;
 
+  @ApiPropertyOptional({ description: 'Business registration / CAC number' })
+  @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @ApiPropertyOptional({ description: 'ISO 2-character country code (e.g. NG, US)' })
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
+  @ApiPropertyOptional({ description: 'Full country name' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
   @ApiPropertyOptional({ description: 'Short summary headline' })
   @IsOptional()
   @IsString()
@@ -35,6 +50,11 @@ export class UpdateAgencyListingDto {
   @IsString()
   logoUrl?: string;
 
+  @ApiPropertyOptional({ description: 'Primary contact email' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
   @ApiPropertyOptional({ description: 'Contact phone number' })
   @IsOptional()
   @IsString()
@@ -44,6 +64,11 @@ export class UpdateAgencyListingDto {
   @IsOptional()
   @IsString()
   website?: string;
+
+  @ApiPropertyOptional({ description: 'Year founded' })
+  @IsOptional()
+  @IsNumber()
+  yearFounded?: number;
 
   @ApiPropertyOptional({ description: 'Number of staff' })
   @IsOptional()
@@ -85,4 +110,12 @@ export class UpdateAgencyListingDto {
   @IsOptional()
   @IsEnum(AgencyListingStatus)
   listingStatus?: AgencyListingStatus;
+
+  @ApiPropertyOptional({
+    description: 'Service offerings',
+    type: [Object],
+  })
+  @IsOptional()
+  @IsArray()
+  offerings?: any[];
 }

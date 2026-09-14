@@ -1,66 +1,190 @@
-import { describe, expect, it, vi } from "vitest";
-import { authenticateAgency, registerAgency } from "../agency/auth";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  authenticateAgency,
+  registerAgency,
+  sendAgencyOtp,
+  verifyAgencyOtp,
+} from "../agency/auth";
 
-describe("Agency Auth", () => {
-  it("authenticates seed user with correct password", async () => {
-    const { user, message } = await authenticateAgency(
-      "adaeze@sentinelridge.example",
-      "worldportal-agency",
+describe("Agency Auth (Passwordless OTP)", () => {
+  const registeredAgencies: any[] = [];
+
+  beforeEach(() => {
+    registeredAgencies.length = 0;
+
+    // Mock fetch for NestJS backend endpoints
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string, options?: any) => {
+        if (typeof url === "string" && url.includes("/agency")) {
+          if (options?.method === "POST") {
+            const body = JSON.parse(options.body);
+            const newAgency = {
+              id: `ag-test-${Date.now()}`,
+              name: body.name,
+              email: body.email,
+              phone: body.phone,
+              country: body.country,
+              countryCode: body.countryCode,
+              users: [{ id: `agu-test-${Date.now()}`, name: body.name, email: body.email }],
+            };
+            registeredAgencies.push(newAgency);
+            return {
+              ok: true,
+              json: async () => ({ data: newAgency }),
+            };
+          }
+
+          if (url.includes("search=")) {
+            const searchParam = new URL(url).searchParams.get("search")?.toLowerCase();
+            const matches = registeredAgencies.filter((a) =>
+              a.email.toLowerCase() === searchParam,
+            );
+            return {
+              ok: true,
+              json: async () => ({ data: matches }),
+            };
+          }
+
+          const emailOrId = decodeURIComponent(url.split("/agency/")[1] || "").toLowerCase();
+          const match = registeredAgencies.find(
+            (a) => a.email.toLowerCase() === emailOrId || a.id.toLowerCase() === emailOrId,
+          );
+
+          if (match) {
+            return {
+              ok: true,
+              json: async () => ({ data: match }),
+            };
+          }
+
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({ message: "Not found" }),
+          };
+        }
+
+        return { ok: false, status: 400, json: async () => ({}) };
+      }),
     );
-    expect(message).toBeNull();
-    expect(user).not.toBeNull();
-    expect(user?.email).toBe("adaeze@sentinelridge.example");
-    expect(user?.role).toBe("owner");
   });
 
-  it("fails authentication with invalid password", async () => {
-    const { user, message } = await authenticateAgency(
-      "adaeze@sentinelridge.example",
-      "WrongPassword123",
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends OTP and allows verifying with 000000 bypass code", async () => {
+    const res = await sendAgencyOtp("test.otp@example.com");
+    expect(res.success).toBe(true);
+    expect(res.message).toContain("Verification code sent");
+
+    const isValid = verifyAgencyOtp("test.otp@example.com", "000000");
+    expect(isValid).toBe(true);
+  });
+
+  it("refuses sending OTP for unknown email on login intent", async () => {
+    const res = await sendAgencyOtp("unknown.email@domain.com", "login");
+    expect(res.success).toBe(false);
+    expect(res.status).toBe(404);
+    expect(res.message).toContain("No registered agency matches");
+  });
+
+  it("refuses sending OTP for existing email on signup intent", async () => {
+    const existingEmail = `registered.${Date.now()}@test.com`;
+    await registerAgency({
+      agencyName: "Existing Agency",
+      contactName: "Owner",
+      email: existingEmail,
+      phone: "+15550199",
+      countryCode: "US",
+      country: "United States",
+      otp: "000000",
+    });
+
+    const res = await sendAgencyOtp(existingEmail, "signup");
+    expect(res.success).toBe(false);
+    expect(res.status).toBe(409);
+    expect(res.message).toContain("already listed");
+  });
+
+  it("fails authentication with invalid OTP code", async () => {
+    const { user, token, message } = await authenticateAgency(
+      "test.otp@example.com",
+      "999999",
     );
     expect(user).toBeNull();
-    expect(message).toBe("That email and password do not match.");
+    expect(token).toBeNull();
+    expect(message).toBe("Invalid or expired verification code.");
   });
 
-  it("fails authentication for unknown email", async () => {
-    const { user, message } = await authenticateAgency(
-      "unknown.email@domain.com",
-      "Password@2",
-    );
-    expect(user).toBeNull();
-    expect(message).toBe("That email and password do not match.");
-  });
-
-  it("registers a new agency successfully", async () => {
+  it("registers a new agency successfully and issues a JWT token", async () => {
     const testEmail = `new.agency.${Date.now()}@test.com`;
-    const { user, message } = await registerAgency({
+    const { user, token, message } = await registerAgency({
       agencyName: "Unique Test Agency",
       contactName: "Bob Builder",
       email: testEmail,
       phone: "+15550199",
       countryCode: "US",
       country: "United States",
-      password: "Password@2",
+      otp: "000000",
     });
 
     expect(message).toBeNull();
     expect(user).not.toBeNull();
+    expect(token).not.toBeNull();
+    expect(typeof token).toBe("string");
     expect(user?.email).toBe(testEmail);
     expect(user?.agencyName).toBe("Unique Test Agency");
   });
 
-  it("prevents registering duplicate agency email", async () => {
-    const { user, message } = await registerAgency({
-      agencyName: "Duplicate Sentinel Ridge",
-      contactName: "Adaeze",
-      email: "adaeze@sentinelridge.example",
+  it("authenticates registered agency with 000000 OTP and returns user and token", async () => {
+    const testEmail = `auth.test.${Date.now()}@test.com`;
+    await registerAgency({
+      agencyName: "Auth Test Agency",
+      contactName: "Auth User",
+      email: testEmail,
       phone: "+15550199",
       countryCode: "US",
       country: "United States",
-      password: "Password@2",
+      otp: "000000",
+    });
+
+    const { user, token, message } = await authenticateAgency(
+      testEmail,
+      "000000",
+    );
+
+    expect(message).toBeNull();
+    expect(user).not.toBeNull();
+    expect(token).not.toBeNull();
+    expect(user?.email).toBe(testEmail);
+  });
+
+  it("prevents registering duplicate agency email", async () => {
+    const testEmail = `dup.agency.${Date.now()}@test.com`;
+    await registerAgency({
+      agencyName: "Initial Agency",
+      contactName: "First User",
+      email: testEmail,
+      phone: "+15550199",
+      countryCode: "US",
+      country: "United States",
+      otp: "000000",
+    });
+
+    const { user, token, message } = await registerAgency({
+      agencyName: "Duplicate Agency",
+      contactName: "Second User",
+      email: testEmail,
+      phone: "+15550199",
+      countryCode: "US",
+      country: "United States",
+      otp: "000000",
     });
 
     expect(user).toBeNull();
+    expect(token).toBeNull();
     expect(message).toBe("An agency is already listed with that email. Sign in instead.");
   });
 });

@@ -19,7 +19,10 @@ export async function GET() {
 
   const agency = await getAgency(session.agencyId);
   if (!agency) {
-    return NextResponse.json({ message: "Agency not found" }, { status: 404 });
+    const res = NextResponse.json({ message: "Agency session expired or agency not found. Please sign in." }, { status: 401 });
+    res.cookies.delete("wp_agency_session");
+    res.cookies.delete("agency_session");
+    return res;
   }
 
   return NextResponse.json({ data: agency });

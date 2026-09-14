@@ -75,9 +75,10 @@ export function ListingFlow() {
     );
   }
 
-  // Keyed on the record so a signed-out/signed-in swap rebuilds the form rather
-  // than leaving one agency's draft in another's fields.
-  return <ListingEditor key={listing.data.id} agency={listing.data} />;
+  // Keyed on the agency email/id so a signed-out/signed-in swap rebuilds the form
+  // while autosaves with backend ID reconciliation do not trigger a component remount.
+  const editorKey = listing.data.email?.trim() || listing.data.id;
+  return <ListingEditor key={editorKey} agency={listing.data} />;
 }
 
 function ListingEditor({ agency }: { agency: Agency }) {

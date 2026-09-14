@@ -229,6 +229,7 @@ export type DashboardStats = {
 export type ListParams = {
   q?: string;
   status?: string;
+  verification?: string;
   page?: number;
   perPage?: number;
 };

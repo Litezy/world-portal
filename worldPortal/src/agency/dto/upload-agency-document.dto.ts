@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { AgencyDocumentKind, AgencyDocumentStatus } from '@prisma/client';
 
 export class UploadAgencyDocumentDto {
@@ -7,6 +8,7 @@ export class UploadAgencyDocumentDto {
     enum: AgencyDocumentKind,
     description: 'Paperwork category / document kind',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase() : value))
   @IsEnum(AgencyDocumentKind)
   kind: AgencyDocumentKind;
 

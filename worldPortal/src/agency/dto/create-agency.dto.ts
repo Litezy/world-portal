@@ -20,10 +20,10 @@ export class CreateAgencyDto {
   @IsNotEmpty()
   legalName: string;
 
-  @ApiProperty({ description: 'Business registration / CAC number' })
+  @ApiPropertyOptional({ description: 'Business registration / CAC number' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  registrationNumber: string;
+  registrationNumber?: string;
 
   @ApiProperty({ description: 'ISO 2-character country code (e.g. NG, US)' })
   @IsString()

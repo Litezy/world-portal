@@ -18,7 +18,7 @@ import { AgencyService } from './agency.service';
 import { CreateAgencyDto } from './dto/create-agency.dto';
 import { UpdateAgencyListingDto } from './dto/update-agency-listing.dto';
 import { AddAgencyStaffDto, UpdateAgencyStaffDto } from './dto/add-agency-staff.dto';
-import { UploadAgencyDocumentDto } from './dto/upload-agency-document.dto';
+import { UploadAgencyDocumentDto, UpdateDocumentStatusDto } from './dto/upload-agency-document.dto';
 import { AssignStaffDto } from './dto/assign-staff.dto';
 
 @ApiTags('Agency Portal')
@@ -126,6 +126,18 @@ export class AgencyController {
     @Body() dto: UploadAgencyDocumentDto,
   ) {
     return this.agencyService.uploadDocument(id, dto);
+  }
+
+  @Patch(':id/documents/:docId')
+  @ApiOperation({ summary: 'Update compliance document verification status and note' })
+  @ApiParam({ name: 'id', description: 'Agency ID' })
+  @ApiParam({ name: 'docId', description: 'Document ID or Kind' })
+  async updateDocumentStatus(
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+    @Body() dto: UpdateDocumentStatusDto,
+  ) {
+    return this.agencyService.updateDocumentStatus(id, docId, dto.status, dto.note);
   }
 
   @Get(':id/assignments')

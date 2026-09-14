@@ -10,6 +10,7 @@ import { UpdateAgencyListingDto } from './dto/update-agency-listing.dto';
 import { AddAgencyStaffDto, UpdateAgencyStaffDto } from './dto/add-agency-staff.dto';
 import { UploadAgencyDocumentDto, UpdateDocumentStatusDto } from './dto/upload-agency-document.dto';
 import { AssignStaffDto } from './dto/assign-staff.dto';
+import { createHash } from 'crypto';
 import {
   AgencyDocumentKind,
   AgencyDocumentStatus,
@@ -18,6 +19,7 @@ import {
   AgencyPayoutStatus,
   AgencyVerificationStatus,
   AgencyListingStatus,
+  AgencyUserRole,
 } from '@prisma/client';
 
 @Injectable()
@@ -36,15 +38,30 @@ export class AgencyService {
       .replace(/^-+|-+$/g, '');
   }
 
+  private hashPassword(password: string): string {
+    return createHash('sha256').update(password).digest('hex');
+  }
+
   /**
    * Register a new agency listing
    */
   async createAgency(dto: CreateAgencyDto) {
+    if (dto.email) {
+      const existingEmail = await this.prisma.agency.findFirst({
+        where: { email: { equals: dto.email.trim(), mode: 'insensitive' } },
+      });
+      if (existingEmail) {
+        throw new BadRequestException('An agency is already listed with that email.');
+      }
+    }
+
     let slug = this.slugify(dto.name);
     const existingSlug = await this.prisma.agency.findUnique({ where: { slug } });
     if (existingSlug) {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
+
+    const defaultPasswordHash = this.hashPassword((dto as any).password || 'Password@2');
 
     const agency = await this.prisma.agency.create({
       data: {
@@ -65,24 +82,41 @@ export class AgencyService {
         yearFounded: dto.yearFounded,
         staffCount: dto.staffCount,
         languages: dto.languages,
+        users: {
+          create: {
+            name: `${dto.name} Manager`,
+            email: dto.email,
+            passwordHash: defaultPasswordHash,
+            role: AgencyUserRole.OWNER,
+          },
+        },
       },
       include: {
         documents: true,
         staff: true,
         offerings: true,
+        users: true,
       },
     });
 
-    this.logger.log(`Created new agency id=${agency.id} slug=${agency.slug}`);
+    this.logger.log(`Created new agency id=${agency.id} slug=${agency.slug} with user email=${dto.email}`);
     return agency;
   }
 
   /**
-   * Get agency details by ID
+   * Helper to find an agency by ID, slug, or email.
    */
-  async getAgencyById(id: string) {
-    const agency = await this.prisma.agency.findUnique({
-      where: { id },
+  async findAgency(idOrSlug: string) {
+    if (!idOrSlug) return null;
+    const needle = idOrSlug.trim();
+    const match = await this.prisma.agency.findFirst({
+      where: {
+        OR: [
+          { id: needle },
+          { slug: needle },
+          { email: { equals: needle, mode: "insensitive" } },
+        ],
+      },
       include: {
         documents: true,
         staff: true,
@@ -99,6 +133,16 @@ export class AgencyService {
       },
     });
 
+    if (match) return match;
+    return null;
+  }
+
+  /**
+   * Get agency details by ID
+   */
+  async getAgencyById(id: string) {
+    const agency = await this.findAgency(id);
+
     if (!agency) {
       throw new NotFoundException(`Agency with ID "${id}" not found`);
     }
@@ -110,18 +154,45 @@ export class AgencyService {
    * Update agency listing / profile
    */
   async updateAgencyListing(id: string, dto: UpdateAgencyListingDto) {
-    await this.getAgencyById(id);
+    const agency = await this.getAgencyById(id);
+    const realId = agency.id;
+
+    if (Array.isArray(dto.offerings)) {
+      await this.prisma.agencyServiceOffering.deleteMany({
+        where: { agencyId: realId },
+      });
+      if (dto.offerings.length > 0) {
+        await this.prisma.agencyServiceOffering.createMany({
+          data: dto.offerings.map((o: any) => ({
+            agencyId: realId,
+            category: o.category || "security",
+            title: o.title || "Service Offering",
+            description: o.description || "",
+            price: o.price !== null && o.price !== undefined && !isNaN(Number(o.price)) ? Number(o.price) : null,
+            currency: o.currency || "USD",
+            unit: o.unit || "day",
+            leadTimeHours: o.leadTimeHours ? Number(o.leadTimeHours) : 24,
+            capacity: o.capacity ? Number(o.capacity) : 1,
+          })),
+        });
+      }
+    }
 
     const updated = await this.prisma.agency.update({
-      where: { id },
+      where: { id: realId },
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.legalName && { legalName: dto.legalName }),
+        ...(dto.registrationNumber && { registrationNumber: dto.registrationNumber }),
+        ...(dto.countryCode && { countryCode: dto.countryCode }),
+        ...(dto.country && { country: dto.country }),
         ...(dto.summary && { summary: dto.summary }),
         ...(dto.about && { about: dto.about }),
         ...(dto.logoUrl && { logoUrl: dto.logoUrl }),
+        ...(dto.email && { email: dto.email }),
         ...(dto.phone && { phone: dto.phone }),
         ...(dto.website && { website: dto.website }),
+        ...(dto.yearFounded && { yearFounded: dto.yearFounded }),
         ...(dto.staffCount && { staffCount: dto.staffCount }),
         ...(dto.categories && { categories: dto.categories }),
         ...(dto.cities && { cities: dto.cities }),
@@ -135,7 +206,7 @@ export class AgencyService {
       },
     });
 
-    this.logger.log(`Updated agency listing id=${id}`);
+    this.logger.log(`Updated agency listing id=${realId}`);
     return updated;
   }
 
@@ -317,6 +388,65 @@ export class AgencyService {
     });
   }
 
+  async updateDocumentStatus(agencyId: string, docId: string, status: string, note?: string) {
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
+
+    const sUpper = status.toUpperCase();
+    const docStatusEnum =
+      sUpper === 'APPROVED' || sUpper === 'VERIFIED'
+        ? AgencyDocumentStatus.APPROVED
+        : sUpper === 'REJECTED'
+          ? AgencyDocumentStatus.REJECTED
+          : sUpper === 'IN_REVIEW'
+            ? AgencyDocumentStatus.IN_REVIEW
+            : AgencyDocumentStatus.UPLOADED;
+
+    const normalizedKindStr = docId.toUpperCase().replace(/-/g, '_');
+    const validKinds = Object.values(AgencyDocumentKind);
+
+    const matchedKind = validKinds.find(
+      (k) => k === docId || k === normalizedKindStr || k.toLowerCase() === docId.toLowerCase()
+    );
+
+    const existing = await this.prisma.agencyDocument.findFirst({
+      where: {
+        agencyId: realAgencyId,
+        OR: [
+          { id: docId },
+          ...(matchedKind ? [{ kind: matchedKind }] : []),
+        ],
+      },
+    });
+
+    if (existing) {
+      const updated = await this.prisma.agencyDocument.update({
+        where: { id: existing.id },
+        data: {
+          status: docStatusEnum,
+          note: note !== undefined ? note : (docStatusEnum === AgencyDocumentStatus.APPROVED ? null : existing.note),
+        },
+      });
+      this.logger.log(`Updated document status agencyId=${realAgencyId} docId=${existing.id} kind=${existing.kind} status=${docStatusEnum}`);
+      return updated;
+    }
+
+    const targetKind = matchedKind || AgencyDocumentKind.BUSINESS_REGISTRATION;
+
+    const created = await this.prisma.agencyDocument.create({
+      data: {
+        agencyId: realAgencyId,
+        kind: targetKind,
+        fileName: `${targetKind}.pdf`,
+        fileUrl: '',
+        status: docStatusEnum,
+        note: note || null,
+      },
+    });
+    this.logger.log(`Created document for status change agencyId=${realAgencyId} kind=${targetKind} status=${docStatusEnum}`);
+    return created;
+  }
+
   /**
    * Assignments (Bookings) Management
    */
@@ -404,6 +534,8 @@ export class AgencyService {
         { legalName: { contains: q, mode: 'insensitive' } },
         { registrationNumber: { contains: q, mode: 'insensitive' } },
         { country: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+        { slug: { contains: q, mode: 'insensitive' } },
       ];
     }
 
@@ -424,7 +556,7 @@ export class AgencyService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
       }),
     ]);
 

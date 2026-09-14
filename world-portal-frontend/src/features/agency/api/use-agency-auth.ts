@@ -7,24 +7,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgencyUser } from "@/features/agency/types";
 import { internalApi } from "@/lib/api-client";
 import type { ApiResponse } from "@/types";
-import type { AgencyLoginInput, AgencySignupInput } from "@/validations/agency";
-
-/**
- * The agency dashboard is a BFF client, exactly like the admin console: every
- * call here goes to this app's own route handlers under `/api/agency`, never
- * to the World Portal service. `internalApi` is the same-origin client — `api`
- * is the public one and would miss the session cookie entirely.
- */
+import type { AgencyLoginInput, AgencySendOtpInput, AgencySignupInput } from "@/validations/agency";
 
 export const agencyAuthKeys = {
   me: ["agency", "auth", "me"] as const,
 };
 
+export function useAgencySendOtp() {
+  return useMutation({
+    mutationKey: ["agency", "auth", "otp", "send"],
+    mutationFn: (input: AgencySendOtpInput) =>
+      internalApi.post<ApiResponse<null>>("/agency/auth/otp/send", input),
+  });
+}
+
 export function useAgencyLogin() {
   return useMutation({
     mutationKey: ["agency", "auth", "login"],
     mutationFn: (input: AgencyLoginInput) =>
-      internalApi.post<ApiResponse<AgencyUser>>("/agency/auth/login", input),
+      internalApi.post<ApiResponse<AgencyUser & { token?: string }>>("/agency/auth/login", input),
   });
 }
 
@@ -32,7 +33,7 @@ export function useAgencySignup() {
   return useMutation({
     mutationKey: ["agency", "auth", "signup"],
     mutationFn: (input: AgencySignupInput) =>
-      internalApi.post<ApiResponse<AgencyUser>>("/agency/auth/signup", input),
+      internalApi.post<ApiResponse<AgencyUser & { token?: string }>>("/agency/auth/signup", input),
   });
 }
 
@@ -51,12 +52,6 @@ export function useAgencyLogout() {
   });
 }
 
-/**
- * The signed-in agency. The console layout already has the session server-side,
- * so this is for client surfaces that need it without prop-drilling — it 401s
- * when the cookie has gone, and the query client is configured not to retry
- * that.
- */
 export function useAgencyMe() {
   return useQuery({
     queryKey: agencyAuthKeys.me,
