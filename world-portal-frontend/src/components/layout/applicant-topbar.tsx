@@ -6,6 +6,7 @@ import { ArrowUpRight, LogOut, Menu, ShoppingBag, Sparkles, User, X } from "luci
 
 import { Logo } from "@/components/common/logo";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { NotificationCenter } from "@/components/common/notification-center";
 import { ApplicantNav } from "@/components/layout/applicant-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,7 @@ export function ApplicantTopbar() {
   const [open, setOpen] = React.useState(false);
 
   const email = useApplicantAuthStore((s) => s.email);
+  const profileId = useApplicantAuthStore((s) => s.profileId);
   const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
   const logout = useApplicantAuthStore((s) => s.logout);
 
@@ -70,6 +72,7 @@ export function ApplicantTopbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <NotificationCenter recipientId={email || profileId} recipientType="APPLICANT" />
           <ThemeToggle />
 
           <Button asChild variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex">

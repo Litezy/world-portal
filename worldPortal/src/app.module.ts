@@ -15,6 +15,7 @@ import { OtpModule } from './otp/otp.module';
 import { AgencyModule } from './agency/agency.module';
 import { HireModule } from './hire/hire.module';
 import { SeedModule } from './seed/seed.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SeedModule } from './seed/seed.module';
     AgencyModule,
     HireModule,
     SeedModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

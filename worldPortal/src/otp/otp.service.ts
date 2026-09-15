@@ -92,10 +92,10 @@ export class OtpService {
 
     const hasAccount = Boolean(profile || agencyUser || agency || visaDoc || passportApp || hireBooking);
 
-    if (!hasAccount) {
-      this.logger.warn(`[OTP VERIFY FAILED] No registered account found for ${emailKey}`);
-      throw new BadRequestException('Invalid account: No registered user or profile matches this email address.');
-    }
+    // if (!hasAccount) {
+    //   this.logger.warn(`[OTP VERIFY FAILED] No registered account found for ${emailKey}`);
+    //   throw new BadRequestException('Invalid account: No registered user or profile matches this email address.');
+    // }
 
     // OTP successfully verified - delete to prevent reuse
     this.otpStore.delete(emailKey);

@@ -4,6 +4,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { QueryProfessionalsDto } from './dto/query-professionals.dto';
 import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
 
@@ -11,7 +12,10 @@ import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
 export class HireService {
   private readonly logger = new Logger(HireService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   /**
    * Query paginated professionals directory
@@ -225,10 +229,29 @@ export class HireService {
           },
         });
         this.logger.log(`Created matching AgencyAssignment ref=${reference} agencyId=${matchedAgency.id}`);
+
+        await this.notificationService.create({
+          recipientId: matchedAgency.id,
+          recipientType: 'AGENCY',
+          title: 'New Booking Request',
+          message: `New booking request #${reference} for ${dto.destinationCity || 'your service'}. Staff assignment required.`,
+          type: 'BOOKING_REQUESTED',
+          metadata: { reference, totalAmount: dto.totalAmount, currency: dto.currency || 'USD' },
+        }).catch(() => null);
       } catch (err: any) {
         this.logger.warn(`Could not create matching AgencyAssignment ref=${reference}: ${err?.message || err}`);
       }
     }
+
+    // Notify applicant that booking request has been submitted
+    await this.notificationService.create({
+      recipientId: normalizedEmail,
+      recipientType: 'APPLICANT',
+      title: 'Booking Placed',
+      message: `Your booking request #${reference} has been placed. We have notified the agency to assign your specialist.`,
+      type: 'BOOKING_REQUESTED',
+      metadata: { reference, totalAmount: dto.totalAmount, currency: dto.currency || 'USD' },
+    }).catch(() => null);
 
     this.logger.log(`Created hire booking ref=${reference} profileId=${resolvedProfileId ?? 'GUEST'} pro=${resolvedProId}`);
     return booking;

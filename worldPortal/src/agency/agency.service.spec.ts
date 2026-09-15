@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AgencyService } from './agency.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { AgencyVerificationStatus, AgencyListingStatus, AgencyStaffStatus, AssignmentStatus } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 describe('AgencyService', () => {
   let service: AgencyService;
@@ -86,11 +87,16 @@ describe('AgencyService', () => {
     },
   };
 
+  const mockNotificationService = {
+    create: jest.fn().mockResolvedValue({ id: 'notif-test' }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AgencyService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 

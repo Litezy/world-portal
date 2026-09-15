@@ -22,11 +22,16 @@ import {
   AgencyUserRole,
 } from '@prisma/client';
 
+import { NotificationService } from '../notification/notification.service';
+
 @Injectable()
 export class AgencyService {
   private readonly logger = new Logger(AgencyService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) { }
 
   /** Create slug from agency name */
   private slugify(name: string): string {
@@ -572,6 +577,7 @@ export class AgencyService {
     }
 
     // Update staff status to ASSIGNED if staff members were selected
+    let assignedStaffMembers: { name: string; role: string }[] = [];
     if (dto.assignedStaffIds.length > 0) {
       await this.prisma.agencyStaff.updateMany({
         where: {
@@ -582,6 +588,36 @@ export class AgencyService {
           status: AgencyStaffStatus.ASSIGNED,
         },
       });
+
+      assignedStaffMembers = await this.prisma.agencyStaff.findMany({
+        where: { id: { in: dto.assignedStaffIds } },
+        select: { name: true, role: true },
+      }).catch(() => []);
+    }
+
+    const staffNames = assignedStaffMembers.map((s) => s.name).join(', ') || 'Specialist';
+
+    // In-app notifications
+    if (dto.assignedStaffIds.length > 0) {
+      if (assignment.travellerEmail) {
+        await this.notificationService.create({
+          recipientId: assignment.travellerEmail,
+          recipientType: 'APPLICANT',
+          title: 'Specialist Assigned',
+          message: `${staffNames} has been assigned to your booking #${assignment.reference}.`,
+          type: 'STAFF_ASSIGNED',
+          metadata: { reference: assignment.reference, staffNames },
+        }).catch(() => null);
+      }
+
+      await this.notificationService.create({
+        recipientId: realAgencyId,
+        recipientType: 'AGENCY',
+        title: 'Staff Confirmed',
+        message: `${staffNames} was assigned to booking #${assignment.reference}.`,
+        type: 'STAFF_ASSIGNED',
+        metadata: { reference: assignment.reference, assignmentId: assignment.id, staffNames },
+      }).catch(() => null);
     }
 
     this.logger.log(`Assigned staff [${dto.assignedStaffIds.join(', ')}] to assignment id=${assignment.id} ref=${assignment.reference}`);
@@ -628,6 +664,27 @@ export class AgencyService {
         this.logger.warn(`Failed to sync hireBooking to COMPLETED for ref=${assignment.reference}: ${err?.message || err}`);
       });
     }
+
+    // In-app notifications on completion
+    if (assignment.travellerEmail) {
+      await this.notificationService.create({
+        recipientId: assignment.travellerEmail,
+        recipientType: 'APPLICANT',
+        title: 'Service Completed',
+        message: `Your booking #${assignment.reference} has been marked completed. Thank you for using World Portal!`,
+        type: 'JOB_COMPLETED',
+        metadata: { reference: assignment.reference },
+      }).catch(() => null);
+    }
+
+    await this.notificationService.create({
+      recipientId: realAgencyId,
+      recipientType: 'AGENCY',
+      title: 'Job Completed',
+      message: `Assignment #${assignment.reference} completed. $${assignment.netToAgency} net earnings credited to your Pending Payouts.`,
+      type: 'JOB_COMPLETED',
+      metadata: { reference: assignment.reference, assignmentId: assignment.id, netToAgency: assignment.netToAgency },
+    }).catch(() => null);
 
     this.logger.log(`Completed assignment id=${assignment.id} ref=${assignment.reference}`);
     return updated;

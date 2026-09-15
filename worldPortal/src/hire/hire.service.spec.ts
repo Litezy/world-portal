@@ -2,8 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HireService } from './hire.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+import { NotificationService } from '../notification/notification.service';
+
 describe('HireService', () => {
   let service: HireService;
+
+  const mockNotificationService = {
+    create: jest.fn().mockResolvedValue({ id: 'notif-test' }),
+  };
 
   const mockPrismaService = {
     professionalProfile: {
@@ -42,6 +48,7 @@ describe('HireService', () => {
       providers: [
         HireService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 

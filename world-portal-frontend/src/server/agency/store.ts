@@ -247,12 +247,9 @@ export async function listAgencies(params: ListParams = {}): Promise<Paginated<A
   let backendRows: Agency[] = [];
   let fetchedFromBackend = false;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(`${BACKEND_API_URL}/agency?limit=100`, {
       cache: "no-store",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
+    });
     if (res.ok) {
       const json = await res.json();
       const payload = json.data ?? json;
