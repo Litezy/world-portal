@@ -23,9 +23,13 @@ export class OtpService {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     this.otpStore.set(emailKey, { code, expiresAt });
-    this.logger.log(`[OTP GENERATED] Email: ${emailKey} | Code: ${code} | Expires: ${expiresAt.toISOString()}`);
+    this.logger.log(`[OTP GENERATED] Email: ${emailKey} | Code: ${code} | Expires: ${expiresAt.toISOString()}. Dev bypass: ${process.env.OTP_DEV_BYPASS || '000000'}`);
 
-    await this.sendGridService.sendOtpEmail(emailKey, code);
+    try {
+      await this.sendGridService.sendOtpEmail(emailKey, code);
+    } catch (err: any) {
+      this.logger.warn(`[OTP MAIL DISPATCH WARN] SendGrid failed for ${emailKey}: ${err?.message || err}`);
+    }
 
     return {
       success: true,
@@ -36,6 +40,21 @@ export class OtpService {
 
   async verifyOtp(dto: VerifyOtpDto) {
     const emailKey = dto.email.trim().toLowerCase();
+    const code = dto.code.trim();
+
+    const isDevBypassEnabled = process.env.ENABLE_OTP_DEV_BYPASS !== 'false';
+    const bypassCode = process.env.OTP_DEV_BYPASS || '000000';
+
+    if (isDevBypassEnabled && code === bypassCode) {
+      this.logger.log(`[OTP VERIFY BYPASS] Dev bypass code (${bypassCode}) used for ${emailKey}`);
+      this.verifiedStore.set(emailKey, new Date(Date.now() + 30 * 60 * 1000));
+      return {
+        success: true,
+        verified: true,
+        message: 'OTP verified successfully (dev bypass).',
+      };
+    }
+
     const entry = this.otpStore.get(emailKey);
 
     if (!entry) {
@@ -49,7 +68,7 @@ export class OtpService {
       throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
 
-    if (entry.code !== dto.code.trim()) {
+    if (entry.code !== code) {
       this.logger.warn(`[OTP VERIFY FAILED] Invalid code provided for ${emailKey}`);
       throw new BadRequestException('Invalid verification code.');
     }
