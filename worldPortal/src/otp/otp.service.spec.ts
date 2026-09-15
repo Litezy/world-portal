@@ -2,14 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OtpService } from './otp.service';
 import { SendGridService } from '../mail/sendgrid.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 describe('OtpService', () => {
   let service: OtpService;
-  let prisma: any;
 
   const mockSendGridService = {
-    sendOtpEmail: jest.fn().mockResolvedValue(true),
+    sendOtpEmail: jest
+      .fn<Promise<boolean>, [string, string]>()
+      .mockResolvedValue(true),
   };
 
   const mockPrismaService = {
@@ -32,14 +36,13 @@ describe('OtpService', () => {
     }).compile();
 
     service = module.get<OtpService>(OtpService);
-    prisma = module.get<PrismaService>(PrismaService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should throw BadRequestException if account does not exist in DB', async () => {
+  it('preserves intentional bypass for an email without an account pending parent auth', async () => {
     mockPrismaService.profile.findUnique.mockResolvedValue(null);
     mockPrismaService.agencyUser.findUnique.mockResolvedValue(null);
     mockPrismaService.agency.findFirst.mockResolvedValue(null);
@@ -49,11 +52,46 @@ describe('OtpService', () => {
 
     await expect(
       service.verifyOtp({ email: 'nonexistent@example.com', code: '000000' }),
-    ).rejects.toThrow(BadRequestException);
+    ).resolves.toMatchObject({ verified: true, profileId: null });
   });
 
+  it('delivers the generated code and accepts it only once', async () => {
+    await service.sendOtp({ email: ' Mailbox@Example.com ' });
+    const [email, code] = mockSendGridService.sendOtpEmail.mock.calls.at(-1)!;
+    expect(email).toBe('mailbox@example.com');
+    expect(code).toMatch(/^\d{6}$/);
+    await expect(service.verifyOtp({ email, code })).resolves.toMatchObject({
+      verified: true,
+    });
+    await expect(service.verifyOtp({ email, code })).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it.each(['false', 'throw'])(
+    'rejects failed delivery (%s) and invalidates the unsent code',
+    async (failure) => {
+      if (failure === 'false')
+        mockSendGridService.sendOtpEmail.mockResolvedValueOnce(false);
+      else
+        mockSendGridService.sendOtpEmail.mockRejectedValueOnce(
+          new Error('provider failure'),
+        );
+      await expect(
+        service.sendOtp({ email: 'failure@example.com' }),
+      ).rejects.toThrow(ServiceUnavailableException);
+      const [email, code] = mockSendGridService.sendOtpEmail.mock.calls.at(-1)!;
+      await expect(service.verifyOtp({ email, code })).rejects.toThrow(
+        BadRequestException,
+      );
+    },
+  );
+
   it('should verify successfully if email account exists in DB', async () => {
-    mockPrismaService.profile.findUnique.mockResolvedValue({ id: 'prof-1', email: 'registered@example.com' });
+    mockPrismaService.profile.findUnique.mockResolvedValue({
+      id: 'prof-1',
+      email: 'registered@example.com',
+    });
 
     const result = await service.verifyOtp({
       email: 'registered@example.com',

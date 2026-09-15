@@ -390,6 +390,14 @@ export class SendGridService {
    * 7. OTP Email Verification
    */
   async sendOtpEmail(to: string, otpCode: string): Promise<boolean> {
+    // OTP callers need a real delivery result, never a simulated success.
+    if (!this.isConfigured) {
+      this.logger.warn(
+        'OTP email delivery unavailable: SendGrid is not configured',
+      );
+      return false;
+    }
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px;">
         <h2 style="color: #0f172a; margin-bottom: 8px;">E-Embassy Verification Code</h2>

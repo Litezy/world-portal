@@ -4,14 +4,6 @@ import { createAgencySessionToken } from "@/server/agency/session";
 
 const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
 
-type OtpEntry = {
-  code: string;
-  expiresAt: number;
-};
-
-// In-memory OTP store for agency passwordless auth
-const otpStore = new Map<string, OtpEntry>();
-
 export async function sendAgencyOtp(
   email: string,
   intent?: "login" | "signup",
@@ -58,46 +50,48 @@ export async function sendAgencyOtp(
     }
   }
 
-  // Generate 6-digit OTP
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes TTL
-
-  otpStore.set(normalizedEmail, { code, expiresAt });
-
-  console.log(`[AGENCY OTP] Generated OTP for ${normalizedEmail}: ${code} (expires in 10 minutes). Dev bypass: 000000`);
-
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/otp/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, purpose: "AGENCY_AUTH" }),
+      cache: "no-store",
+    });
+    const json = await response.json();
+    const result = json.data ?? json;
+    if (response.ok && result.success === true) {
+      return { success: true, message: `Verification code sent to ${normalizedEmail}.` };
+    }
+  } catch {
+    // Delivery must succeed before the UI claims a code was sent.
+  }
   return {
-    success: true,
-    message: `Verification code sent to ${normalizedEmail}.`,
+    success: false,
+    status: 503,
+    message: "Could not send the verification code. Please try again.",
   };
 }
 
-export function verifyAgencyOtp(email: string, otp: string): boolean {
+export async function verifyAgencyOtp(email: string, otp: string): Promise<boolean> {
   const normalizedEmail = email.trim().toLowerCase();
   const trimmedOtp = otp.trim();
 
-  // Local development / non-production bypass code
-  if (!isProduction && trimmedOtp === "000000") {
-    return true;
-  }
+  // Retain the intentional local development shortcut pending parent auth.
+  if (!isProduction && trimmedOtp === "000000") return true;
 
-  const record = otpStore.get(normalizedEmail);
-  if (!record) {
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/otp/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, code: trimmedOtp }),
+      cache: "no-store",
+    });
+    const json = await response.json();
+    const result = json.data ?? json;
+    return response.ok && result.verified === true;
+  } catch {
     return false;
   }
-
-  if (Date.now() > record.expiresAt) {
-    otpStore.delete(normalizedEmail);
-    return false;
-  }
-
-  if (record.code === trimmedOtp) {
-    // OTP used successfully, delete to prevent reuse
-    otpStore.delete(normalizedEmail);
-    return true;
-  }
-
-  return false;
 }
 
 export async function authenticateAgency(
@@ -106,7 +100,7 @@ export async function authenticateAgency(
 ): Promise<{ user: AgencyUser | null; token: string | null; message: string | null }> {
   const needle = email.trim().toLowerCase();
 
-  const isValidOtp = verifyAgencyOtp(needle, otp);
+  const isValidOtp = await verifyAgencyOtp(needle, otp);
   if (!isValidOtp) {
     return {
       user: null,
@@ -176,7 +170,7 @@ export async function registerAgency(
 ): Promise<{ user: AgencyUser | null; token: string | null; message: string | null }> {
   const email = input.email.trim();
 
-  const isValidOtp = verifyAgencyOtp(email, input.otp);
+  const isValidOtp = await verifyAgencyOtp(email, input.otp);
   if (!isValidOtp) {
     return {
       user: null,

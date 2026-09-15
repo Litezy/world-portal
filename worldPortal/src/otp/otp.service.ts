@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SendGridService } from '../mail/sendgrid.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SendOtpDto } from './dto/send-otp.dto';
@@ -26,13 +31,20 @@ export class OtpService {
     const code = randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-    this.otpStore.set(emailKey, { code, expiresAt });
-    this.logger.log(`[OTP GENERATED] Email: ${emailKey} | Code: ${code} | Expires: ${expiresAt.toISOString()}. Dev bypass: ${process.env.OTP_DEV_BYPASS || '000000'}`);
-
+    const entry = { code, expiresAt };
+    this.otpStore.set(emailKey, entry);
     try {
-      await this.sendGridService.sendOtpEmail(emailKey, code);
-    } catch (err: any) {
-      this.logger.warn(`[OTP MAIL DISPATCH WARN] SendGrid failed for ${emailKey}: ${err?.message || err}`);
+      const sent = await this.sendGridService.sendOtpEmail(emailKey, code);
+      if (!sent) throw new Error('OTP delivery was not accepted');
+    } catch {
+      // A failed older request must not delete a newer code for this email.
+      if (this.otpStore.get(emailKey) === entry) {
+        this.otpStore.delete(emailKey);
+      }
+      this.logger.warn('OTP email delivery failed');
+      throw new ServiceUnavailableException(
+        'Could not send the verification code. Please try again.',
+      );
     }
 
     return {

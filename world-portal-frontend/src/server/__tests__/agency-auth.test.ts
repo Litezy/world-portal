@@ -8,14 +8,27 @@ import {
 
 describe("Agency Auth (Passwordless OTP)", () => {
   const registeredAgencies: any[] = [];
+  const deliveredCodes = new Map<string, string>();
 
   beforeEach(() => {
     registeredAgencies.length = 0;
+    deliveredCodes.clear();
 
     // Mock fetch for NestJS backend endpoints
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation(async (url: string, options?: any) => {
+        if (url.endsWith("/otp/send")) {
+          const { email } = JSON.parse(options.body);
+          deliveredCodes.set(email, "123456");
+          return { ok: true, json: async () => ({ data: { success: true } }) };
+        }
+        if (url.endsWith("/otp/verify")) {
+          const { email, code } = JSON.parse(options.body);
+          const verified = deliveredCodes.get(email) === code;
+          if (verified) deliveredCodes.delete(email);
+          return { ok: verified, json: async () => ({ data: { verified } }) };
+        }
         if (typeof url === "string" && url.includes("/agency")) {
           if (options?.method === "POST") {
             const body = JSON.parse(options.body);
@@ -79,8 +92,31 @@ describe("Agency Auth (Passwordless OTP)", () => {
     expect(res.success).toBe(true);
     expect(res.message).toContain("Verification code sent");
 
-    const isValid = verifyAgencyOtp("test.otp@example.com", "000000");
+    const isValid = await verifyAgencyOtp("test.otp@example.com", "000000");
     expect(isValid).toBe(true);
+  });
+
+  it("sends through the backend and verifies the delivered code once", async () => {
+    expect((await sendAgencyOtp(" Mailbox@Example.com ")).success).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/otp/send"), expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ email: "mailbox@example.com", purpose: "AGENCY_AUTH" }),
+      cache: "no-store",
+    }));
+    expect(await verifyAgencyOtp("mailbox@example.com", "999999")).toBe(false);
+    expect(await verifyAgencyOtp(" Mailbox@Example.com ", "123456")).toBe(true);
+    expect(await verifyAgencyOtp("mailbox@example.com", "123456")).toBe(false);
+  });
+
+  it.each([503, 200])("does not claim delivery when the backend reports failure (%s)", async (status) => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ data: { success: false } }), { status }));
+    expect(await sendAgencyOtp("failure@example.com")).toMatchObject({ success: false, status: 503 });
+  });
+
+  it("handles network failure during sending and verification", async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error("offline"));
+    expect((await sendAgencyOtp("offline@example.com")).success).toBe(false);
+    expect(await verifyAgencyOtp("offline@example.com", "123456")).toBe(false);
   });
 
   it("refuses sending OTP for unknown email on login intent", async () => {
