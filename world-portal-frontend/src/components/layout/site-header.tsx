@@ -39,13 +39,13 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
           "bg-ink-950/85 shadow-[0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl backdrop-saturate-150",
       )}
     >
-      <div className="mx-auto flex h-[72px] max-w-[1420px] items-center justify-between gap-4 px-5 sm:px-8 lg:h-20 lg:px-12">
-        <Logo markClassName="h-11 sm:h-14" />
+      <div className="relative mx-auto flex h-[72px] max-w-[1420px] items-center justify-between gap-4 px-5 sm:px-8 lg:h-20 lg:px-12">
+        <Logo markClassName="h-11 sm:h-14" className="shrink-0" />
 
         <nav
           aria-label="Main"
           className={cn(
-            "absolute left-1/2 hidden -translate-x-1/2 rounded-full p-1.5 transition-all duration-500 xl:flex",
+            "hidden shrink items-center justify-center rounded-full p-1.5 transition-all duration-500 xl:flex",
             filled ? "bg-white/8" : "glass-dark",
           )}
         >
@@ -54,7 +54,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="inline-flex h-9 items-center rounded-full px-3 text-[13px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white xl:px-4"
+                  className="inline-flex h-9 items-center rounded-full px-2.5 text-[12.5px] font-medium text-white/85 transition-colors duration-300 hover:bg-white/15 hover:text-white xl:px-3.5 2xl:px-4 2xl:text-[13px]"
                 >
                   {item.title}
                 </a>
@@ -63,12 +63,12 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2.5">
           <Button
             asChild
             variant="ghost"
             size="md"
-            className="hidden text-white/90 hover:bg-white/10 hover:text-white 2xl:inline-flex"
+            className="hidden text-white/90 hover:bg-white/10 hover:text-white xl:inline-flex"
           >
             <Link href="/track">Track application</Link>
           </Button>

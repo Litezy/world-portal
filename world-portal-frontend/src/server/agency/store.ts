@@ -15,6 +15,7 @@ import type {
   AgencyCategory,
   AgencyDocument,
   AgencyDocumentKind,
+  AgencyDocumentStatus,
   AgencyListingStatus,
   AgencyOverview,
   AgencyPayout,
@@ -97,12 +98,18 @@ function nowIso() {
  * ------------------------------------------------------------------------- */
 
 function resolveAgencyId(agencyId: string): string {
-  const match = db.agencies.find((agency) => agency.id === agencyId);
+  const needle = agencyId.toLowerCase();
+  const match = db.agencies.find(
+    (agency) => agency.id === agencyId || agency.email?.toLowerCase() === needle,
+  );
   return match ? match.id : agencyId;
 }
 
 function agencyRecord(agencyId: string): Agency | undefined {
-  const match = db.agencies.find((agency) => agency.id === agencyId);
+  const needle = agencyId.toLowerCase();
+  const match = db.agencies.find(
+    (agency) => agency.id === agencyId || agency.email?.toLowerCase() === needle,
+  );
   return match ? match : undefined;
 }
 
@@ -183,8 +190,8 @@ function normalizeAgency(raw: any): Agency {
 export async function getAgency(agencyId: string): Promise<Agency | null> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}`, {
+    const timer = setTimeout(() => controller.abort(), 400);
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`, {
       cache: "no-store",
       signal: controller.signal,
     }).finally(() => clearTimeout(timer));

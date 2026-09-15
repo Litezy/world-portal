@@ -82,8 +82,8 @@ export function ProModal({
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant="muted" size="sm">
-                <Star className="size-3 fill-current text-highlight" />
-                {pro.rating} · {pro.jobs} jobs
+                {pro.rating > 0 && <Star className="size-3 fill-current text-highlight" />}
+                {pro.rating > 0 ? `${pro.rating} · ` : ""}{pro.jobs} jobs
               </Badge>
               <Badge variant="muted" size="sm">
                 {pro.years} years experience

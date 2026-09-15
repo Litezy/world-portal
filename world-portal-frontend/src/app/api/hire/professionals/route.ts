@@ -57,7 +57,7 @@ function mapAgencyToProfessional(agency: Agency): Professional {
     city,
     country,
     languages: agency.languages && agency.languages.length > 0 ? agency.languages : ["English"],
-    rating: agency.rating ? Number(agency.rating) : 4.9,
+    rating: agency.rating ? Number(agency.rating) : 0,
     jobs: agency.completedJobs || 0,
     years: Math.max(1, new Date().getFullYear() - (agency.yearFounded || 2020)),
     price,

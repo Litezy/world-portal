@@ -65,7 +65,7 @@ export function ListingFlow() {
     return (
       <Alert variant="destructive">
         <TriangleAlert />
-        <AlertTitle>{agencyListing.headingLead}</AlertTitle>
+        <AlertTitle>Session Notice</AlertTitle>
         <AlertDescription>
           {listing.error instanceof Error
             ? listing.error.message
