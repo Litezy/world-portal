@@ -73,6 +73,19 @@ export class PassportApplicationController {
     return this.passportApplicationService.findAllApplications(query);
   }
 
+  @Get('applicant/:identifier')
+  @ApiOperation({
+    summary: 'Get all passport applications for a specific applicant email or profile ID',
+  })
+  @ApiParam({
+    name: 'identifier',
+    description: 'Applicant profile ID or email address',
+  })
+  @ApiResponse({ status: 200, description: 'List of applicant passport applications.' })
+  async findApplicantApplications(@Param('identifier') identifier: string) {
+    return this.passportApplicationService.findApplicantPassportApplications(identifier);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get detailed passport application by ID or applicationNo',

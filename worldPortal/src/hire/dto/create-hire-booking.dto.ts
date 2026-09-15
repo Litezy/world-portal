@@ -41,8 +41,23 @@ export class CreateHireBookingDto {
   @Min(0)
   totalAmount: number;
 
+  @ApiPropertyOptional({ description: 'Optional applicant profile ID' })
+  @IsOptional()
+  @IsString()
+  profileId?: string;
+
+  @ApiPropertyOptional({ description: 'Optional visa documentation ID' })
+  @IsOptional()
+  @IsString()
+  visaDocumentationId?: string;
+
   @ApiPropertyOptional({ description: 'Currency code', default: 'USD' })
   @IsOptional()
   @IsString()
   currency?: string = 'USD';
+
+  @ApiPropertyOptional({ description: 'Optional booking notes' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

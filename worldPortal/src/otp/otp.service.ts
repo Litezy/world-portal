@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { SendGridService } from '../mail/sendgrid.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { randomInt } from 'crypto';
@@ -15,7 +16,10 @@ export class OtpService {
   private readonly otpStore = new Map<string, OtpEntry>();
   private readonly verifiedStore = new Map<string, Date>();
 
-  constructor(private readonly sendGridService: SendGridService) {}
+  constructor(
+    private readonly sendGridService: SendGridService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async sendOtp(dto: SendOtpDto) {
     const emailKey = dto.email.trim().toLowerCase();
@@ -45,32 +49,52 @@ export class OtpService {
     const isDevBypassEnabled = process.env.ENABLE_OTP_DEV_BYPASS !== 'false';
     const bypassCode = process.env.OTP_DEV_BYPASS || '000000';
 
+    let isCodeValid = false;
+
     if (isDevBypassEnabled && code === bypassCode) {
       this.logger.log(`[OTP VERIFY BYPASS] Dev bypass code (${bypassCode}) used for ${emailKey}`);
-      this.verifiedStore.set(emailKey, new Date(Date.now() + 30 * 60 * 1000));
-      return {
-        success: true,
-        verified: true,
-        message: 'OTP verified successfully (dev bypass).',
-      };
+      isCodeValid = true;
+    } else {
+      const entry = this.otpStore.get(emailKey);
+
+      if (!entry) {
+        this.logger.warn(`[OTP VERIFY FAILED] No active OTP found for ${emailKey}`);
+        throw new BadRequestException('Verification code has expired or is invalid.');
+      }
+
+      if (new Date() > entry.expiresAt) {
+        this.otpStore.delete(emailKey);
+        this.logger.warn(`[OTP VERIFY FAILED] OTP expired for ${emailKey}`);
+        throw new BadRequestException('Verification code has expired. Please request a new one.');
+      }
+
+      if (entry.code !== code) {
+        this.logger.warn(`[OTP VERIFY FAILED] Invalid code provided for ${emailKey}`);
+        throw new BadRequestException('Invalid verification code.');
+      }
+
+      isCodeValid = true;
     }
 
-    const entry = this.otpStore.get(emailKey);
-
-    if (!entry) {
-      this.logger.warn(`[OTP VERIFY FAILED] No active OTP found for ${emailKey}`);
-      throw new BadRequestException('Verification code has expired or is invalid.');
-    }
-
-    if (new Date() > entry.expiresAt) {
-      this.otpStore.delete(emailKey);
-      this.logger.warn(`[OTP VERIFY FAILED] OTP expired for ${emailKey}`);
-      throw new BadRequestException('Verification code has expired. Please request a new one.');
-    }
-
-    if (entry.code !== code) {
-      this.logger.warn(`[OTP VERIFY FAILED] Invalid code provided for ${emailKey}`);
+    if (!isCodeValid) {
       throw new BadRequestException('Invalid verification code.');
+    }
+
+    // Check account/profile existence in database
+    const [profile, agencyUser, agency, visaDoc, passportApp, hireBooking] = await Promise.all([
+      this.prisma.profile.findUnique({ where: { email: emailKey } }).catch(() => null),
+      this.prisma.agencyUser.findUnique({ where: { email: emailKey } }).catch(() => null),
+      this.prisma.agency.findFirst({ where: { email: emailKey } }).catch(() => null),
+      this.prisma.visaDocumentation.findFirst({ where: { email: emailKey } }).catch(() => null),
+      this.prisma.passportApplication.findFirst({ where: { email: emailKey } }).catch(() => null),
+      this.prisma.hireBooking.findFirst({ where: { travellerEmail: emailKey } }).catch(() => null),
+    ]);
+
+    const hasAccount = Boolean(profile || agencyUser || agency || visaDoc || passportApp || hireBooking);
+
+    if (!hasAccount) {
+      this.logger.warn(`[OTP VERIFY FAILED] No registered account found for ${emailKey}`);
+      throw new BadRequestException('Invalid account: No registered user or profile matches this email address.');
     }
 
     // OTP successfully verified - delete to prevent reuse
@@ -83,6 +107,7 @@ export class OtpService {
       success: true,
       verified: true,
       email: emailKey,
+      profileId: profile?.id || null,
       message: 'Email verified successfully.',
     };
   }

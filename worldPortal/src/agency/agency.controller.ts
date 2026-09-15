@@ -159,6 +159,17 @@ export class AgencyController {
     return this.agencyService.assignStaffToAssignment(id, assignmentId, dto);
   }
 
+  @Post(':id/assignments/:assignmentId/complete')
+  @ApiOperation({ summary: 'Mark booking assignment as completed' })
+  @ApiParam({ name: 'id', description: 'Agency ID' })
+  @ApiParam({ name: 'assignmentId', description: 'Assignment Reference ID' })
+  async completeAssignment(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.agencyService.completeAssignment(id, assignmentId);
+  }
+
   @Get(':id/payouts')
   @ApiOperation({ summary: 'List payout history and settlement batches' })
   @ApiParam({ name: 'id', description: 'Agency ID' })

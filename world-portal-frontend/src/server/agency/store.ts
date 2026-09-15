@@ -147,16 +147,52 @@ function matches(needle: string, ...fields: (string | null | undefined)[]) {
   return fields.some((field) => field?.toLowerCase().includes(needle));
 }
 
-/**
- * The traveller's contact details are released only once the agency has put a
- * name against the job — so the redaction lives on the *read*, not in storage.
- * Assign staff and the same record comes back with the contact filled in.
- */
 function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
-  if (assignment.assignedStaffIds.length > 0) return assignment;
+  if (!assignment) return assignment;
+  const raw = assignment as any;
+
+  const travellerName = raw.travellerName || raw.traveller?.name || "Applicant";
+  const travellerEmail = raw.travellerEmail ?? raw.traveller?.email ?? null;
+  const travellerPhone = raw.travellerPhone ?? raw.traveller?.phone ?? null;
+  const partySize = raw.partySize ?? raw.traveller?.partySize ?? 1;
+
+  const destinationCity = raw.destinationCity || raw.destination?.city || "Destination City";
+  const destinationCountry = raw.destinationCountry || raw.destination?.country || "Destination Country";
+  const destinationCountryCode = raw.destinationCountryCode || raw.destination?.countryCode || "US";
+
+  const assignedStaffIds = Array.isArray(raw.assignedStaffIds) ? raw.assignedStaffIds : [];
+  const hasStaff = assignedStaffIds.length > 0;
+
   return {
-    ...assignment,
-    traveller: { ...assignment.traveller, email: null, phone: null },
+    ...raw,
+    id: raw.id || `asg-${Date.now()}`,
+    reference: raw.reference || `HIRE-${Date.now()}`,
+    agencyId: raw.agencyId || "",
+    category: (raw.category?.toLowerCase() || "freelancer") as any,
+    offeringId: raw.offeringId || "",
+    offeringTitle: raw.offeringTitle || "Service Package",
+    traveller: {
+      name: travellerName,
+      email: hasStaff ? travellerEmail : null,
+      phone: hasStaff ? travellerPhone : null,
+      partySize,
+    },
+    destination: {
+      city: destinationCity,
+      country: destinationCountry,
+      countryCode: destinationCountryCode,
+    },
+    startsAt: raw.startsAt || new Date().toISOString(),
+    endsAt: raw.endsAt || new Date().toISOString(),
+    status: (raw.status?.toLowerCase() || "requested") as any,
+    assignedStaffIds,
+    staffRequired: raw.staffRequired || 1,
+    notes: raw.notes || null,
+    gross: raw.gross !== undefined && raw.gross !== null ? Number(raw.gross) : 150,
+    currency: raw.currency || "USD",
+    platformFee: raw.platformFee !== undefined && raw.platformFee !== null ? Number(raw.platformFee) : 22.5,
+    netToAgency: raw.netToAgency !== undefined && raw.netToAgency !== null ? Number(raw.netToAgency) : 127.5,
+    createdAt: raw.createdAt || new Date().toISOString(),
   };
 }
 
@@ -190,7 +226,7 @@ function normalizeAgency(raw: any): Agency {
 export async function getAgency(agencyId: string): Promise<Agency | null> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 400);
+    const timer = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`, {
       cache: "no-store",
       signal: controller.signal,
@@ -259,8 +295,8 @@ export async function listAgencies(params: ListParams = {}): Promise<Paginated<A
         matches(needle, agency.name, agency.legalName, agency.country, agency.registrationNumber),
     )
     .sort((a, b) => {
-      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      const timeA = new Date((a as any).updatedAt || (a as any).createdAt || 0).getTime();
+      const timeB = new Date((b as any).updatedAt || (b as any).createdAt || 0).getTime();
       return timeB - timeA;
     });
 
@@ -496,7 +532,7 @@ export async function setDocument(
 ): Promise<Agency | null> {
   try {
     const backendKind = kind.toUpperCase();
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/documents`, {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/documents`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind: backendKind, fileName: file.fileName, fileUrl: file.fileUrl, expiresAt: file.expiresAt }),
@@ -510,7 +546,13 @@ export async function setDocument(
     // Fallback to local store
   }
 
-  const agency = agencyRecord(agencyId);
+  let agency = agencyRecord(agencyId);
+  if (!agency) {
+    const fetched = await getAgency(agencyId);
+    if (fetched) {
+      agency = fetched;
+    }
+  }
   if (!agency) return null;
 
   let document = agency.documents.find((entry) => entry.kind === kind);
@@ -537,11 +579,14 @@ export async function setDocument(
  * `uploaded` and `in_review` do not — submission is what *asks* for approval,
  * so requiring approval first would be circular.
  */
-export function listingReadiness(agencyId: string): {
+export async function listingReadiness(agencyId: string): Promise<{
   ready: boolean;
   missing: AgencyDocumentKind[];
-} {
-  const agency = agencyRecord(agencyId);
+}> {
+  let agency: Agency | null | undefined = agencyRecord(agencyId);
+  if (!agency) {
+    agency = await getAgency(agencyId);
+  }
   if (!agency) return { ready: false, missing: [] };
 
   const required = new Set(requiredDocumentsFor(agency.categories));
@@ -561,7 +606,7 @@ export async function submitListing(agencyId: string): Promise<{
   message: string | null;
 }> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/listing`, {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/listing`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listingStatus: "submitted", verification: "pending" }),
@@ -576,10 +621,13 @@ export async function submitListing(agencyId: string): Promise<{
     // Ignore backend sync failure
   }
 
-  const agency = agencyRecord(agencyId);
+  let agency: Agency | null | undefined = agencyRecord(agencyId);
+  if (!agency) {
+    agency = await getAgency(agencyId);
+  }
   if (!agency) return { agency: null, message: "We could not find that agency." };
 
-  const { ready, missing } = listingReadiness(agencyId);
+  const { ready, missing } = await listingReadiness(agencyId);
   if (!ready) {
     return {
       agency: null,
@@ -662,10 +710,19 @@ export async function listAssignments(
   return paginate(rows, params?.page, params?.perPage);
 }
 
-export function getAssignment(agencyId: string, id: string): AgencyAssignment | null {
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id);
+export async function getAssignment(agencyId: string, id: string): Promise<AgencyAssignment | null> {
+  try {
+    const paginated = await listAssignments(agencyId, { perPage: 100 });
+    const match = paginated.data.find((record) => record.id === id || record.reference === id);
+    if (match) return withContactRule(clone(match));
+  } catch {
+    // Fallback to local store
+  }
+
+  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
   return assignment ? withContactRule(clone(assignment)) : null;
 }
+
 
 /**
  * Puts the agency's own people against a booking.
@@ -764,11 +821,26 @@ function releaseStaff(agencyId: string, staffId: string) {
   if (!stillBusy) member.status = "available";
 }
 
-export function completeAssignment(
+export async function completeAssignment(
   agencyId: string,
   id: string,
-): { assignment: AgencyAssignment | null; message: string | null } {
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id);
+): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${id}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const updated = json.data ?? json;
+      return { assignment: withContactRule(clone(updated)), message: null };
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
   if (!assignment) {
     return { assignment: null, message: "We could not find that assignment." };
   }

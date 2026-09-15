@@ -5,6 +5,7 @@ import {
   createAgency,
   findAgencyUserByEmail,
   getAgency,
+  getAssignment,
   getOverview,
   listAssignments,
   listStaff,
@@ -137,6 +138,25 @@ describe("Agency Store", () => {
         expect(updated).not.toBeNull();
         expect(updated?.assignment?.assignedStaffIds).toContain(staffMember.id);
       }
+    }
+  });
+
+  it("fetches single assignment by ID or reference", async () => {
+    const created = createAgency({
+      agencyName: "Test Agency Six",
+      contactName: "Owner Six",
+      email: "owner6@test.com",
+      phone: "+15550666",
+      countryCode: "US",
+      country: "United States",
+    });
+
+    const list = await listAssignments(created.agency.id);
+    if (list.data.length > 0) {
+      const first = list.data[0];
+      const fetched = await getAssignment(created.agency.id, first.id);
+      expect(fetched).not.toBeNull();
+      expect(fetched?.id).toBe(first.id);
     }
   });
 

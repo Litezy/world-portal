@@ -74,6 +74,19 @@ export class VisaDocumentationController {
     return this.visaDocumentationService.findAllVisaApplications(query);
   }
 
+  @Get('applicant/:identifier')
+  @ApiOperation({
+    summary: 'Get all visa applications for a specific applicant email or profile ID',
+  })
+  @ApiParam({
+    name: 'identifier',
+    description: 'Applicant profile ID or email address',
+  })
+  @ApiResponse({ status: 200, description: 'List of applicant visa applications.' })
+  async findApplicantApplications(@Param('identifier') identifier: string) {
+    return this.visaDocumentationService.findApplicantVisaApplications(identifier);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get detailed visa application by ID or applicationNo',

@@ -70,10 +70,10 @@ export async function PATCH(request: Request) {
   // to have named itself. `AgencyServiceOffering.id` is required downstream.
   const { offerings, ...rest } = body.data;
   const patch = offerings
-    ? { ...rest, offerings: offerings.map((o) => ({ ...o, id: o.id ?? randomUUID() })) }
+    ? { ...rest, offerings: offerings.map((o) => ({ ...o, id: o.id ?? randomUUID(), title: o.title ?? "Service Offering" })) }
     : rest;
 
-  const agency = await updateListing(session.agencyId, patch);
+  const agency = await updateListing(session.agencyId, patch as any);
   if (!agency) {
     return NextResponse.json({ message: "Agency not found" }, { status: 404 });
   }

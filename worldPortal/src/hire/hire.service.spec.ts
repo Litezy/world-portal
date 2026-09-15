@@ -1,12 +1,48 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HireService } from './hire.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('HireService', () => {
   let service: HireService;
 
+  const mockPrismaService = {
+    professionalProfile: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockImplementation((args) => Promise.resolve({ id: args.where.id, isVerified: args.data.isVerified })),
+    },
+    profile: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    agency: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    agencyAssignment: {
+      upsert: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({}),
+    },
+    hireBooking: {
+      create: jest.fn().mockImplementation((args) =>
+        Promise.resolve({
+          id: 'booking-123',
+          reference: args.data.reference,
+          status: 'REQUESTED',
+          totalAmount: args.data.totalAmount,
+          currency: args.data.currency,
+          ...args.data,
+        }),
+      ),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [HireService],
+      providers: [
+        HireService,
+        { provide: PrismaService, useValue: mockPrismaService },
+      ],
     }).compile();
 
     service = module.get<HireService>(HireService);

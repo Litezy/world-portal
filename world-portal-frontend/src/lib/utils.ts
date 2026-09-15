@@ -23,7 +23,7 @@ export function absoluteUrl(path = "/") {
   return new URL(path, env.NEXT_PUBLIC_SITE_URL).toString();
 }
 
-export function formatCurrency(amount: number, currency = "NGN", locale = "en-US") {
+export function formatCurrency(amount: number, currency = "USD", locale = "en-US") {
   const targetLocale = currency === "NGN" ? "en-NG" : locale;
   return new Intl.NumberFormat(targetLocale, {
     style: "currency",

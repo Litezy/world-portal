@@ -206,12 +206,11 @@ export function AgencySignupForm() {
               <CountrySelect
                 label={agencyAuth.fields.country}
                 value={field.value}
-                disabled={otpSent || isPending}
                 onChange={(code) => {
                   field.onChange(code);
                   form.setValue("country", countryName(code), {
                     shouldValidate: true,
-                  });
+                    });
                 }}
               />
               <FormMessage />

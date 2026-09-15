@@ -496,4 +496,31 @@ export class VisaDocumentationService {
 
     return record;
   }
+
+  async findApplicantVisaApplications(identifier: string) {
+    if (!identifier) return [];
+
+    const cleanIdentifier = identifier.trim();
+
+    return this.prisma.visaDocumentation.findMany({
+      where: {
+        OR: [
+          { profileId: cleanIdentifier },
+          { email: { equals: cleanIdentifier, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        profile: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
+    });
+  }
 }

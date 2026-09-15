@@ -215,20 +215,21 @@ export class AgencyService {
    */
   async getOverview(agencyId: string) {
     const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
 
     const openAssignmentsCount = await this.prisma.agencyAssignment.count({
       where: {
-        agencyId,
+        agencyId: realAgencyId,
         status: { in: [AssignmentStatus.REQUESTED, AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS] },
       },
     });
 
     const staffTotal = await this.prisma.agencyStaff.count({
-      where: { agencyId },
+      where: { agencyId: realAgencyId },
     });
 
     const staffOnDuty = await this.prisma.agencyStaff.count({
-      where: { agencyId, status: AgencyStaffStatus.ASSIGNED },
+      where: { agencyId: realAgencyId, status: AgencyStaffStatus.ASSIGNED },
     });
 
     const now = new Date();
@@ -236,7 +237,7 @@ export class AgencyService {
 
     const completedThisMonth = await this.prisma.agencyAssignment.count({
       where: {
-        agencyId,
+        agencyId: realAgencyId,
         status: AssignmentStatus.COMPLETED,
         updatedAt: { gte: firstDayOfMonth },
       },
@@ -244,7 +245,7 @@ export class AgencyService {
 
     const monthEarnings = await this.prisma.agencyAssignment.aggregate({
       where: {
-        agencyId,
+        agencyId: realAgencyId,
         status: AssignmentStatus.COMPLETED,
         updatedAt: { gte: firstDayOfMonth },
       },
@@ -255,7 +256,7 @@ export class AgencyService {
 
     const pendingPayouts = await this.prisma.agencyPayout.aggregate({
       where: {
-        agencyId,
+        agencyId: realAgencyId,
         status: { in: [AgencyPayoutStatus.PENDING, AgencyPayoutStatus.PROCESSING] },
       },
       _sum: {
@@ -265,7 +266,7 @@ export class AgencyService {
 
     const outstandingDocuments = await this.prisma.agencyDocument.count({
       where: {
-        agencyId,
+        agencyId: realAgencyId,
         status: { in: [AgencyDocumentStatus.MISSING, AgencyDocumentStatus.REJECTED] },
       },
     });
@@ -288,18 +289,20 @@ export class AgencyService {
    * Manage Staff
    */
   async listStaff(agencyId: string) {
+    const agency = await this.getAgencyById(agencyId);
     return this.prisma.agencyStaff.findMany({
-      where: { agencyId },
+      where: { agencyId: agency.id },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async addStaff(agencyId: string, dto: AddAgencyStaffDto) {
-    await this.getAgencyById(agencyId);
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
 
     const staff = await this.prisma.agencyStaff.create({
       data: {
-        agencyId,
+        agencyId: realAgencyId,
         name: dto.name,
         role: dto.role,
         category: dto.category,
@@ -312,13 +315,16 @@ export class AgencyService {
       },
     });
 
-    this.logger.log(`Added staff id=${staff.id} for agencyId=${agencyId}`);
+    this.logger.log(`Added staff id=${staff.id} for agencyId=${realAgencyId}`);
     return staff;
   }
 
   async updateStaff(agencyId: string, staffId: string, dto: UpdateAgencyStaffDto) {
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
+
     const existing = await this.prisma.agencyStaff.findFirst({
-      where: { id: staffId, agencyId },
+      where: { id: staffId, agencyId: realAgencyId },
     });
 
     if (!existing) {
@@ -345,17 +351,19 @@ export class AgencyService {
    * Documents Management
    */
   async listDocuments(agencyId: string) {
+    const agency = await this.getAgencyById(agencyId);
     return this.prisma.agencyDocument.findMany({
-      where: { agencyId },
+      where: { agencyId: agency.id },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async uploadDocument(agencyId: string, dto: UploadAgencyDocumentDto) {
-    await this.getAgencyById(agencyId);
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
 
     const existing = await this.prisma.agencyDocument.findFirst({
-      where: { agencyId, kind: dto.kind },
+      where: { agencyId: realAgencyId, kind: dto.kind },
     });
 
     const uploadedAt = new Date();
@@ -377,7 +385,7 @@ export class AgencyService {
 
     return this.prisma.agencyDocument.create({
       data: {
-        agencyId,
+        agencyId: realAgencyId,
         kind: dto.kind,
         fileName: dto.fileName,
         fileUrl: dto.fileUrl,
@@ -451,35 +459,124 @@ export class AgencyService {
    * Assignments (Bookings) Management
    */
   async listAssignments(agencyId: string) {
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
+
+    try {
+      const proIds = [
+        realAgencyId,
+        `agency-${realAgencyId}`,
+        agency.slug,
+        `agency-${agency.slug}`,
+      ];
+
+      const hireBookings = await this.prisma.hireBooking.findMany({
+        where: {
+          professionalId: { in: proIds },
+        },
+      });
+
+      for (const booking of hireBookings) {
+        const existingAssignment = await this.prisma.agencyAssignment.findUnique({
+          where: { reference: booking.reference },
+        });
+
+        if (!existingAssignment) {
+          const grossAmount = Number(booking.totalAmount) || 150;
+          const commissionRate = agency.commissionRate ? Number(agency.commissionRate) : 0.15;
+          const platformFee = grossAmount * commissionRate;
+          const netToAgency = grossAmount - platformFee;
+
+          const sUpper = (booking.status || '').toUpperCase();
+          const assignmentStatus =
+            sUpper === 'CONFIRMED'
+              ? AssignmentStatus.ASSIGNED
+              : sUpper === 'COMPLETED'
+                ? AssignmentStatus.COMPLETED
+                : sUpper === 'CANCELLED'
+                  ? AssignmentStatus.CANCELLED
+                  : AssignmentStatus.REQUESTED;
+
+          await this.prisma.agencyAssignment.create({
+            data: {
+              reference: booking.reference,
+              agencyId: realAgencyId,
+              category: agency.categories?.[0] || 'freelancer',
+              offeringId: agency.offerings?.[0]?.id || `offering-${realAgencyId}`,
+              offeringTitle: agency.offerings?.[0]?.title || `${agency.name} Service Package`,
+              travellerName: booking.travellerName || 'Applicant',
+              travellerEmail: booking.travellerEmail,
+              travellerPhone: booking.travellerPhone || null,
+              partySize: 1,
+              destinationCity: booking.destinationCity || agency.cities?.[0] || 'Destination City',
+              destinationCountry: agency.country || 'Destination Country',
+              destinationCountryCode: agency.countryCode || 'US',
+              startsAt: booking.startsAt,
+              endsAt: booking.endsAt,
+              status: assignmentStatus,
+              assignedStaffIds: [],
+              staffRequired: 1,
+              notes: booking.notes || null,
+              gross: grossAmount,
+              currency: booking.currency || 'USD',
+              platformFee,
+              netToAgency,
+            },
+          }).catch(() => null);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Error auto-syncing hire bookings to agency assignments: ${err?.message || err}`);
+    }
+
     return this.prisma.agencyAssignment.findMany({
-      where: { agencyId },
+      where: { agencyId: realAgencyId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async assignStaffToAssignment(agencyId: string, assignmentId: string, dto: AssignStaffDto) {
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
+
     const assignment = await this.prisma.agencyAssignment.findFirst({
-      where: { id: assignmentId, agencyId },
+      where: {
+        agencyId: realAgencyId,
+        OR: [{ id: assignmentId }, { reference: assignmentId }],
+      },
     });
 
     if (!assignment) {
       throw new NotFoundException(`Assignment "${assignmentId}" not found for this agency`);
     }
 
+    const newStatus = dto.assignedStaffIds.length > 0 ? AssignmentStatus.ASSIGNED : AssignmentStatus.REQUESTED;
+
     const updated = await this.prisma.agencyAssignment.update({
-      where: { id: assignmentId },
+      where: { id: assignment.id },
       data: {
         assignedStaffIds: dto.assignedStaffIds,
-        status: dto.assignedStaffIds.length > 0 ? AssignmentStatus.ASSIGNED : AssignmentStatus.REQUESTED,
+        status: newStatus,
       },
     });
+
+    // Sync status to the HireBooking record on applicant side
+    if (assignment.reference) {
+      const hireStatus = dto.assignedStaffIds.length > 0 ? 'CONFIRMED' : 'REQUESTED';
+      await this.prisma.hireBooking.updateMany({
+        where: { reference: assignment.reference },
+        data: { status: hireStatus },
+      }).catch((err) => {
+        this.logger.warn(`Failed to sync hireBooking status for ref=${assignment.reference}: ${err?.message || err}`);
+      });
+    }
 
     // Update staff status to ASSIGNED if staff members were selected
     if (dto.assignedStaffIds.length > 0) {
       await this.prisma.agencyStaff.updateMany({
         where: {
           id: { in: dto.assignedStaffIds },
-          agencyId,
+          agencyId: realAgencyId,
         },
         data: {
           status: AgencyStaffStatus.ASSIGNED,
@@ -487,7 +584,52 @@ export class AgencyService {
       });
     }
 
-    this.logger.log(`Assigned staff [${dto.assignedStaffIds.join(', ')}] to assignment id=${assignmentId}`);
+    this.logger.log(`Assigned staff [${dto.assignedStaffIds.join(', ')}] to assignment id=${assignment.id} ref=${assignment.reference}`);
+    return updated;
+  }
+
+  async completeAssignment(agencyId: string, assignmentId: string) {
+    const agency = await this.getAgencyById(agencyId);
+    const realAgencyId = agency.id;
+
+    const assignment = await this.prisma.agencyAssignment.findFirst({
+      where: {
+        agencyId: realAgencyId,
+        OR: [{ id: assignmentId }, { reference: assignmentId }],
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException(`Assignment "${assignmentId}" not found for this agency`);
+    }
+
+    const updated = await this.prisma.agencyAssignment.update({
+      where: { id: assignment.id },
+      data: { status: AssignmentStatus.COMPLETED },
+    });
+
+    // Release assigned staff back to available
+    if (assignment.assignedStaffIds && assignment.assignedStaffIds.length > 0) {
+      await this.prisma.agencyStaff.updateMany({
+        where: {
+          id: { in: assignment.assignedStaffIds },
+          agencyId: realAgencyId,
+        },
+        data: { status: AgencyStaffStatus.AVAILABLE },
+      });
+    }
+
+    // Sync HireBooking to COMPLETED
+    if (assignment.reference) {
+      await this.prisma.hireBooking.updateMany({
+        where: { reference: assignment.reference },
+        data: { status: 'COMPLETED' },
+      }).catch((err) => {
+        this.logger.warn(`Failed to sync hireBooking to COMPLETED for ref=${assignment.reference}: ${err?.message || err}`);
+      });
+    }
+
+    this.logger.log(`Completed assignment id=${assignment.id} ref=${assignment.reference}`);
     return updated;
   }
 
@@ -495,8 +637,9 @@ export class AgencyService {
    * Payouts Management
    */
   async listPayouts(agencyId: string) {
+    const agency = await this.getAgencyById(agencyId);
     return this.prisma.agencyPayout.findMany({
-      where: { agencyId },
+      where: { agencyId: agency.id },
       include: {
         assignments: true,
       },

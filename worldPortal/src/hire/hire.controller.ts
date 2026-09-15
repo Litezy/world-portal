@@ -61,4 +61,11 @@ export class HireController {
     this.logger.log(`POST /hire/bookings called for proId=${dto.professionalId}`);
     return this.hireService.createBooking(dto);
   }
+
+  @Get('bookings/applicant/:identifier')
+  @ApiOperation({ summary: 'Get hire bookings for an applicant profile ID or email' })
+  @ApiParam({ name: 'identifier', description: 'Applicant Profile ID or Email address' })
+  async findBookingsByApplicant(@Param('identifier') identifier: string) {
+    return this.hireService.findBookingsByApplicant(identifier);
+  }
 }

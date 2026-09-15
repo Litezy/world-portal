@@ -38,6 +38,7 @@ export function toBasketItem(pro: Professional): BasketItem {
     subtitle: `${pro.unit} · ${pro.city}`,
     city: pro.city,
     price: pro.price,
+    currency: pro.currency,
     unit: pro.unit,
     href: "/hire",
   };

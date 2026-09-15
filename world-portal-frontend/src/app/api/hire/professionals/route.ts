@@ -32,12 +32,14 @@ function mapAgencyToProfessional(agency: Agency): Professional {
 
   const firstOffering = agency.offerings?.[0];
   const price = firstOffering?.price ? Number(firstOffering.price) : 150;
+  const currency = firstOffering?.currency || "USD";
   const unit = firstOffering?.unit || "per service";
 
   const packages = (agency.offerings || []).map((offering) => ({
     name: offering.title,
     description: offering.description || `${offering.title} service package by ${agency.name}`,
     price: Number(offering.price) || 150,
+    currency: offering.currency || currency,
   }));
 
   if (packages.length === 0) {
@@ -45,6 +47,7 @@ function mapAgencyToProfessional(agency: Agency): Professional {
       name: `${agency.name} Service Package`,
       description: agency.summary || "Full agency service package",
       price: 150,
+      currency,
     });
   }
 
@@ -61,6 +64,7 @@ function mapAgencyToProfessional(agency: Agency): Professional {
     jobs: agency.completedJobs || 0,
     years: Math.max(1, new Date().getFullYear() - (agency.yearFounded || 2020)),
     price,
+    currency,
     unit,
     about: agency.about || agency.summary || "Verified agency listing",
     availability: "Available for booking",

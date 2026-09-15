@@ -130,7 +130,7 @@ export function ProModal({
                     </span>
                   </span>
                   <span className="shrink-0 text-[15px] font-semibold text-ink-900">
-                    {formatCurrency(pkg.price)}
+                    {formatCurrency(pkg.price, pkg.currency || pro.currency || "USD")}
                   </span>
                 </li>
               ))}
@@ -173,7 +173,7 @@ export function ProModal({
         <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-border bg-background p-5 sm:px-8">
           <span>
             <span className="block text-[20px] font-semibold text-ink-900">
-              {formatCurrency(pro.price)}
+              {formatCurrency(pro.price, pro.currency || "USD")}
             </span>
             <span className="block text-[11.5px] text-muted-foreground">
               {pro.unit}

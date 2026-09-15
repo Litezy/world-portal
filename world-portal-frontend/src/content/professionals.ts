@@ -43,10 +43,11 @@ export type Professional = {
   years: number;
   /** Headline rate. `unit` is what the price buys. */
   price: number;
+  currency?: string;
   unit: string;
   about: string;
   availability: string;
-  packages: { name: string; description: string; price: number }[];
+  packages: { name: string; description: string; price: number; currency?: string }[];
   included: string[];
   skills: string[];
   cancellation: string;

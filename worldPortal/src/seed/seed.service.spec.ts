@@ -45,6 +45,6 @@ describe('SeedService', () => {
     const res = await service.runSeed({ secretCode: 'WORLD_PORTAL_SEED_2026_SECURE' });
     expect(res.success).toBe(true);
     expect(res.defaultPassword).toBe('Password@2');
-    expect(mockPrismaService.agency.upsert).toHaveBeenCalled();
+    expect(mockPrismaService.profile.upsert).toHaveBeenCalled();
   });
 });

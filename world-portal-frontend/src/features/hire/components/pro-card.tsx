@@ -76,7 +76,7 @@ export function ProCard({
       <div className="flex items-end justify-between gap-3 border-t border-border p-5">
         <span>
           <span className="block text-[18px] font-semibold text-ink-900">
-            {formatCurrency(pro.price)}
+            {formatCurrency(pro.price, pro.currency || "USD")}
           </span>
           <span className="block text-[11.5px] text-muted-foreground">{pro.unit}</span>
         </span>

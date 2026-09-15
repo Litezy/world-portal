@@ -478,4 +478,31 @@ export class PassportApplicationService {
 
     return record;
   }
+
+  async findApplicantPassportApplications(identifier: string) {
+    if (!identifier) return [];
+
+    const cleanIdentifier = identifier.trim();
+
+    return this.prisma.passportApplication.findMany({
+      where: {
+        OR: [
+          { profileId: cleanIdentifier },
+          { email: { equals: cleanIdentifier, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        profile: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
+    });
+  }
 }

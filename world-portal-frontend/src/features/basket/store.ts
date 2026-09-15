@@ -20,6 +20,7 @@ export type BasketItem = {
   city?: string;
   /** `null` means "priced after review" — a visa fee we cannot quote up front. */
   price: number | null;
+  currency?: string;
   unit?: string;
   href?: string;
 };

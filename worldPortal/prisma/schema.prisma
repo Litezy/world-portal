@@ -89,6 +89,7 @@ model Profile {
   visaDocumentations   VisaDocumentation[]
   paymentTransactions  PaymentTransaction[]
   passportApplications PassportApplication[]
+  hireBookings         HireBooking[]
 
   @@index([email])
   @@index([role])
@@ -158,6 +159,7 @@ model VisaDocumentation {
 
   profile             Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
   paymentTransactions PaymentTransaction[]
+  hireBookings        HireBooking[]
 
   @@index([profileId])
   @@index([status])
@@ -288,6 +290,7 @@ model PaymentTransaction {
   visaDocumentation   VisaDocumentation?   @relation(fields: [visaDocumentationId], references: [id], onDelete: SetNull)
   passportApplication PassportApplication? @relation(fields: [passportApplicationId], references: [id], onDelete: SetNull)
   profile             Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  hireBooking         HireBooking?         @relation(fields: [hireBookingId], references: [id], onDelete: SetNull)
   refunds             PaymentRefund[]
 
   @@index([visaDocumentationId])
@@ -597,3 +600,83 @@ model AgencyPayout {
 // ==========================================
 // HIRE & PROFESSIONAL SERVICES MODELS & ENUMS
 // ==========================================
+
+enum HireBookingStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model ProfessionalProfile {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  name          String
+  title         String
+  category      String
+  bio           String   @db.Text
+  avatarUrl     String?
+  countryCode   String
+  country       String
+  hourlyRate    Decimal  @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  languages     String[]
+  rating        Decimal? @db.Decimal(3, 2)
+  completedJobs Int      @default(0)
+  isVerified    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bookings HireBooking[]
+  ratings  ProfessionalRating[]
+
+  @@index([slug])
+  @@index([category])
+  @@index([countryCode])
+  @@index([isVerified])
+}
+
+model HireBooking {
+  id                  String            @id @default(uuid())
+  reference           String            @unique
+  professionalId      String
+  profileId           String?
+  visaDocumentationId String?
+  travellerName       String
+  travellerEmail      String
+  travellerPhone      String?
+  destinationCity     String
+  startsAt            DateTime
+  endsAt              DateTime
+  status              HireBookingStatus @default(REQUESTED)
+  totalAmount         Decimal           @db.Decimal(10, 2)
+  currency            String            @default("USD")
+  notes               String?           @db.Text
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  professional      ProfessionalProfile  @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  profile           Profile?             @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  visaDocumentation VisaDocumentation?   @relation(fields: [visaDocumentationId], references: [id], onDelete: SetNull)
+  paymentTransactions PaymentTransaction[]
+
+  @@index([reference])
+  @@index([professionalId])
+  @@index([profileId])
+  @@index([visaDocumentationId])
+  @@index([status])
+  @@index([travellerEmail])
+}
+
+model ProfessionalRating {
+  id             String   @id @default(uuid())
+  professionalId String
+  reviewerName   String
+  rating         Int
+  reviewText     String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+}
