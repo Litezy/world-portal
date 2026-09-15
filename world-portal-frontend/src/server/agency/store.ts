@@ -225,12 +225,9 @@ function normalizeAgency(raw: any): Agency {
 
 export async function getAgency(agencyId: string): Promise<Agency | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`, {
       cache: "no-store",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
+    });
     if (res.ok) {
       const json = await res.json();
       const agency = normalizeAgency(json);
@@ -413,12 +410,9 @@ function isExpired(document: AgencyDocument, at: Date) {
  */
 export async function getOverview(agencyId: string): Promise<AgencyOverview> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
     const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/overview`, {
       cache: "no-store",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
+    });
     if (res.ok) {
       const json = await res.json();
       return json.data ?? json;
