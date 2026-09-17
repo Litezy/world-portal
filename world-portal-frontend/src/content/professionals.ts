@@ -3,14 +3,22 @@
  */
 
 export const professions = [
+  "driving",
+  "security",
+  "tour_guide",
+  "catering",
+  "interpreting",
+  "cleaning",
+  "childcare",
+  "logistics",
+  "events",
+  "medical",
   "photographer",
   "videographer",
   "chef",
   "barber",
   "shopper",
   "interpreter",
-  "security",
-  "childcare",
   "event",
   "freelancer",
 ] as const;
@@ -18,17 +26,44 @@ export const professions = [
 export type Profession = (typeof professions)[number];
 
 export const professionLabels: Record<Profession, string> = {
+  driving: "Driving & transfers",
+  security: "Private security",
+  tour_guide: "Tour guides",
+  catering: "Catering & private chefs",
+  interpreting: "Interpreting & translation",
+  cleaning: "Cleaning & housekeeping",
+  childcare: "Childcare & nannies",
+  logistics: "Logistics & customs",
+  events: "Events & planning",
+  medical: "Medical standby",
   photographer: "Photographer",
   videographer: "Videographer",
   chef: "Private chef / cook",
   barber: "Barber / stylist",
   shopper: "Personal shopper",
   interpreter: "Interpreter / translator",
-  security: "Private security",
-  childcare: "Babysitter / nanny",
   event: "Event planner",
   freelancer: "Freelancer / other",
 };
+
+/**
+ * Primary display categories shown on the /hire filter
+ */
+export const unifiedDisplayCategories: Profession[] = [
+  "driving",
+  "security",
+  "tour_guide",
+  "catering",
+  "interpreting",
+  "cleaning",
+  "childcare",
+  "logistics",
+  "events",
+  "medical",
+  "photographer",
+  "videographer",
+  "freelancer",
+];
 
 export type Professional = {
   id: string;

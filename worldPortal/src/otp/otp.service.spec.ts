@@ -55,37 +55,73 @@ describe('OtpService', () => {
     ).resolves.toMatchObject({ verified: true, profileId: null });
   });
 
-  it('delivers the generated code and accepts it only once', async () => {
-    await service.sendOtp({ email: ' Mailbox@Example.com ' });
-    const [email, code] = mockSendGridService.sendOtpEmail.mock.calls.at(-1)!;
-    expect(email).toBe('mailbox@example.com');
-    expect(code).toMatch(/^\d{6}$/);
-    await expect(service.verifyOtp({ email, code })).resolves.toMatchObject({
-      verified: true,
-    });
-    await expect(service.verifyOtp({ email, code })).rejects.toThrow(
-      BadRequestException,
-    );
+  it('bypasses SendGrid delivery when ENABLE_OTP_DEV_BYPASS is true', async () => {
+    const originalEnv = process.env.ENABLE_OTP_DEV_BYPASS;
+    try {
+      process.env.ENABLE_OTP_DEV_BYPASS = 'true';
+      const result = await service.sendOtp({ email: 'bypass@example.com' });
+      expect(result.success).toBe(true);
+      expect(mockSendGridService.sendOtpEmail).not.toHaveBeenCalled();
+
+      await expect(
+        service.verifyOtp({ email: 'bypass@example.com', code: '000000' }),
+      ).resolves.toMatchObject({ verified: true });
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.ENABLE_OTP_DEV_BYPASS = originalEnv;
+      } else {
+        delete process.env.ENABLE_OTP_DEV_BYPASS;
+      }
+    }
   });
 
-  it.each(['false', 'throw'])(
-    'rejects failed delivery (%s) and invalidates the unsent code',
-    async (failure) => {
-      if (failure === 'false')
-        mockSendGridService.sendOtpEmail.mockResolvedValueOnce(false);
-      else
-        mockSendGridService.sendOtpEmail.mockRejectedValueOnce(
-          new Error('provider failure'),
-        );
-      await expect(
-        service.sendOtp({ email: 'failure@example.com' }),
-      ).rejects.toThrow(ServiceUnavailableException);
+  describe('when dev bypass is disabled', () => {
+    const originalEnv = process.env.ENABLE_OTP_DEV_BYPASS;
+
+    beforeEach(() => {
+      process.env.ENABLE_OTP_DEV_BYPASS = 'false';
+    });
+
+    afterAll(() => {
+      if (originalEnv !== undefined) {
+        process.env.ENABLE_OTP_DEV_BYPASS = originalEnv;
+      } else {
+        delete process.env.ENABLE_OTP_DEV_BYPASS;
+      }
+    });
+
+    it('delivers the generated code and accepts it only once', async () => {
+      await service.sendOtp({ email: ' Mailbox@Example.com ' });
       const [email, code] = mockSendGridService.sendOtpEmail.mock.calls.at(-1)!;
+      expect(email).toBe('mailbox@example.com');
+      expect(code).toMatch(/^\d{6}$/);
+      await expect(service.verifyOtp({ email, code })).resolves.toMatchObject({
+        verified: true,
+      });
       await expect(service.verifyOtp({ email, code })).rejects.toThrow(
         BadRequestException,
       );
-    },
-  );
+    });
+
+    it.each(['false', 'throw'])(
+      'rejects failed delivery (%s) and invalidates the unsent code',
+      async (failure) => {
+        if (failure === 'false')
+          mockSendGridService.sendOtpEmail.mockResolvedValueOnce(false);
+        else
+          mockSendGridService.sendOtpEmail.mockRejectedValueOnce(
+            new Error('provider failure'),
+          );
+        await expect(
+          service.sendOtp({ email: 'failure@example.com' }),
+        ).rejects.toThrow(ServiceUnavailableException);
+        const [email, code] = mockSendGridService.sendOtpEmail.mock.calls.at(-1)!;
+        await expect(service.verifyOtp({ email, code })).rejects.toThrow(
+          BadRequestException,
+        );
+      },
+    );
+  });
 
   it('should verify successfully if email account exists in DB', async () => {
     mockPrismaService.profile.findUnique.mockResolvedValue({

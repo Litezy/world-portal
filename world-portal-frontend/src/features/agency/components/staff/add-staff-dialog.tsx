@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { agencyStaff as copy } from "@/content/agency";
+import { useAgencyListing } from "@/features/agency/api/use-listing";
 import { useCreateStaff } from "@/features/agency/api/use-staff";
 import { allCategories, categoryCatalog } from "@/features/agency/catalog";
 import type { AgencyCategory } from "@/features/agency/types";
@@ -57,6 +58,15 @@ export function AddStaffDialog() {
   const [backgroundChecked, setBackgroundChecked] = React.useState(false);
   const create = useCreateStaff();
 
+  const listingQuery = useAgencyListing();
+  const registeredCategories = listingQuery.data?.categories;
+  const availableCategories = React.useMemo(() => {
+    if (registeredCategories && registeredCategories.length > 0) {
+      return registeredCategories;
+    }
+    return allCategories;
+  }, [registeredCategories]);
+
   const {
     control,
     register,
@@ -68,17 +78,35 @@ export function AddStaffDialog() {
     defaultValues: {
       name: "",
       role: "",
-      category: allCategories[0],
+      category: availableCategories[0] || allCategories[0],
       phone: "",
       languages: "",
       experienceYears: 1,
     },
   });
 
+  React.useEffect(() => {
+    if (availableCategories.length > 0) {
+      reset((prev) => {
+        if (!prev.category || !availableCategories.includes(prev.category)) {
+          return { ...prev, category: availableCategories[0] };
+        }
+        return prev;
+      });
+    }
+  }, [availableCategories, reset]);
+
   const close = (next: boolean) => {
     setOpen(next);
     if (!next) {
-      reset();
+      reset({
+        name: "",
+        role: "",
+        category: availableCategories[0] || allCategories[0],
+        phone: "",
+        languages: "",
+        experienceYears: 1,
+      });
       setBackgroundChecked(false);
       create.reset();
     }
@@ -166,9 +194,9 @@ export function AddStaffDialog() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {allCategories.map((category) => (
+                      {availableCategories.map((category) => (
                         <SelectItem key={category} value={category}>
-                          {categoryCatalog[category].label}
+                          {categoryCatalog[category]?.label || category}
                         </SelectItem>
                       ))}
                     </SelectContent>

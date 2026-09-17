@@ -18,6 +18,7 @@ import {
   useAssignStaff,
   useCompleteAssignment,
 } from "@/features/agency/api/use-assignments";
+import { useAgencyListing } from "@/features/agency/api/use-listing";
 import { useAgencyStaff } from "@/features/agency/api/use-staff";
 import { StaffStatusBadge } from "@/features/agency/components/agency-badges";
 import type { AgencyAssignment, AgencyStaff } from "@/features/agency/types";
@@ -41,22 +42,32 @@ export function AssignStaffPanel({ assignment }: { assignment: AgencyAssignment 
     assignment.status === "requested" || assignment.status === "assigned";
 
   const staffQuery = useAgencyStaff({ perPage: 100 });
+  const listingQuery = useAgencyListing();
   const assign = useAssignStaff(assignment.id);
   const complete = useCompleteAssignment(assignment.id);
 
   const [selected, setSelected] = React.useState<string[]>(assignment.assignedStaffIds);
 
   const roster = staffQuery.data?.data ?? [];
+  const registeredCategories = listingQuery.data?.categories;
   const normalizeCat = (cat?: string) => (cat || "").toLowerCase().replace(/[\s_]+/g, "");
 
-  const matchingCategoryStaff = roster.filter((person) => {
+  const staffInRegisteredCategories = React.useMemo(() => {
+    if (!registeredCategories || registeredCategories.length === 0) return roster;
+    return roster.filter(
+      (person) => !person.category || registeredCategories.includes(person.category),
+    );
+  }, [roster, registeredCategories]);
+
+  const matchingCategoryStaff = staffInRegisteredCategories.filter((person) => {
     if (!person.category || !assignment.category) return true;
     const pCat = normalizeCat(person.category);
     const aCat = normalizeCat(assignment.category);
     return pCat === aCat || pCat === "freelancer" || aCat === "freelancer";
   });
 
-  const staffPool = matchingCategoryStaff.length > 0 ? matchingCategoryStaff : roster;
+  const staffPool =
+    matchingCategoryStaff.length > 0 ? matchingCategoryStaff : staffInRegisteredCategories;
 
   const eligible = staffPool.filter(
     (person) =>

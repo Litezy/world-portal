@@ -4,19 +4,23 @@ import type { Agency } from "@/features/agency/types";
 import { listAgencies } from "@/server/agency/store";
 
 const categoryToProfession: Record<string, Profession> = {
+  driving: "driving",
+  security: "security",
+  tour_guide: "tour_guide",
+  catering: "catering",
+  chef: "catering",
+  interpreting: "interpreting",
+  interpreter: "interpreting",
+  cleaning: "cleaning",
+  childcare: "childcare",
+  logistics: "logistics",
+  events: "events",
+  event: "events",
+  medical: "medical",
   photographer: "photographer",
   videographer: "videographer",
-  chef: "chef",
-  catering: "chef",
   barber: "barber",
   shopper: "shopper",
-  interpreting: "interpreter",
-  interpreter: "interpreter",
-  security: "security",
-  childcare: "childcare",
-  event: "event",
-  driving: "freelancer",
-  tour_guide: "freelancer",
   freelancer: "freelancer",
 };
 
@@ -28,7 +32,7 @@ function mapAgencyToProfessional(agency: Agency): Professional {
   const isVerified = vLower === "verified" || lLower === "live";
 
   const primaryCategory = agency.categories?.[0] || "freelancer";
-  const profession = categoryToProfession[primaryCategory] || "freelancer";
+  const profession = (categoryToProfession[primaryCategory] || primaryCategory || "freelancer") as Profession;
 
   const firstOffering = agency.offerings?.[0];
   const price = firstOffering?.price ? Number(firstOffering.price) : 150;
@@ -99,7 +103,37 @@ export async function GET(request: Request) {
 
   let filtered = results;
   if (category && category !== "all") {
-    filtered = filtered.filter((item) => item.profession === category);
+    const target = category.toLowerCase().trim();
+    filtered = filtered.filter((item) => {
+      const itemProf = (item.profession || "").toLowerCase();
+      if (itemProf === target) return true;
+      if (
+        (target === "catering" || target === "chef") &&
+        (itemProf === "catering" || itemProf === "chef")
+      )
+        return true;
+      if (
+        (target === "interpreting" || target === "interpreter") &&
+        (itemProf === "interpreting" || itemProf === "interpreter")
+      )
+        return true;
+      if (
+        (target === "events" || target === "event") &&
+        (itemProf === "events" || itemProf === "event")
+      )
+        return true;
+
+      return (item.skills || []).some((s) => {
+        const sLower = s.toLowerCase();
+        return (
+          sLower === target ||
+          categoryToProfession[sLower] === target ||
+          (target === "catering" && sLower === "chef") ||
+          (target === "interpreting" && sLower === "interpreter") ||
+          (target === "events" && sLower === "event")
+        );
+      });
+    });
   }
   if (city && city !== "all") {
     filtered = filtered.filter((item) => item.city.toLowerCase() === city.toLowerCase());

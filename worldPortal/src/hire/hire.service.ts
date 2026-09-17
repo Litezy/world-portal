@@ -312,6 +312,8 @@ export class HireService {
         where: { reference: b.reference },
       }).catch(() => null);
 
+      let matchedAgencyInfo: any = null;
+
       if (assignment) {
         const sUpper = (assignment.status || '').toUpperCase();
         if (sUpper === 'ASSIGNED' || (assignment.assignedStaffIds && assignment.assignedStaffIds.length > 0)) {
@@ -343,6 +345,43 @@ export class HireService {
           }).catch(() => []);
           (b as any).assignedStaff = staffMembers;
         }
+
+        if (assignment.agencyId) {
+          matchedAgencyInfo = await this.prisma.agency.findUnique({
+            where: { id: assignment.agencyId },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              website: true,
+              logoUrl: true,
+              country: true,
+              cities: true,
+            },
+          }).catch(() => null);
+        }
+      }
+
+      if (!matchedAgencyInfo && b.professional) {
+        const rawAgencyId = b.professional.slug.replace(/^agency-/, '');
+        matchedAgencyInfo = await this.prisma.agency.findFirst({
+          where: { OR: [{ id: rawAgencyId }, { slug: rawAgencyId }, { id: b.professional.slug }] },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            website: true,
+            logoUrl: true,
+            country: true,
+            cities: true,
+          },
+        }).catch(() => null);
+      }
+
+      if (matchedAgencyInfo) {
+        (b as any).agency = matchedAgencyInfo;
       }
     }
 

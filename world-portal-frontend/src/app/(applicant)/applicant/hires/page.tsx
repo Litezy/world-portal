@@ -3,12 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  Building2,
   Calendar,
   CheckCircle2,
   Clock,
   Eye,
+  Globe,
   Mail,
   MapPin,
+  Phone,
   Plus,
   Search,
   ShieldCheck,
@@ -86,6 +89,16 @@ type HiredBookingRecord = {
     phone?: string;
     experienceYears?: number;
   }>;
+  agency?: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    website?: string | null;
+    logoUrl?: string | null;
+    country?: string;
+    cities?: string[];
+  };
 };
 
 function getMonogram(name: string): string {
@@ -429,35 +442,119 @@ export default function ApplicantHiresPage() {
                 </div>
               </div>
 
-              {selectedBooking.assignedStaff && selectedBooking.assignedStaff.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <UserCheck className="size-3.5 text-primary" />
-                    Assigned Specialist / Staff
-                  </h4>
-                  <div className="space-y-2">
-                    {selectedBooking.assignedStaff.map((staff) => (
-                      <div
-                        key={staff.id}
-                        className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-                      >
-                        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
-                          {getMonogram(staff.name)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {staff.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {staff.role} {staff.experienceYears ? `· ${staff.experienceYears}y experience` : ""}
-                          </p>
-                        </div>
-                        <Badge variant="softSuccess" size="sm">
-                          Assigned
-                        </Badge>
+              {/* Staff & Agency Contact Details (Released upon Confirmation) */}
+              {selectedBooking.status === "CONFIRMED" || selectedBooking.status === "COMPLETED" ? (
+                <div className="space-y-4">
+                  {/* Assigned Staff Contacts */}
+                  {selectedBooking.assignedStaff && selectedBooking.assignedStaff.length > 0 ? (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <UserCheck className="size-3.5 text-primary" />
+                        Assigned Specialist & Direct Contact
+                      </h4>
+                      <div className="space-y-2">
+                        {selectedBooking.assignedStaff.map((staff) => (
+                          <div
+                            key={staff.id}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0 border border-primary/20">
+                                {getMonogram(staff.name)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                  {staff.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {staff.role} {staff.experienceYears ? `· ${staff.experienceYears}y exp` : ""}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pl-13 sm:pl-0">
+                              {staff.phone ? (
+                                <Button asChild variant="primary" size="sm" className="h-8 text-xs gap-1.5">
+                                  <a href={`tel:${staff.phone}`}>
+                                    <Phone className="size-3.5" />
+                                    {staff.phone}
+                                  </a>
+                                </Button>
+                              ) : (
+                                <Badge variant="softNeutral" size="sm">
+                                  Contact Via Agency
+                                </Badge>
+                              )}
+                              <Badge variant="softSuccess" size="sm">
+                                Assigned
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : null}
+
+                  {/* Agency Direct Contact */}
+                  {selectedBooking.agency && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <Building2 className="size-3.5 text-primary" />
+                        Agency Support & Office Contact
+                      </h4>
+                      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {selectedBooking.agency.name}
+                          </p>
+                          <Badge variant="softInfo" size="sm">
+                            Fulfilling Agency
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {selectedBooking.agency.phone && (
+                            <a
+                              href={`tel:${selectedBooking.agency.phone}`}
+                              className="flex items-center gap-2 text-primary hover:underline bg-muted/30 p-2 rounded-lg"
+                            >
+                              <Phone className="size-3.5 text-primary shrink-0" />
+                              <span className="truncate">{selectedBooking.agency.phone}</span>
+                            </a>
+                          )}
+                          {selectedBooking.agency.email && (
+                            <a
+                              href={`mailto:${selectedBooking.agency.email}`}
+                              className="flex items-center gap-2 text-primary hover:underline bg-muted/30 p-2 rounded-lg"
+                            >
+                              <Mail className="size-3.5 text-primary shrink-0" />
+                              <span className="truncate">{selectedBooking.agency.email}</span>
+                            </a>
+                          )}
+                          {selectedBooking.agency.website && (
+                            <a
+                              href={selectedBooking.agency.website.startsWith("http") ? selectedBooking.agency.website : `https://${selectedBooking.agency.website}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-muted-foreground hover:text-foreground hover:underline bg-muted/30 p-2 rounded-lg sm:col-span-2"
+                            >
+                              <Globe className="size-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate">{selectedBooking.agency.website}</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Awaiting Agency Confirmation
+                  </p>
+                  <p className="text-[11.5px] text-muted-foreground max-w-sm mx-auto">
+                    Direct phone contacts for your assigned specialist and managing agency will be shown here once your request has been confirmed.
+                  </p>
                 </div>
               )}
 

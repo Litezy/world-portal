@@ -19,6 +19,7 @@ import {
   professionalCities,
   professionLabels,
   professions,
+  unifiedDisplayCategories,
 } from "@/content/professionals";
 import { type BasketItem, useBasketStore } from "@/features/basket/store";
 import { ProCard } from "@/features/hire/components/pro-card";
@@ -132,15 +133,15 @@ export function HireBrowser() {
     <div>
       <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]">
         <label className="sr-only" htmlFor="hire-profession">
-          Profession
+          Category
         </label>
         <Select value={profession} onValueChange={setProfession}>
           <SelectTrigger id="hire-profession" size="lg">
-            <SelectValue placeholder="All professionals" />
+            <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>All professionals</SelectItem>
-            {professions.map((p) => (
+            <SelectItem value={ALL}>All categories</SelectItem>
+            {unifiedDisplayCategories.map((p) => (
               <SelectItem key={p} value={p}>
                 {professionLabels[p]}
               </SelectItem>
@@ -179,7 +180,7 @@ export function HireBrowser() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {[ALL, ...professions].map((value) => {
+        {[ALL, ...unifiedDisplayCategories].map((value) => {
           const active = profession === value;
           return (
             <button

@@ -28,11 +28,25 @@ export class OtpService {
 
   async sendOtp(dto: SendOtpDto) {
     const emailKey = dto.email.trim().toLowerCase();
-    const code = randomInt(100000, 999999).toString();
+    const isDevBypassEnabled = process.env.ENABLE_OTP_DEV_BYPASS === 'true';
+    const bypassCode = process.env.OTP_DEV_BYPASS || '000000';
+    const code = isDevBypassEnabled ? bypassCode : randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     const entry = { code, expiresAt };
     this.otpStore.set(emailKey, entry);
+
+    if (isDevBypassEnabled) {
+      this.logger.log(
+        `[OTP DEV BYPASS] Dev bypass enabled. Skipping SendGrid email for ${emailKey}. Dev OTP: ${code}`,
+      );
+      return {
+        success: true,
+        message: 'Verification OTP sent to your email address.',
+        expiresIn: '10m',
+      };
+    }
+
     try {
       const sent = await this.sendGridService.sendOtpEmail(emailKey, code);
       if (!sent) throw new Error('OTP delivery was not accepted');
