@@ -18,6 +18,7 @@ import {
   useAssignStaff,
   useCompleteAssignment,
 } from "@/features/agency/api/use-assignments";
+import { useAgencyListing } from "@/features/agency/api/use-listing";
 import { useAgencyStaff } from "@/features/agency/api/use-staff";
 import { StaffStatusBadge } from "@/features/agency/components/agency-badges";
 import type { AgencyAssignment, AgencyStaff } from "@/features/agency/types";
@@ -41,20 +42,36 @@ export function AssignStaffPanel({ assignment }: { assignment: AgencyAssignment 
     assignment.status === "requested" || assignment.status === "assigned";
 
   const staffQuery = useAgencyStaff({ perPage: 100 });
+  const listingQuery = useAgencyListing();
   const assign = useAssignStaff(assignment.id);
   const complete = useCompleteAssignment(assignment.id);
 
   const [selected, setSelected] = React.useState<string[]>(assignment.assignedStaffIds);
 
   const roster = staffQuery.data?.data ?? [];
-  // Only this agency's people, and only those who work in what was booked.
-  // Inactive staff are not offered — except one who is already on this job,
-  // who has to stay visible or the count would say two while one row is
-  // checked, and there would be no way to take them off.
-  const eligible = roster.filter(
+  const registeredCategories = listingQuery.data?.categories;
+  const normalizeCat = (cat?: string) => (cat || "").toLowerCase().replace(/[\s_]+/g, "");
+
+  const staffInRegisteredCategories = React.useMemo(() => {
+    if (!registeredCategories || registeredCategories.length === 0) return roster;
+    return roster.filter(
+      (person) => !person.category || registeredCategories.includes(person.category),
+    );
+  }, [roster, registeredCategories]);
+
+  const matchingCategoryStaff = staffInRegisteredCategories.filter((person) => {
+    if (!person.category || !assignment.category) return true;
+    const pCat = normalizeCat(person.category);
+    const aCat = normalizeCat(assignment.category);
+    return pCat === aCat || pCat === "freelancer" || aCat === "freelancer";
+  });
+
+  const staffPool =
+    matchingCategoryStaff.length > 0 ? matchingCategoryStaff : staffInRegisteredCategories;
+
+  const eligible = staffPool.filter(
     (person) =>
-      person.category === assignment.category &&
-      (person.status !== "inactive" || assignment.assignedStaffIds.includes(person.id)),
+      person.status !== "inactive" || assignment.assignedStaffIds.includes(person.id),
   );
   const assigned = assignment.assignedStaffIds
     .map((id) => roster.find((person) => person.id === id))
@@ -208,15 +225,16 @@ export function AssignStaffPanel({ assignment }: { assignment: AgencyAssignment 
         </Button>
       ) : null}
 
-      {assignment.status === "in_progress" ? (
+      {(assignment.status === "assigned" || assignment.status === "in_progress") &&
+      assignment.assignedStaffIds.length > 0 ? (
         <Button
-          className="mt-5"
+          className="mt-3"
           size="block"
           variant="outline"
           isLoading={complete.isPending}
           onClick={() => complete.mutate()}
         >
-          <CircleCheckBig className="size-4" />
+          <CircleCheckBig className="size-4 text-success-600" />
           {copy.detail.markComplete}
         </Button>
       ) : null}

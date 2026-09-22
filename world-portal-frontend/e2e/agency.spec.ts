@@ -74,7 +74,7 @@ test.describe("the agency guard", () => {
       expect(response?.status(), `${path} should not error`).toBeLessThan(400);
       await expect(page).toHaveURL(new RegExp(`${path}$`));
       await expect(page.locator("form")).toBeAttached();
-      await expect(page.locator('input[type="password"]').first()).toBeAttached();
+      await expect(page.locator('input[type="email"]').first()).toBeAttached();
     });
   }
 

@@ -116,13 +116,13 @@ export function AssignmentsTable() {
                   </TableCell>
                   <TableCell>{assignment.offeringTitle}</TableCell>
                   <TableCell>
-                    {assignment.traveller.name}
+                    {assignment.traveller?.name || "Applicant"}
                     <span className="block text-[11.5px] font-normal text-muted-foreground tabular-nums">
-                      {copy.detail.partySize}: {assignment.traveller.partySize}
+                      {copy.detail.partySize}: {assignment.traveller?.partySize ?? 1}
                     </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {assignment.destination.city}, {assignment.destination.country}
+                    {assignment.destination?.city || "Destination City"}, {assignment.destination?.country || "Country"}
                   </TableCell>
                   <TableCell className="text-[12.5px] whitespace-nowrap text-muted-foreground">
                     {formatDate(assignment.startsAt, {

@@ -29,7 +29,7 @@ const buttonVariants = cva(
         glassDark: "glass-dark glass-3d text-white",
         /** Flat white pill (the hero "Book Now" in the reference). */
         solid:
-          "glass-3d bg-white text-ink-900 shadow-[0_1px_2px_rgba(12,14,18,0.10),0_10px_24px_-12px_rgba(12,14,18,0.45)]",
+          "glass-3d bg-white text-ink-950 shadow-[0_1px_2px_rgba(12,14,18,0.10),0_10px_24px_-12px_rgba(12,14,18,0.45)]",
         outline:
           "border border-border bg-transparent transition-colors hover:bg-secondary",
         ghost: "transition-colors hover:bg-secondary",

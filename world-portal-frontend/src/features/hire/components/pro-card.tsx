@@ -44,10 +44,12 @@ export function ProCard({
               <h3 className="text-[15px] leading-tight font-semibold text-ink-900">
                 {pro.name}
               </h3>
-              <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-ink-900">
-                <Star className="size-3.5 fill-current text-highlight" />
-                {pro.rating}
-              </span>
+              {pro.rating > 0 && (
+                <span className="flex shrink-0 items-center gap-1 text-[13px] font-medium text-ink-900">
+                  <Star className="size-3.5 fill-current text-highlight" />
+                  {pro.rating}
+                </span>
+              )}
             </div>
 
             <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
@@ -74,7 +76,7 @@ export function ProCard({
       <div className="flex items-end justify-between gap-3 border-t border-border p-5">
         <span>
           <span className="block text-[18px] font-semibold text-ink-900">
-            {formatCurrency(pro.price)}
+            {formatCurrency(pro.price, pro.currency || "USD")}
           </span>
           <span className="block text-[11.5px] text-muted-foreground">{pro.unit}</span>
         </span>

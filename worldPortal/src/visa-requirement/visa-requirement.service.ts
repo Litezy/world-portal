@@ -167,13 +167,9 @@ export class VisaRequirementService {
     url: string,
     options: RequestInit = {},
   ): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
     try {
       const response = await fetch(url, {
         ...options,
-        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-rapidapi-host': this.host,
@@ -181,8 +177,6 @@ export class VisaRequirementService {
           ...(options.headers || {}),
         },
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -197,7 +191,6 @@ export class VisaRequirementService {
       const result = (await response.json()) as T;
       return result;
     } catch (error: unknown) {
-      clearTimeout(timeoutId);
       if (error instanceof BadGatewayException) {
         throw error;
       }

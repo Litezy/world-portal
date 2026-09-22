@@ -169,6 +169,7 @@ export const visaStatusLabels: Record<VisaStatus, string> = {
 
 export const passportStatusLabels: Record<PassportStatus, string> = {
   SUBMITTED: "Submitted",
+  EVALUATED: "Evaluated",
   UNDER_REVIEW: "Under review",
   APPROVED: "Approved",
   REJECTED: "Rejected",

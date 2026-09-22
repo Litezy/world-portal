@@ -12,6 +12,10 @@ import { PaymentModule } from './payment/payment.module';
 import { PassportApplicationModule } from './passport-application/passport-application.module';
 import { BankAccountModule } from './bank-account/bank-account.module';
 import { OtpModule } from './otp/otp.module';
+import { AgencyModule } from './agency/agency.module';
+import { HireModule } from './hire/hire.module';
+import { SeedModule } from './seed/seed.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -29,6 +33,10 @@ import { OtpModule } from './otp/otp.module';
     PassportApplicationModule,
     BankAccountModule,
     OtpModule,
+    AgencyModule,
+    HireModule,
+    SeedModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

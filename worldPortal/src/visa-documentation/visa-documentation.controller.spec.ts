@@ -35,6 +35,7 @@ describe('VisaDocumentationController', () => {
       ...mockVisaRecord,
       status: VisaDocumentStatus.APPROVED,
     }),
+    inviteApplicant: jest.fn().mockResolvedValue(mockVisaRecord),
   };
 
   const mockPrismaService = {};
@@ -110,7 +111,29 @@ describe('VisaDocumentationController', () => {
       expect(result).toEqual(mockVisaRecord);
       expect(mockVisaService.findVisaApplicationById).toHaveBeenCalledWith(
         'visa-uuid-001',
+        undefined,
+      );
+    });
+  });
+
+  describe('inviteApplicant', () => {
+    it('should delegate invite applicant call to VisaDocumentationService', async () => {
+      const dto = {
+        purpose: 'Biometric Data Capture',
+        date: '2026-09-15',
+        time: '10:00 AM',
+        location: 'Embassy Headquarters',
+      };
+      const user = { email: 'staff@worldportal.com' };
+
+      const result = await controller.inviteApplicant('visa-uuid-001', dto, user);
+      expect(result).toEqual(mockVisaRecord);
+      expect(mockVisaService.inviteApplicant).toHaveBeenCalledWith(
+        'visa-uuid-001',
+        dto,
+        'staff@worldportal.com',
       );
     });
   });
 });
+

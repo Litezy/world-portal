@@ -54,44 +54,35 @@ const isoDateSchema = z.iso.date("Enter a valid date");
 /* Authentication                                                             */
 /* -------------------------------------------------------------------------- */
 
-export const agencyLoginSchema = z.object({
+export const agencySendOtpSchema = z.object({
   email: emailSchema,
-  password: z.string().min(6, "Enter your password"),
-  remember: z.boolean(),
+  intent: z.enum(["login", "signup"]).optional(),
 });
 
-/**
- * Signup policy. Eight characters is the floor the brief sets; a letter and a
- * digit are cheap to ask for and stop "password" and "12345678" outright. The
- * 72-byte ceiling is bcrypt's — a longer secret is silently truncated by every
- * implementation of it, so refuse rather than mislead.
- */
-export const agencyPasswordSchema = z
+export const agencyOtpSchema = z
   .string()
-  .min(8, "Use at least 8 characters")
-  .max(72, "Keep the password under 72 characters")
-  .regex(/[A-Za-z]/, "Include at least one letter")
-  .regex(/\d/, "Include at least one number");
+  .trim()
+  .length(6, "Enter the 6-digit verification code");
 
-export const agencySignupSchema = z
-  .object({
-    agencyName: z
-      .string()
-      .trim()
-      .min(2, "Enter the agency's name")
-      .max(120, "That name is too long"),
-    contactName: fullNameSchema,
-    email: emailSchema,
-    phone: phoneSchema,
-    countryCode: countryCodeSchema,
-    country: z.string().trim().min(2, "Select the country of operation").max(80),
-    password: agencyPasswordSchema,
-    confirmPassword: z.string().min(1, "Re-enter the password"),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    error: "Those passwords do not match",
-    path: ["confirmPassword"],
-  });
+export const agencyLoginSchema = z.object({
+  email: emailSchema,
+  otp: agencyOtpSchema,
+  remember: z.boolean().optional(),
+});
+
+export const agencySignupSchema = z.object({
+  agencyName: z
+    .string()
+    .trim()
+    .min(2, "Enter the agency's name")
+    .max(120, "That name is too long"),
+  contactName: fullNameSchema,
+  email: emailSchema,
+  phone: phoneSchema,
+  countryCode: countryCodeSchema,
+  country: z.string().trim().min(2, "Select the country of operation").max(80),
+  otp: agencyOtpSchema,
+});
 
 /* -------------------------------------------------------------------------- */
 /* Assignments                                                                */
@@ -177,7 +168,7 @@ export const agencyOfferingSchema = z.object({
 export const agencyListingSchema = z.object({
   name: z.string().trim().min(2, "Enter the trading name").max(120),
   legalName: z.string().trim().min(2, "Enter the registered name").max(160),
-  registrationNumber: z.string().trim().min(2, "Enter the registration number").max(60),
+  registrationNumber: z.string().trim().max(60).optional().or(z.literal("")),
   countryCode: countryCodeSchema,
   country: z.string().trim().min(2, "Select the country of operation").max(80),
   cities: z
@@ -219,11 +210,66 @@ export const agencyListingSchema = z.object({
   offerings: z.array(agencyOfferingSchema).max(40, "That is more than we can list"),
 });
 
+export const patchOfferingSchema = z.object({
+  id: z.string().min(1).optional(),
+  category: agencyCategorySchema,
+  title: z.string().trim().max(80, "That title is too long").optional().or(z.literal("")),
+  description: z
+    .string()
+    .trim()
+    .max(400, "Keep the description under 400 characters")
+    .optional()
+    .or(z.literal("")),
+  price: z
+    .number()
+    .min(0, "A price cannot be negative")
+    .max(1_000_000, "That figure looks wrong")
+    .nullable()
+    .optional(),
+  currency: z
+    .string()
+    .trim()
+    .length(3, "Use a three-letter currency code")
+    .toUpperCase()
+    .optional(),
+  unit: z.string().trim().max(40).optional(),
+  leadTimeHours: z.coerce
+    .number()
+    .int("Enter whole hours")
+    .min(0, "Enter whole hours")
+    .max(24 * 90, "That is more notice than anyone books")
+    .optional(),
+  capacity: z.coerce
+    .number()
+    .int("Enter a whole head count")
+    .min(1, "Enter a whole head count")
+    .max(500, "That looks wrong")
+    .optional(),
+});
+
 /**
  * The listing is edited a step at a time, so the PATCH takes any subset. An
  * absent key means "leave it alone" — it is never read as a clear.
  */
-export const listingPatchSchema = agencyListingSchema.partial();
+export const listingPatchSchema = z.object({
+  name: z.string().trim().max(120).optional().or(z.literal("")),
+  legalName: z.string().trim().max(160).optional().or(z.literal("")),
+  registrationNumber: z.string().trim().max(60).optional().or(z.literal("")),
+  countryCode: z.string().trim().max(10).optional().or(z.literal("")),
+  country: z.string().trim().max(80).optional().or(z.literal("")),
+  cities: z.array(z.string().trim()).optional(),
+  categories: z.array(agencyCategorySchema).optional(),
+  summary: z.string().trim().max(200).optional().or(z.literal("")),
+  about: z.string().trim().max(2000).optional().or(z.literal("")),
+  logoUrl: optionalUrlSchema.optional(),
+  email: z.string().trim().optional().or(z.literal("")),
+  phone: z.string().trim().optional().or(z.literal("")),
+  website: optionalUrlSchema.optional(),
+  yearFounded: z.coerce.number().optional(),
+  staffCount: z.coerce.number().optional(),
+  languages: z.array(z.string().trim()).optional(),
+  offerings: z.array(patchOfferingSchema).max(40, "That is more than we can list").optional(),
+});
 
 /** One uploaded file recorded against the agency's compliance file. */
 export const setDocumentSchema = z.object({
@@ -234,6 +280,7 @@ export const setDocumentSchema = z.object({
   expiresAt: isoDateSchema.optional(),
 });
 
+export type AgencySendOtpInput = z.infer<typeof agencySendOtpSchema>;
 export type AgencyLoginInput = z.infer<typeof agencyLoginSchema>;
 export type AgencySignupInput = z.infer<typeof agencySignupSchema>;
 export type AssignStaffInput = z.infer<typeof assignStaffSchema>;

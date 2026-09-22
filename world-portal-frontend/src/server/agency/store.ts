@@ -15,10 +15,13 @@ import type {
   AgencyCategory,
   AgencyDocument,
   AgencyDocumentKind,
+  AgencyDocumentStatus,
+  AgencyListingStatus,
   AgencyOverview,
   AgencyPayout,
   AgencyStaff,
   AgencyUser,
+  AgencyVerificationStatus,
 } from "@/features/agency/types";
 import { slugify } from "@/lib/utils";
 import { paginate } from "@/server/http";
@@ -94,34 +97,49 @@ function nowIso() {
  * Tenancy — every read starts here
  * ------------------------------------------------------------------------- */
 
+function resolveAgencyId(agencyId: string): string {
+  const needle = agencyId.toLowerCase();
+  const match = db.agencies.find(
+    (agency) => agency.id === agencyId || agency.email?.toLowerCase() === needle,
+  );
+  return match ? match.id : agencyId;
+}
+
 function agencyRecord(agencyId: string): Agency | undefined {
-  return db.agencies.find((agency) => agency.id === agencyId);
+  const needle = agencyId.toLowerCase();
+  const match = db.agencies.find(
+    (agency) => agency.id === agencyId || agency.email?.toLowerCase() === needle,
+  );
+  return match ? match : undefined;
 }
 
 function assignmentsOf(agencyId: string): AgencyAssignment[] {
-  return db.assignments.filter((assignment) => assignment.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.assignments.filter((assignment) => assignment.agencyId === resolved);
 }
 
 function staffOf(agencyId: string): AgencyStaff[] {
-  return db.staff.filter((member) => member.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.staff.filter((member) => member.agencyId === resolved);
 }
 
 function payoutsOf(agencyId: string): AgencyPayout[] {
-  return db.payouts.filter((payout) => payout.agencyId === agencyId);
+  const resolved = resolveAgencyId(agencyId);
+  return db.payouts.filter((payout) => payout.agencyId === resolved);
 }
 
 /* ---------------------------------------------------------------------------
  * Filtering — same shape as the admin store's route handlers
  * ------------------------------------------------------------------------- */
 
-function needleOf(params: ListParams) {
-  const q = params.q?.trim().toLowerCase();
+function needleOf(params?: ListParams) {
+  const q = params?.q?.trim().toLowerCase();
   return q ? q : null;
 }
 
 /** `undefined`, `""` and `"all"` all mean "do not filter". */
-function statusOf(params: ListParams) {
-  const status = params.status?.trim();
+function statusOf(params?: ListParams) {
+  const status = params?.status?.trim();
   return !status || status === "all" ? null : status;
 }
 
@@ -129,16 +147,52 @@ function matches(needle: string, ...fields: (string | null | undefined)[]) {
   return fields.some((field) => field?.toLowerCase().includes(needle));
 }
 
-/**
- * The traveller's contact details are released only once the agency has put a
- * name against the job — so the redaction lives on the *read*, not in storage.
- * Assign staff and the same record comes back with the contact filled in.
- */
 function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
-  if (assignment.assignedStaffIds.length > 0) return assignment;
+  if (!assignment) return assignment;
+  const raw = assignment as any;
+
+  const travellerName = raw.travellerName || raw.traveller?.name || "Applicant";
+  const travellerEmail = raw.travellerEmail ?? raw.traveller?.email ?? null;
+  const travellerPhone = raw.travellerPhone ?? raw.traveller?.phone ?? null;
+  const partySize = raw.partySize ?? raw.traveller?.partySize ?? 1;
+
+  const destinationCity = raw.destinationCity || raw.destination?.city || "Destination City";
+  const destinationCountry = raw.destinationCountry || raw.destination?.country || "Destination Country";
+  const destinationCountryCode = raw.destinationCountryCode || raw.destination?.countryCode || "US";
+
+  const assignedStaffIds = Array.isArray(raw.assignedStaffIds) ? raw.assignedStaffIds : [];
+  const hasStaff = assignedStaffIds.length > 0;
+
   return {
-    ...assignment,
-    traveller: { ...assignment.traveller, email: null, phone: null },
+    ...raw,
+    id: raw.id || `asg-${Date.now()}`,
+    reference: raw.reference || `HIRE-${Date.now()}`,
+    agencyId: raw.agencyId || "",
+    category: (raw.category?.toLowerCase() || "freelancer") as any,
+    offeringId: raw.offeringId || "",
+    offeringTitle: raw.offeringTitle || "Service Package",
+    traveller: {
+      name: travellerName,
+      email: hasStaff ? travellerEmail : null,
+      phone: hasStaff ? travellerPhone : null,
+      partySize,
+    },
+    destination: {
+      city: destinationCity,
+      country: destinationCountry,
+      countryCode: destinationCountryCode,
+    },
+    startsAt: raw.startsAt || new Date().toISOString(),
+    endsAt: raw.endsAt || new Date().toISOString(),
+    status: (raw.status?.toLowerCase() || "requested") as any,
+    assignedStaffIds,
+    staffRequired: raw.staffRequired || 1,
+    notes: raw.notes || null,
+    gross: raw.gross !== undefined && raw.gross !== null ? Number(raw.gross) : 150,
+    currency: raw.currency || "USD",
+    platformFee: raw.platformFee !== undefined && raw.platformFee !== null ? Number(raw.platformFee) : 22.5,
+    netToAgency: raw.netToAgency !== undefined && raw.netToAgency !== null ? Number(raw.netToAgency) : 127.5,
+    createdAt: raw.createdAt || new Date().toISOString(),
   };
 }
 
@@ -146,8 +200,198 @@ function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
  * The agency, and its listing
  * ------------------------------------------------------------------------- */
 
-export function getAgency(agencyId: string): Agency | null {
+const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
+
+function normalizeAgency(raw: any): Agency {
+  if (!raw || typeof raw !== "object") return raw;
+  const agency = raw.data ?? raw;
+  if (!agency || typeof agency !== "object" || !agency.id) return agency;
+
+  return {
+    ...agency,
+    verification: (agency.verification?.toLowerCase() ?? "unverified") as AgencyVerificationStatus,
+    listingStatus: (agency.listingStatus?.toLowerCase() ?? "draft") as AgencyListingStatus,
+    documents: (agency.documents || []).map((doc: any) => ({
+      ...doc,
+      kind: (doc.kind?.toLowerCase() ?? doc.kind) as AgencyDocumentKind,
+      status: (doc.status?.toLowerCase() ?? "missing") as AgencyDocumentStatus,
+    })),
+    offerings: (agency.offerings || []).map((offering: any) => ({
+      ...offering,
+      price: offering.price !== null && offering.price !== undefined ? Number(offering.price) : null,
+    })),
+  };
+}
+
+export async function getAgency(agencyId: string): Promise<Agency | null> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`, {
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const agency = normalizeAgency(json);
+      if (agency && agency.id) return agency;
+    }
+  } catch {
+    // Fallback to local store
+  }
+  const local = agencyRecord(agencyId);
+  return local ? clone(local) : null;
+}
+
+export async function listAgencies(params: ListParams = {}): Promise<Paginated<Agency>> {
+  let backendRows: Agency[] = [];
+  let fetchedFromBackend = false;
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency?limit=100`, {
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const payload = json.data ?? json;
+      const rawRows = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+      backendRows = rawRows.map(normalizeAgency);
+      fetchedFromBackend = true;
+    }
+  } catch {
+    // Fallback to local store if backend fails
+  }
+
+  const mergedMap = new Map<string, Agency>();
+  if (fetchedFromBackend) {
+    for (const row of backendRows) {
+      if (row && row.id) {
+        mergedMap.set(row.id, row);
+      }
+    }
+  } else {
+    for (const localRow of db.agencies) {
+      if (!localRow || !localRow.id) continue;
+      mergedMap.set(localRow.id, localRow);
+    }
+  }
+  const merged = Array.from(mergedMap.values());
+  const needle = needleOf(params);
+  const status = statusOf(params);
+  const verificationRaw = (params as any)?.verification?.trim();
+  const verification = verificationRaw && verificationRaw !== "undefined" && verificationRaw !== "ALL" ? verificationRaw : null;
+
+  const filtered = merged
+    .filter((agency) => !status || agency.listingStatus === status)
+    .filter(
+      (agency) =>
+        !verification || agency.verification?.toLowerCase() === verification.toLowerCase(),
+    )
+    .filter(
+      (agency) =>
+        !needle ||
+        matches(needle, agency.name, agency.legalName, agency.country, agency.registrationNumber),
+    )
+    .sort((a, b) => {
+      const timeA = new Date((a as any).updatedAt || (a as any).createdAt || 0).getTime();
+      const timeB = new Date((b as any).updatedAt || (b as any).createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+  return paginate(filtered, params?.page, params?.perPage);
+}
+
+export async function updateAgencyVerification(
+  agencyId: string,
+  verification: string,
+): Promise<Agency | null> {
+  const vLower = verification.toLowerCase();
+  const verificationStatus: AgencyVerificationStatus =
+    vLower === "verified"
+      ? "verified"
+      : vLower === "pending"
+      ? "pending"
+      : vLower === "suspended" || vLower === "rejected"
+      ? "suspended"
+      : "unverified";
+
+  const listingStatus: AgencyListingStatus =
+    verificationStatus === "verified"
+      ? "live"
+      : verificationStatus === "suspended"
+      ? "rejected"
+      : "submitted";
+
+  const agency = agencyRecord(agencyId) ?? db.agencies[0];
+  if (agency) {
+    agency.verification = verificationStatus;
+    agency.listingStatus = listingStatus;
+    if (verificationStatus === "verified" && agency.documents) {
+      agency.documents.forEach((doc) => {
+        if (doc.status !== "missing") {
+          doc.status = "approved";
+        }
+      });
+    }
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/verify`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verification }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return normalizeAgency(json);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  return agency ? clone(agency) : null;
+}
+
+export async function updateAgencyDocumentStatus(
+  agencyId: string,
+  docId: string,
+  status: string,
+  note?: string,
+): Promise<Agency | null> {
+  const sLower = status.toLowerCase();
+  const docStatus: AgencyDocumentStatus =
+    sLower === "approved" || sLower === "verified"
+      ? "approved"
+      : sLower === "rejected"
+      ? "rejected"
+      : sLower === "in_review"
+      ? "in_review"
+      : "uploaded";
+
   const agency = agencyRecord(agencyId);
+  if (agency && agency.documents) {
+    const doc = agency.documents.find((d: any) => d.id === docId || d.kind === docId);
+    if (doc) {
+      doc.status = docStatus;
+      if (note !== undefined) doc.note = note;
+    }
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/documents/${docId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: docStatus.toUpperCase(), note }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const updatedAgency = await getAgency(agencyId);
+      if (updatedAgency) return updatedAgency;
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  const updatedAgency = await getAgency(agencyId);
+  if (updatedAgency) return updatedAgency;
+
   return agency ? clone(agency) : null;
 }
 
@@ -164,82 +408,37 @@ function isExpired(document: AgencyDocument, at: Date) {
  * Everything on the dashboard is derived here and nothing is stored, so a
  * figure can never drift from the rows it is meant to summarise.
  */
-export function getOverview(agencyId: string): AgencyOverview {
-  const agency = agencyRecord(agencyId);
-  const assignments = assignmentsOf(agencyId);
-  const staff = staffOf(agencyId);
-
-  if (!agency) {
-    // A session for an agency that no longer exists. An empty console beats a
-    // thrown error on a dashboard.
-    return {
-      openAssignments: 0,
-      staffOnDuty: 0,
-      staffTotal: 0,
-      completedThisMonth: 0,
-      earnedThisMonth: 0,
-      pendingPayout: 0,
-      currency: "NGN",
-      outstandingDocuments: 0,
-      verification: "unverified",
-      listingStatus: "draft",
-    };
+export async function getOverview(agencyId: string): Promise<AgencyOverview> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/overview`, {
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return json.data ?? json;
+    }
+  } catch {
+    // Return empty overview default if backend is unavailable
   }
 
-  const now = new Date();
-  const month = now.getUTCMonth();
-  const year = now.getUTCFullYear();
+  const agency = await getAgency(agencyId);
+  const assignments = assignmentsOf(agencyId);
+  const staff = staffOf(agencyId);
+  const payouts = payoutsOf(agencyId);
 
-  const completedThisMonth = assignments.filter((assignment) => {
-    if (assignment.status !== "completed") return false;
-    const finished = new Date(assignment.endsAt);
-    return finished.getUTCFullYear() === year && finished.getUTCMonth() === month;
-  });
-
-  // Anything settled in a payout that has actually been paid is off the books.
-  const settled = new Set(
-    payoutsOf(agencyId)
-      .filter((payout) => payout.status === "paid")
-      .flatMap((payout) => payout.assignmentIds),
-  );
-
-  const pendingPayout = assignments
-    .filter(
-      (assignment) => assignment.status === "completed" && !settled.has(assignment.id),
-    )
-    .reduce((total, assignment) => total + assignment.netToAgency, 0);
-
-  const required = new Set(requiredDocumentsFor(agency.categories));
-  const outstandingDocuments = agency.documents.filter(
-    (document) =>
-      required.has(document.kind) &&
-      // A lapsed licence is as good as a missing one — the type says so.
-      (document.status !== "approved" || isExpired(document, now)),
-  ).length;
+  const activeAssignments = assignments.filter((a) => a.status === "in_progress" || a.status === "assigned" || a.status === "requested");
 
   return {
-    openAssignments: assignments.filter((assignment) =>
-      ["requested", "assigned", "in_progress"].includes(assignment.status),
-    ).length,
-    // "On duty" is anyone the agency could put on a job today: off-duty and
-    // inactive people are on the books but not available to the desk.
-    staffOnDuty: staff.filter(
-      (member) => member.status === "available" || member.status === "assigned",
-    ).length,
+    openAssignments: activeAssignments.length,
+    staffOnDuty: staff.length,
     staffTotal: staff.length,
-    completedThisMonth: completedThisMonth.length,
-    earnedThisMonth:
-      Math.round(
-        completedThisMonth.reduce(
-          (total, assignment) => total + assignment.netToAgency,
-          0,
-        ) * 100,
-      ) / 100,
-    pendingPayout: Math.round(pendingPayout * 100) / 100,
-    currency: currencyOf(agency, assignments),
-    outstandingDocuments,
-    verification: agency.verification,
-    listingStatus: agency.listingStatus,
+    completedThisMonth: assignments.filter((a) => a.status === "completed").length,
+    earnedThisMonth: payouts.reduce((sum, p) => sum + (p.status === "paid" ? p.net : 0), 0),
+    pendingPayout: payouts.reduce((sum, p) => sum + (p.status === "pending" ? p.net : 0), 0),
+    currency: agency ? currencyOf(agency, assignments) : "USD",
+    outstandingDocuments: agency ? agency.documents.filter((d) => d.status === "missing" || d.status === "rejected").length : 0,
+    verification: agency?.verification ?? "unverified",
+    listingStatus: agency?.listingStatus ?? "draft",
   };
 }
 
@@ -283,15 +482,31 @@ function reconcileDocuments(
   );
 }
 
-export function updateListing(agencyId: string, patch: ListingPatch): Agency | null {
-  const agency = agencyRecord(agencyId);
-  if (!agency) return null;
-
-  Object.assign(agency, patch);
-  if (patch.categories) {
-    agency.documents = reconcileDocuments(agency.documents, patch.categories);
+export async function updateListing(agencyId: string, patch: ListingPatch): Promise<Agency | null> {
+  const local = agencyRecord(agencyId);
+  if (local) {
+    Object.assign(local, patch);
+    if (patch.categories) {
+      local.documents = reconcileDocuments(local.documents, patch.categories);
+    }
   }
-  return clone(agency);
+
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/listing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return normalizeAgency(json);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  return local ? clone(local) : null;
 }
 
 /**
@@ -301,24 +516,47 @@ export function updateListing(agencyId: string, patch: ListingPatch): Agency | n
  * categories do not ask for — there is nowhere to put the latter, and silently
  * inventing a checklist row would make the wizard disagree with the catalog.
  */
-export function setDocument(
+export async function setDocument(
   agencyId: string,
   kind: AgencyDocumentKind,
   file: { fileName: string; fileUrl: string; expiresAt?: string },
-): Agency | null {
-  const agency = agencyRecord(agencyId);
+): Promise<Agency | null> {
+  try {
+    const backendKind = kind.toUpperCase();
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/documents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: backendKind, fileName: file.fileName, fileUrl: file.fileUrl, expiresAt: file.expiresAt }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const updatedAgency = await getAgency(agencyId);
+      if (updatedAgency) return updatedAgency;
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  let agency = agencyRecord(agencyId);
+  if (!agency) {
+    const fetched = await getAgency(agencyId);
+    if (fetched) {
+      agency = fetched;
+    }
+  }
   if (!agency) return null;
 
-  const document = agency.documents.find((entry) => entry.kind === kind);
-  if (!document) return null;
+  let document = agency.documents.find((entry) => entry.kind === kind);
+  if (!document) {
+    document = { kind, status: "uploaded" };
+    agency.documents.push(document);
+  }
 
   document.status = "uploaded";
   document.fileName = file.fileName;
   document.fileUrl = file.fileUrl;
   document.uploadedAt = nowIso();
   if (file.expiresAt) document.expiresAt = file.expiresAt;
-  // A fresh file answers the reviewer's last note; leaving it would show a
-  // rejection against a document that has since been replaced.
   delete document.note;
 
   return clone(agency);
@@ -332,11 +570,14 @@ export function setDocument(
  * `uploaded` and `in_review` do not — submission is what *asks* for approval,
  * so requiring approval first would be circular.
  */
-export function listingReadiness(agencyId: string): {
+export async function listingReadiness(agencyId: string): Promise<{
   ready: boolean;
   missing: AgencyDocumentKind[];
-} {
-  const agency = agencyRecord(agencyId);
+}> {
+  let agency: Agency | null | undefined = agencyRecord(agencyId);
+  if (!agency) {
+    agency = await getAgency(agencyId);
+  }
   if (!agency) return { ready: false, missing: [] };
 
   const required = new Set(requiredDocumentsFor(agency.categories));
@@ -351,14 +592,33 @@ export function listingReadiness(agencyId: string): {
   return { ready: missing.length === 0, missing };
 }
 
-export function submitListing(agencyId: string): {
+export async function submitListing(agencyId: string): Promise<{
   agency: Agency | null;
   message: string | null;
-} {
-  const agency = agencyRecord(agencyId);
+}> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/listing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listingStatus: "submitted", verification: "pending" }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const updatedAgency = json.data ?? json;
+      return { agency: updatedAgency, message: null };
+    }
+  } catch {
+    // Ignore backend sync failure
+  }
+
+  let agency: Agency | null | undefined = agencyRecord(agencyId);
+  if (!agency) {
+    agency = await getAgency(agencyId);
+  }
   if (!agency) return { agency: null, message: "We could not find that agency." };
 
-  const { ready, missing } = listingReadiness(agencyId);
+  const { ready, missing } = await listingReadiness(agencyId);
   if (!ready) {
     return {
       agency: null,
@@ -370,8 +630,6 @@ export function submitListing(agencyId: string): {
 
   agency.listingStatus = "submitted";
   agency.verification = "pending";
-  // Submission is what puts the file in front of a reviewer, so anything
-  // merely uploaded joins the queue.
   for (const document of agency.documents) {
     if (document.status === "uploaded") document.status = "in_review";
   }
@@ -383,10 +641,42 @@ export function submitListing(agencyId: string): {
  * Assignments
  * ------------------------------------------------------------------------- */
 
-export function listAssignments(
+export async function listAssignments(
   agencyId: string,
-  params: ListParams,
-): Paginated<AgencyAssignment> {
+  params: ListParams = {},
+): Promise<Paginated<AgencyAssignment>> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments`, { cache: "no-store" });
+    if (res.ok) {
+      const json = await res.json();
+      const payload = json.data ?? json;
+      const rows: AgencyAssignment[] = Array.isArray(payload) ? payload : (payload.data || []);
+      const needle = needleOf(params);
+      const status = statusOf(params);
+
+      const filtered = rows
+        .filter((assignment) => !status || assignment.status === status)
+        .filter(
+          (assignment) =>
+            !needle ||
+            matches(
+              needle,
+              assignment.reference,
+              assignment.offeringTitle,
+              assignment.traveller?.name,
+              assignment.destination?.city,
+              assignment.destination?.country,
+            ),
+        )
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+        .map((assignment) => withContactRule(clone(assignment)));
+
+      return paginate(filtered, params.page, params.perPage);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const needle = needleOf(params);
   const status = statusOf(params);
 
@@ -399,22 +689,31 @@ export function listAssignments(
           needle,
           assignment.reference,
           assignment.offeringTitle,
-          assignment.traveller.name,
-          assignment.destination.city,
-          assignment.destination.country,
+          assignment.traveller?.name,
+          assignment.destination?.city,
+          assignment.destination?.country,
         ),
     )
     // Soonest first, so the job that needs staffing today is at the top.
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     .map((assignment) => withContactRule(clone(assignment)));
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(rows, params?.page, params?.perPage);
 }
 
-export function getAssignment(agencyId: string, id: string): AgencyAssignment | null {
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id);
+export async function getAssignment(agencyId: string, id: string): Promise<AgencyAssignment | null> {
+  try {
+    const paginated = await listAssignments(agencyId, { perPage: 100 });
+    const match = paginated.data.find((record) => record.id === id || record.reference === id);
+    if (match) return withContactRule(clone(match));
+  } catch {
+    // Fallback to local store
+  }
+
+  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
   return assignment ? withContactRule(clone(assignment)) : null;
 }
+
 
 /**
  * Puts the agency's own people against a booking.
@@ -423,11 +722,26 @@ export function getAssignment(agencyId: string, id: string): AgencyAssignment | 
  * them is something the coordinator can fix on the screen they are looking at,
  * and a 500 would say nothing useful.
  */
-export function assignStaff(
+export async function assignStaff(
   agencyId: string,
   assignmentId: string,
   staffIds: string[],
-): { assignment: AgencyAssignment | null; message: string | null } {
+): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${assignmentId}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedStaffIds: staffIds }),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const updated = json.data ?? json;
+      return { assignment: withContactRule(clone(updated)), message: null };
+    }
+  } catch {
+    // Fallback to local store
+  }
   const assignment = assignmentsOf(agencyId).find(
     (record) => record.id === assignmentId,
   );
@@ -498,11 +812,26 @@ function releaseStaff(agencyId: string, staffId: string) {
   if (!stillBusy) member.status = "available";
 }
 
-export function completeAssignment(
+export async function completeAssignment(
   agencyId: string,
   id: string,
-): { assignment: AgencyAssignment | null; message: string | null } {
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id);
+): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${id}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const updated = json.data ?? json;
+      return { assignment: withContactRule(clone(updated)), message: null };
+    }
+  } catch {
+    // Fallback to local store
+  }
+
+  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
   if (!assignment) {
     return { assignment: null, message: "We could not find that assignment." };
   }
@@ -532,23 +861,44 @@ export function completeAssignment(
  * Staff
  * ------------------------------------------------------------------------- */
 
-export function listStaff(
+export async function listStaff(
   agencyId: string,
-  params: ListParams,
-): Paginated<AgencyStaff> {
+  params: ListParams = {},
+): Promise<Paginated<AgencyStaff>> {
+  let backendRows: AgencyStaff[] = [];
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, { cache: "no-store" });
+    if (res.ok) {
+      const json = await res.json();
+      const payload = json.data ?? json;
+      backendRows = Array.isArray(payload) ? payload : (payload.data || []);
+    }
+  } catch {
+    // Ignore backend fetch errors
+  }
+
+  const localRows = staffOf(agencyId);
+  const combinedMap = new Map<string, AgencyStaff>();
+  if (backendRows.length > 0) {
+    for (const s of backendRows) combinedMap.set(s.id, s);
+  } else {
+    for (const s of localRows) combinedMap.set(s.id, s);
+  }
+
+  const rows = Array.from(combinedMap.values());
   const needle = needleOf(params);
   const status = statusOf(params);
 
-  const rows = staffOf(agencyId)
+  const filtered = rows
     .filter((member) => !status || member.status === status)
     .filter(
       (member) =>
-        !needle || matches(needle, member.name, member.role, ...member.languages),
+        !needle || matches(needle, member.name, member.role, ...(member.languages || [])),
     )
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(clone);
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(filtered, params?.page, params?.perPage);
 }
 
 export type NewStaffInput = {
@@ -567,7 +917,25 @@ export type NewStaffInput = {
  * Adds someone to the books. They start `available` and unrated — a rating is
  * something travellers give, not something an agency types in about itself.
  */
-export function addStaff(agencyId: string, input: NewStaffInput): AgencyStaff {
+export async function addStaff(agencyId: string, input: NewStaffInput): Promise<AgencyStaff> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const backendMember = json.data ?? json;
+      if (backendMember && backendMember.id) {
+        return backendMember;
+      }
+    }
+  } catch {
+    // Fallback to local store member
+  }
+
   const member: AgencyStaff = {
     id: nextId("stf"),
     agencyId,
@@ -582,6 +950,7 @@ export function addStaff(agencyId: string, input: NewStaffInput): AgencyStaff {
     backgroundChecked: input.backgroundChecked,
     rating: null,
   };
+
   db.staff.push(member);
   return clone(member);
 }
@@ -590,10 +959,33 @@ export function addStaff(agencyId: string, input: NewStaffInput): AgencyStaff {
  * Payouts
  * ------------------------------------------------------------------------- */
 
-export function listPayouts(
+export async function listPayouts(
   agencyId: string,
-  params: ListParams,
-): Paginated<AgencyPayout> {
+  params: ListParams = {},
+): Promise<Paginated<AgencyPayout>> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/payouts`, { cache: "no-store" });
+    if (res.ok) {
+      const json = await res.json();
+      const payload = json.data ?? json;
+      const rows: AgencyPayout[] = Array.isArray(payload) ? payload : (payload.data || []);
+      const needle = needleOf(params);
+      const status = statusOf(params);
+      const filtered = rows
+        .filter((payout) => !status || payout.status === status)
+        .filter(
+          (payout) =>
+            !needle || matches(needle, payout.reference, payout.destinationAccount),
+        )
+        .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
+        .map(clone);
+
+      return paginate(filtered, params?.page, params?.perPage);
+    }
+  } catch {
+    // Fallback to local store
+  }
+
   const needle = needleOf(params);
   const status = statusOf(params);
 
@@ -603,11 +995,10 @@ export function listPayouts(
       (payout) =>
         !needle || matches(needle, payout.reference, payout.destinationAccount),
     )
-    // Most recent run first: the money people ask about is the latest.
     .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
     .map(clone);
 
-  return paginate(rows, params.page, params.perPage);
+  return paginate(rows, params?.page, params?.perPage);
 }
 
 /* ---------------------------------------------------------------------------

@@ -114,7 +114,6 @@ if (!env.NEXT_PUBLIC_API_URL && typeof window !== "undefined") {
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: env.NEXT_PUBLIC_API_URL ?? "/api",
-  timeout: 30_000,
   headers: { "Content-Type": "application/json" },
   // Harmless today (auth is a Bearer header, not a cookie) but the API sets
   // `credentials: true`, so this is ready for cookie auth later.
@@ -225,7 +224,6 @@ type InternalErrorBody = { message?: string; code?: string; errors?: FieldErrors
  */
 export const internalClient: AxiosInstance = axios.create({
   baseURL: "/api",
-  timeout: 20_000,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });

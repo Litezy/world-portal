@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Mail, KeyRound } from "lucide-react";
 import { useForm } from "react-hook-form";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { agencyAuth } from "@/content/agency";
-import { useAgencySignup } from "@/features/agency/api/use-agency-auth";
+import { useAgencySendOtp, useAgencySignup } from "@/features/agency/api/use-agency-auth";
 import { CountrySelect } from "@/features/trip/components/country-select";
 import { ApiError } from "@/lib/api-client";
 import { countryName } from "@/lib/countries";
@@ -30,16 +31,15 @@ function safeNext(next: string | null) {
   return next && next.startsWith("/agency") ? next : "/agency";
 }
 
-/**
- * The first thing an agency owner ever fills in, so it asks for the least that
- * still identifies the business — everything else is collected later, in the
- * listing flow. The country is a searchable picker rather than free text: the
- * whole platform keys off ISO codes, and "UK" typed by hand matches nothing.
- */
 export function AgencySignupForm() {
   const router = useRouter();
   const next = useSearchParams().get("next");
-  const { mutateAsync, isPending, error, reset } = useAgencySignup();
+
+  const [otpSent, setOtpSent] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const sendOtpMutation = useAgencySendOtp();
+  const signupMutation = useAgencySignup();
 
   const form = useForm<AgencySignupInput>({
     resolver: zodResolver(agencySignupSchema),
@@ -50,32 +50,66 @@ export function AgencySignupForm() {
       phone: "",
       countryCode: "",
       country: "",
-      password: "",
-      confirmPassword: "",
+      otp: "",
     },
   });
 
-  async function onSubmit(values: AgencySignupInput) {
+  async function handleSendOtp() {
+    const isStep1Valid = await form.trigger([
+      "agencyName",
+      "contactName",
+      "email",
+      "phone",
+      "countryCode",
+      "country",
+    ]);
+
+    if (!isStep1Valid) return;
+
+    const email = form.getValues("email");
     try {
-      await mutateAsync(values);
+      const res = await sendOtpMutation.mutateAsync({ email, intent: "signup" });
+      setOtpSent(true);
+      setSuccessMessage(res.message || "Verification code sent to your email.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        form.setError("email", { message: err.message });
+      }
+    }
+  }
+
+  async function onSubmit(values: AgencySignupInput) {
+    if (!otpSent) {
+      await handleSendOtp();
+      return;
+    }
+
+    try {
+      await signupMutation.mutateAsync(values);
       router.replace(safeNext(next));
       router.refresh();
     } catch (submitError) {
-      // 422 lights up the offending fields; a 409 (this email already has an
-      // agency) stays at form level in the alert.
       if (submitError instanceof ApiError && submitError.errors) {
         for (const [field, messages] of Object.entries(submitError.errors)) {
           form.setError(field as keyof AgencySignupInput, { message: messages[0] });
         }
+        return;
       }
+      form.setFocus("otp");
     }
   }
+
+  const error = signupMutation.error || sendOtpMutation.error;
+  const isPending = sendOtpMutation.isPending || signupMutation.isPending;
 
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        onChange={() => error && reset()}
+        onChange={() => {
+          if (signupMutation.error) signupMutation.reset();
+          if (sendOtpMutation.error) sendOtpMutation.reset();
+        }}
         className="grid gap-5"
         noValidate
       >
@@ -89,6 +123,12 @@ export function AgencySignupForm() {
           </Alert>
         ) : null}
 
+        {successMessage && !error ? (
+          <Alert variant="default" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+            <AlertDescription>{successMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+
         <FormField
           control={form.control}
           name="agencyName"
@@ -96,7 +136,7 @@ export function AgencySignupForm() {
             <FormItem>
               <FormLabel required>{agencyAuth.fields.agencyName}</FormLabel>
               <FormControl>
-                <Input autoComplete="organization" {...field} />
+                <Input autoComplete="organization" disabled={otpSent || isPending} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -111,7 +151,7 @@ export function AgencySignupForm() {
               <FormItem>
                 <FormLabel required>{agencyAuth.fields.contactName}</FormLabel>
                 <FormControl>
-                  <Input autoComplete="name" {...field} />
+                  <Input autoComplete="name" disabled={otpSent || isPending} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -125,7 +165,7 @@ export function AgencySignupForm() {
               <FormItem>
                 <FormLabel required>{agencyAuth.fields.phone}</FormLabel>
                 <FormControl>
-                  <Input type="tel" autoComplete="tel" {...field} />
+                  <Input type="tel" autoComplete="tel" disabled={otpSent || isPending} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -140,22 +180,29 @@ export function AgencySignupForm() {
             <FormItem>
               <FormLabel required>{agencyAuth.fields.email}</FormLabel>
               <FormControl>
-                <Input type="email" autoComplete="email" {...field} />
+                <div className="relative">
+                  <Input type="email" autoComplete="email" disabled={otpSent || isPending} {...field} />
+                  {otpSent && (
+                    <button
+                      type="button"
+                      onClick={() => setOtpSent(false)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary underline"
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* Two fields, one control: the code is what everything keys off, the
-            name is what gets displayed. */}
         <FormField
           control={form.control}
           name="countryCode"
           render={({ field }) => (
             <FormItem>
-              {/* No FormControl: CountrySelect renders and labels its own
-                  trigger, so wrapping it in the Slot would only drop props. */}
               <CountrySelect
                 label={agencyAuth.fields.country}
                 value={field.value}
@@ -163,7 +210,7 @@ export function AgencySignupForm() {
                   field.onChange(code);
                   form.setValue("country", countryName(code), {
                     shouldValidate: true,
-                  });
+                    });
                 }}
               />
               <FormMessage />
@@ -171,50 +218,60 @@ export function AgencySignupForm() {
           )}
         />
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        {otpSent && (
           <FormField
             control={form.control}
-            name="password"
+            name="otp"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>{agencyAuth.fields.password}</FormLabel>
+                <FormLabel required>{agencyAuth.fields.otp}</FormLabel>
                 <FormControl>
-                  <Input type="password" autoComplete="new-password" {...field} />
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    placeholder="000000"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+        )}
 
-          <FormField
-            control={form.control}
-            name="confirmPassword"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel required>{agencyAuth.fields.confirmPassword}</FormLabel>
-                <FormControl>
-                  <Input type="password" autoComplete="new-password" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <Button
-          type="submit"
-          size="block"
-          isLoading={isPending}
-          loadingText="Creating your account"
-          className="mt-1"
-        >
-          {copy.submitLabel}
-          <ArrowRight />
-        </Button>
+        {!otpSent ? (
+          <Button
+            type="button"
+            size="block"
+            onClick={handleSendOtp}
+            isLoading={sendOtpMutation.isPending}
+            loadingText="Sending code"
+            className="mt-1"
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            {copy.sendOtpLabel}
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            size="block"
+            isLoading={signupMutation.isPending}
+            loadingText="Creating your account"
+            className="mt-1"
+          >
+            <KeyRound className="mr-2 h-4 w-4" />
+            {copy.submitLabel}
+            <ArrowRight />
+          </Button>
+        )}
 
         <p className="text-center text-[12px] leading-relaxed text-muted-foreground">
           {copy.consent}
         </p>
+
+        <p className="text-center text-[12px] text-muted-foreground">{copy.hint}</p>
       </form>
     </Form>
   );

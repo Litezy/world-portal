@@ -85,6 +85,7 @@ describe('VisaDocumentationService', () => {
       sendPaymentConfirmedEmail: jest.fn().mockResolvedValue(true),
       sendApplicationApprovedEmail: jest.fn().mockResolvedValue(true),
       sendApplicationRejectedEmail: jest.fn().mockResolvedValue(true),
+      sendApplicantInvitationEmail: jest.fn().mockResolvedValue(true),
     };
     const mockBankAccountService = {
       findActive: jest.fn().mockResolvedValue([]),
@@ -167,4 +168,54 @@ describe('VisaDocumentationService', () => {
       expect(result.paymentStatus).toBe(PaymentStatus.AWAITING_PAYMENT);
     });
   });
+
+  describe('inviteApplicant', () => {
+    it('should throw BadRequestException if application is in SUBMITTED status', async () => {
+      mockPrismaService.visaDocumentation.findFirst.mockResolvedValue({
+        ...mockVisaRecord,
+        status: VisaDocumentStatus.SUBMITTED,
+      });
+
+      const dto = {
+        purpose: 'Biometric Data Capture',
+        date: '2026-09-15',
+        time: '10:00 AM',
+        location: 'Embassy Room 302',
+      };
+
+      await expect(
+        service.inviteApplicant('visa-uuid-001', dto, 'staff@worldportal.com'),
+      ).rejects.toThrow('Invitations can only be issued starting from UNDER_REVIEW status');
+    });
+
+    it('should update notes and trigger email when in UNDER_REVIEW status', async () => {
+      mockPrismaService.visaDocumentation.findFirst.mockResolvedValue({
+        ...mockVisaRecord,
+        status: VisaDocumentStatus.UNDER_REVIEW,
+      });
+      mockPrismaService.visaDocumentation.update.mockResolvedValue({
+        ...mockVisaRecord,
+        status: VisaDocumentStatus.UNDER_REVIEW,
+        verificationNotes: '[Invitation Sent - Biometric Data Capture]',
+      });
+
+      const dto = {
+        purpose: 'Biometric Data Capture',
+        date: '2026-09-15',
+        time: '10:00 AM',
+        location: 'Embassy Room 302',
+        note: 'Bring physical passport',
+      };
+
+      const result = await service.inviteApplicant(
+        'visa-uuid-001',
+        dto,
+        'staff@worldportal.com',
+      );
+
+      expect(result.verificationNotes).toContain('Invitation Sent');
+      expect(mockPrismaService.visaDocumentation.update).toHaveBeenCalled();
+    });
+  });
 });
+

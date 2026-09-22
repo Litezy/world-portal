@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 
 import { agencyNav } from "@/config/agency-navigation";
+import { useAgencyLogout } from "@/features/agency/api/use-agency-auth";
 import { cn } from "@/lib/utils";
 
 export function AgencyNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const logout = useAgencyLogout();
 
   // Same shape as the console's nav: an ungrouped Overview, then two labelled
   // groups — the day's work, then the agency's own file.
@@ -60,6 +63,19 @@ export function AgencyNav({ onNavigate }: { onNavigate?: () => void }) {
             onNavigate={onNavigate}
           />
         ))}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (onNavigate) onNavigate();
+            logout.mutate();
+          }}
+          disabled={logout.isPending}
+          className="group relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium text-destructive transition-all duration-200 hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none mt-2"
+        >
+          <LogOut className="size-[17px] shrink-0" strokeWidth={1.9} />
+          <span>Sign out</span>
+        </button>
       </div>
     </nav>
   );

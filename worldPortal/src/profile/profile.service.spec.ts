@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfileService } from './profile.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SendGridService } from '../mail/sendgrid.service';
 import { UserRole } from '@prisma/client';
+
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
 describe('ProfileService', () => {
@@ -30,6 +32,10 @@ describe('ProfileService', () => {
   };
 
   beforeEach(async () => {
+    const mockSendGridService = {
+      sendTeamInviteEmail: jest.fn().mockResolvedValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProfileService,
@@ -37,8 +43,13 @@ describe('ProfileService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: SendGridService,
+          useValue: mockSendGridService,
+        },
       ],
     }).compile();
+
 
     service = module.get<ProfileService>(ProfileService);
 

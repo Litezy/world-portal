@@ -6,6 +6,7 @@ import { Search, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -16,9 +17,9 @@ import {
 import {
   type Professional,
   professionalCities,
-  professionals,
   professionLabels,
   professions,
+  unifiedDisplayCategories,
 } from "@/content/professionals";
 import { type BasketItem, useBasketStore } from "@/features/basket/store";
 import { ProCard } from "@/features/hire/components/pro-card";
@@ -38,27 +39,45 @@ export function toBasketItem(pro: Professional): BasketItem {
     subtitle: `${pro.unit} · ${pro.city}`,
     city: pro.city,
     price: pro.price,
+    currency: pro.currency,
     unit: pro.unit,
     href: "/hire",
   };
 }
 
-/** Name, tagline, profession, city, languages and skills are all searchable. */
-function matches(pro: Professional, query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [
-    pro.name,
-    pro.tagline,
-    professionLabels[pro.profession],
-    pro.city,
-    pro.country,
-    ...pro.languages,
-    ...pro.skills,
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(q);
+function ProCardSkeleton() {
+  return (
+    <div className="flex flex-col rounded-2xl border border-border bg-card shadow-card animate-pulse">
+      <div className="flex flex-1 flex-col items-stretch justify-start p-5">
+        <div className="flex items-start gap-3.5">
+          <Skeleton shape="block" className="size-14 rounded-xl shrink-0" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton shape="text" className="h-4 w-32" />
+              <Skeleton shape="text" className="h-4 w-10" />
+            </div>
+            <Skeleton shape="text" className="h-3.5 w-full" />
+            <Skeleton shape="text" className="h-3.5 w-3/4" />
+            <div className="mt-3 flex items-center gap-2">
+              <Skeleton shape="pill" className="h-6 w-20" />
+              <Skeleton shape="pill" className="h-6 w-16" />
+            </div>
+            <Skeleton shape="text" className="mt-2 h-3 w-28" />
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-border p-5">
+        <div className="space-y-1">
+          <Skeleton shape="text" className="h-5 w-16" />
+          <Skeleton shape="text" className="h-3 w-12" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton shape="block" className="h-8 w-16 rounded-lg" />
+          <Skeleton shape="block" className="h-8 w-16 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function HireBrowser() {
@@ -66,39 +85,63 @@ export function HireBrowser() {
   const [city, setCity] = React.useState<string>(ALL);
   const [query, setQuery] = React.useState("");
   const [openPro, setOpenPro] = React.useState<Professional | null>(null);
+  const [proList, setProList] = React.useState<Professional[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const debouncedQuery = useDebounce(query, 200);
+  const debouncedQuery = useDebounce(query, 250);
   const toggle = useBasketStore((s) => s.toggle);
   const items = useBasketStore((s) => s.items);
   const mounted = useMounted();
+
+  React.useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    const params = new URLSearchParams();
+    if (profession && profession !== ALL) params.set("category", profession);
+    if (city && city !== ALL) params.set("city", city);
+    if (debouncedQuery) params.set("search", debouncedQuery);
+
+    const queryString = params.toString();
+    const endpoint = `/api/hire/professionals${queryString ? `?${queryString}` : ""}`;
+
+    fetch(endpoint)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (active && Array.isArray(data)) {
+          setProList(data);
+        }
+      })
+      .catch(() => {
+        if (active) setProList([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profession, city, debouncedQuery]);
 
   const inBasket = React.useCallback(
     (pro: Professional) => mounted && items.some((i) => i.id === `pro:${pro.id}`),
     [items, mounted],
   );
 
-  const results = React.useMemo(
-    () =>
-      professionals
-        .filter((p) => profession === ALL || p.profession === profession)
-        .filter((p) => city === ALL || p.city === city)
-        .filter((p) => matches(p, debouncedQuery)),
-    [profession, city, debouncedQuery],
-  );
-
   return (
     <div>
       <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 shadow-card sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]">
         <label className="sr-only" htmlFor="hire-profession">
-          Profession
+          Category
         </label>
         <Select value={profession} onValueChange={setProfession}>
           <SelectTrigger id="hire-profession" size="lg">
-            <SelectValue placeholder="All professionals" />
+            <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>All professionals</SelectItem>
-            {professions.map((p) => (
+            <SelectItem value={ALL}>All categories</SelectItem>
+            {unifiedDisplayCategories.map((p) => (
               <SelectItem key={p} value={p}>
                 {professionLabels[p]}
               </SelectItem>
@@ -137,7 +180,7 @@ export function HireBrowser() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {[ALL, ...professions].map((value) => {
+        {[ALL, ...unifiedDisplayCategories].map((value) => {
           const active = profession === value;
           return (
             <button
@@ -159,33 +202,49 @@ export function HireBrowser() {
         })}
       </div>
 
-      <p className="mt-6 flex items-center gap-2 text-[13px] text-muted-foreground">
-        <Users className="size-4" />
-        <span aria-live="polite">
-          {results.length} professional{results.length === 1 ? "" : "s"} available
-        </span>
-      </p>
-
-      {results.length === 0 ? (
-        <EmptyState
-          className="mt-6"
-          icon={Search}
-          title="Nobody matches that yet"
-          description="Try a different profession or city — we are adding vetted professionals in new destinations every month."
-        />
+      {loading ? (
+        <div className="mt-6 space-y-6">
+          <p className="flex items-center gap-2 text-[13px] text-muted-foreground animate-pulse">
+            <Users className="size-4 opacity-50" />
+            <span>Loading professionals…</span>
+          </p>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ProCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
       ) : (
-        <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {results.map((pro) => (
-            <li key={pro.id}>
-              <ProCard
-                pro={pro}
-                inBasket={inBasket(pro)}
-                onOpen={() => setOpenPro(pro)}
-                onToggle={() => toggle(toBasketItem(pro))}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="mt-6 flex items-center gap-2 text-[13px] text-muted-foreground">
+            <Users className="size-4" />
+            <span aria-live="polite">
+              {proList.length} professional{proList.length === 1 ? "" : "s"} available
+            </span>
+          </p>
+
+          {proList.length === 0 ? (
+            <EmptyState
+              className="mt-6"
+              icon={Search}
+              title="Nobody matches that yet"
+              description="Try a different profession or city — we are adding vetted professionals in new destinations every month."
+            />
+          ) : (
+            <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {proList.map((pro) => (
+                <li key={pro.id}>
+                  <ProCard
+                    pro={pro}
+                    inBasket={inBasket(pro)}
+                    onOpen={() => setOpenPro(pro)}
+                    onToggle={() => toggle(toBasketItem(pro))}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <ProModal

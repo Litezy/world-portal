@@ -10,9 +10,18 @@ export async function GET() {
 
   // Scoped by the cookie's agency id and nothing else.
   const overview = await getOverview(session.agencyId);
-  if (!overview) {
-    return NextResponse.json({ message: "Agency not found" }, { status: 404 });
-  }
-
-  return NextResponse.json({ data: overview });
+  return NextResponse.json({
+    data: overview ?? {
+      openAssignments: 0,
+      staffOnDuty: 0,
+      staffTotal: 0,
+      completedThisMonth: 0,
+      earnedThisMonth: 0,
+      pendingPayout: 0,
+      currency: "USD",
+      outstandingDocuments: 0,
+      verification: "unverified",
+      listingStatus: "draft",
+    },
+  });
 }

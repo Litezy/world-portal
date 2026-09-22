@@ -13,7 +13,7 @@ const badgeVariants = cva(
     variants: {
       variant: {
         /** White pill with a dot — the eyebrow used above every section heading. */
-        eyebrow: "bg-white text-ink-900 shadow-[0_2px_10px_-4px_rgba(12,14,18,0.30)]",
+        eyebrow: "bg-card text-foreground border border-border/60 shadow-[0_2px_10px_-4px_rgba(12,14,18,0.30)] dark:shadow-none",
         glass: "glass text-foreground",
         glassDark: "glass-dark text-white",
         solid: "bg-primary text-primary-foreground",

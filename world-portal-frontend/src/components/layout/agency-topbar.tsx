@@ -9,6 +9,7 @@ import { ArrowUpRight, LogOut, Menu, Search, Settings, X } from "lucide-react";
 import { UserAvatar } from "@/components/admin/user-avatar";
 import { Logo } from "@/components/common/logo";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { NotificationCenter } from "@/components/common/notification-center";
 import { AgencyNav } from "@/components/layout/agency-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +124,7 @@ export function AgencyTopbar({ user }: { user: AgencyUser }) {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <NotificationCenter recipientId={user.agencyId} recipientType="AGENCY" />
           <ThemeToggle />
 
           <Button

@@ -21,4 +21,15 @@ All major technical decisions, architectural patterns, data model definitions, a
 - **0005 Pluggable Cloud Storage Provider Architecture**: [Technical ADR](./0005-pluggable-cloud-storage-provider.md) | [ADR for Dummies](./0005-pluggable-cloud-storage-provider.dummies.md)
 - **0006 RapidAPI Visa Requirement Integration**: [Technical ADR](./0006-visa-requirement-integration.md) | [ADR for Dummies](./0006-visa-requirement-integration.dummies.md)
 - **0007 Admin Dashboard Architecture, Mobile-First UI & API Specification**: [Technical ADR](./0007-admin-dashboard-architecture.md) | [ADR for Dummies](./0007-admin-dashboard-architecture.dummies.md)
+- **0008 Agency Portal Backend Architecture & Data Store Implementation**: [Technical ADR](./0008-agency-portal-backend-architecture.md) | [ADR for Dummies](./0008-agency-portal-backend-architecture.dummies.md)
+- **0009 Hire & Professional Services Backend Architecture**: [Technical ADR](./0009-hire-professional-services-backend-architecture.md) | [ADR for Dummies](./0009-hire-professional-services-backend-architecture.dummies.md)
+- **0010 Unified Basket & Package Checkout Payment Engine**: [Technical ADR](./0010-basket-checkout-payment-engine.md) | [ADR for Dummies](./0010-basket-checkout-payment-engine.dummies.md)
+- **0011 WorldSpace API Integration & Proxy Seam**: [Technical ADR](./0011-worldspace-api-proxy-integration.md) | [ADR for Dummies](./0011-worldspace-api-proxy-integration.dummies.md)
+- **0012 Frontend Seam Integration with NestJS Backend Services**: [Technical ADR](./0012-frontend-seam-integration.md) | [ADR for Dummies](./0012-frontend-seam-integration.dummies.md)
+- **0013 Admin Catalog Oversight for Agencies & Professional Services**: [Technical ADR](./0013-admin-catalog-oversight.md) | [ADR for Dummies](./0013-admin-catalog-oversight.dummies.md)
+
+
+
+
+
 
