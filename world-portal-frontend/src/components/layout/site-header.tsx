@@ -11,8 +11,8 @@ import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
 import { mainNav } from "@/config/navigation";
 import { hero } from "@/content/landing";
-import { ApplicantLoginModal } from "@/features/applicant/components/applicant-login-modal";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { BasketButton } from "@/features/basket/components/basket-button";
 import { useScroll } from "@/hooks/use-scroll";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
   const [open, setOpen] = React.useState(false);
   const [loginModalOpen, setLoginModalOpen] = React.useState(false);
 
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
+  const { isAuthenticated } = useApplicantSession();
   const scrolled = useScroll(24);
   const filled = variant === "solid" || scrolled;
 
@@ -158,7 +158,11 @@ export function SiteHeader({ variant = "overlay" }: SiteHeaderProps) {
         </div>
       </header>
 
-      <ApplicantLoginModal open={loginModalOpen} onOpenChange={setLoginModalOpen} />
+      <WorldStreetSignInDialog
+        open={loginModalOpen}
+        onOpenChange={setLoginModalOpen}
+        returnTo="/applicant/applications"
+      />
     </>
   );
 }

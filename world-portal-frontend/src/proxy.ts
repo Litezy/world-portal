@@ -1,5 +1,12 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextFetchEvent, type NextRequest, NextResponse } from "next/server";
 
+import { clerkMiddleware } from "@clerk/nextjs/server";
+
+import {
+  isApplicantProtectedPath,
+  WORLDSTREET_SIGN_IN_URL,
+  WORLDSTREET_SIGN_UP_URL,
+} from "@/config/auth";
 import { serverEnv } from "@/config/env";
 import {
   AGENCY_SESSION_COOKIE,
@@ -19,7 +26,7 @@ function isUnder(pathname: string, base: string) {
 }
 
 /**
- * Two consoles, two sessions, two independent guards.
+ * Three audiences, three independent guards.
  *
  * The separation below is deliberate and load-bearing. `/admin` is staff at
  * E-Embassy; `/agency` is a third-party business that must never see another
@@ -29,16 +36,24 @@ function isUnder(pathname: string, base: string) {
  * `/admin/*`, because neither branch ever looks at the other's cookie. Dispatch
  * once, here, and return from the branch — do not merge them into one
  * "is there any session" check, and do not let one fall through into the other.
+ *
+ * Applicants are the third audience. They sign in on WorldStreet, whose Clerk
+ * session this app shares, so every other path runs through Clerk. The two
+ * consoles and their `/api` proxies never do: their sessions are their own,
+ * and a WorldStreet session grants nothing there.
  */
-export function proxy(request: NextRequest) {
+export function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
 
   if (isUnder(pathname, "/agency")) return guardAgency(request);
   if (isUnder(pathname, "/admin")) return guardAdmin(request);
+  if (isUnder(pathname, "/api/agency") || isUnder(pathname, "/api/admin")) {
+    // Console proxies authenticate themselves (requireSession /
+    // requireAgencySession) — the same as before this app knew about Clerk.
+    return NextResponse.next();
+  }
 
-  // Unreachable through `config.matcher`; here so a widened matcher fails open
-  // on unrelated paths rather than bouncing them to one of the two logins.
-  return NextResponse.next();
+  return guardApplicant(request, event);
 }
 
 /** The console. Unchanged in behaviour — only moved into its own function. */
@@ -91,6 +106,26 @@ function guardAgency(request: NextRequest) {
   return NextResponse.next();
 }
 
+/**
+ * Applicants: the WorldStreet session. Public unless the path is on the
+ * applicant allowlist in `config/auth.ts`; a signed-out visitor to one of
+ * those is sent to WorldStreet's sign-in with `redirect_url` back here.
+ */
+const guardApplicant = clerkMiddleware(
+  async (auth, request) => {
+    if (isApplicantProtectedPath(request.nextUrl.pathname)) {
+      await auth.protect();
+    }
+  },
+  { signInUrl: WORLDSTREET_SIGN_IN_URL, signUpUrl: WORLDSTREET_SIGN_UP_URL },
+);
+
 export const config = {
-  matcher: ["/admin/:path*", "/agency/:path*"],
+  matcher: [
+    // Every page, skipping Next internals and static files — a static asset
+    // missing from this list would get a sign-in redirect instead of the file.
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|json|jpe?g|webp|png|gif|svg|ico|ttf|woff2?|mp4|webm|txt|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Always run for API routes.
+    "/(api|trpc)(.*)",
+  ],
 };

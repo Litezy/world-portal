@@ -6,15 +6,16 @@ import { ArrowUpRight, LogOut, User } from "lucide-react";
 import { Logo } from "@/components/common/logo";
 import { ApplicantNav } from "@/components/layout/applicant-nav";
 import { Button } from "@/components/ui/button";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { worldStreetSignIn } from "@/content/applicant";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 
 export function ApplicantSidebar() {
-  const email = useApplicantAuthStore((s) => s.email);
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
-  const logout = useApplicantAuthStore((s) => s.logout);
-
-  const monogram = email ? email.slice(0, 2).toUpperCase() : "AP";
-  const name = email ? email.split("@")[0] : "Applicant";
+  const {
+    isAuthenticated,
+    monogram,
+    displayName: name,
+    signOut,
+  } = useApplicantSession();
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col border-r border-border/60 bg-background/95 px-5 py-6 text-foreground backdrop-blur-2xl lg:flex">
@@ -61,10 +62,10 @@ export function ApplicantSidebar() {
               size="sm"
               fullWidth
               className="mt-1 text-muted-foreground hover:text-destructive text-[11.5px]"
-              onClick={logout}
+              onClick={() => void signOut()}
               leftIcon={<LogOut className="size-3" />}
             >
-              Sign out
+              {worldStreetSignIn.signOutLabel}
             </Button>
           </div>
         ) : (

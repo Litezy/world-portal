@@ -125,8 +125,9 @@ apiClient.interceptors.request.use((config) => {
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
-  // Auth token attaches here once a real login flow exists. Every endpoint the
-  // public applicant flow touches is unauthenticated by design.
+  // No global auth header. Calls that act as the applicant pass their
+  // WorldStreet session token per call (see `useSubmitVisaApplication`); the
+  // status lookup and uploads stay public and must not carry one.
   return config;
 });
 

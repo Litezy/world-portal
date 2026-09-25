@@ -29,12 +29,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { useSubmitVisaApplication } from "@/features/visa/api/visa-documentation";
 import { DocumentField } from "@/features/visa/components/document-field";
 import { RouteCheck } from "@/features/visa/components/route-check";
 import { routeToApiNote, type VisaVerdict } from "@/features/visa/requirement";
 import { GENDERS, VISA_CATEGORIES } from "@/features/visa/types";
-import { ApiError, internalApi } from "@/lib/api-client";
+import { visaVividFields } from "@/features/visa/vivid-fields";
+import { registerVividForm } from "@/features/vivid/form-bridge";
+import { ApiError } from "@/lib/api-client";
 import { countries } from "@/lib/countries";
 import { findNationality, nationalities } from "@/lib/nationalities";
 import { cn } from "@/lib/utils";
@@ -60,6 +63,7 @@ const genderLabels: Record<(typeof GENDERS)[number], string> = {
 };
 
 export function ApplicationForm() {
+  const { email: accountEmail } = useApplicantSession();
   const [step, setStep] = React.useState(0);
   const [reference, setReference] = React.useState<string | null>(null);
   /** Set by the route check; decides which schema and which steps apply. */
@@ -111,25 +115,23 @@ export function ApplicationForm() {
   const { mutateAsync, isPending } = useSubmitVisaApplication();
   const isLast = step === steps.length - 1;
 
-  const [isEmailVerified, setIsEmailVerified] = React.useState(false);
-
-  /** Only advance once this step's own fields are clean and email is verified. */
-  async function next() {
-    if (step === 0 && !isEmailVerified) {
-      toast.error("Please verify your email address with OTP before continuing.");
-      return;
+  // The applicant's email is their WorldStreet account's, which the API will
+  // file the application under regardless — so fill it in rather than ask.
+  React.useEffect(() => {
+    if (accountEmail && form.getValues("email") !== accountEmail) {
+      form.setValue("email", accountEmail, { shouldValidate: true });
     }
+  }, [accountEmail, form]);
+
+  /** Only advance once this step's own fields are clean. */
+  async function next() {
     const fields = steps[step].fields as (keyof VisaApplicationInput)[];
     const ok = await form.trigger(fields, { shouldFocus: true });
     if (ok) setStep((s) => Math.min(s + 1, steps.length - 1));
   }
 
-  async function onSubmit(values: VisaApplicationInput) {
-    if (!isEmailVerified) {
-      toast.error("Please verify your email address with OTP before submitting.");
-      setStep(0);
-      return;
-    }
+  /** Submits and returns the reference, or null when it was refused. */
+  async function submitApplication(values: VisaApplicationInput): Promise<string | null> {
     try {
       const record = await mutateAsync(
         toApiPayload({
@@ -144,6 +146,7 @@ export function ApplicationForm() {
         }),
       );
       setReference(record.applicationNo);
+      return record.applicationNo;
     } catch (error) {
       if (error instanceof ApiError && error.errors) {
         // Map the API's per-field messages back onto the inputs, then jump to
@@ -158,14 +161,75 @@ export function ApplicationForm() {
         }
         setStep(earliest);
         toast.error("Please check the highlighted fields");
-        return;
+        return null;
       }
       toast.error("Could not submit your application", {
         description:
           error instanceof Error ? error.message : "Please try again shortly.",
       });
+      return null;
     }
   }
+
+  async function onSubmit(values: VisaApplicationInput) {
+    await submitApplication(values);
+  }
+
+  /** The route check's Continue — also what Vivid's startVisaApplication does. */
+  function confirmRoute(v: VisaVerdict) {
+    setVerdict(v);
+    form.setValue("targetCountry", v.destination?.name ?? "");
+    setStep(0);
+  }
+
+  // Vivid works this form through the bridge. The binding is registered once
+  // and reads the latest render through this ref, so it is never stale.
+  const vivid = React.useRef({ step, steps, verdict, reference, submitApplication, confirmRoute });
+  React.useEffect(() => {
+    vivid.current = { step, steps, verdict, reference, submitApplication, confirmRoute };
+  });
+  React.useEffect(
+    () =>
+      registerVividForm({
+        id: "visa",
+        title: "Visa application",
+        fields: visaVividFields,
+        stage: () =>
+          vivid.current.reference ? "submitted" : vivid.current.verdict ? "form" : "route-check",
+        steps: () => vivid.current.steps.map((s) => ({ title: s.title, fields: s.fields })),
+        currentStep: () => vivid.current.step,
+        getValues: () => form.getValues() as Record<string, unknown>,
+        getErrors: () =>
+          Object.fromEntries(
+            visaVividFields.flatMap((f) => {
+              const message = form.getFieldState(f.name as keyof VisaApplicationInput).error
+                ?.message;
+              return message ? [[f.name, message]] : [];
+            }),
+          ),
+        setValue: (name, value) =>
+          form.setValue(name as keyof VisaApplicationInput, value, {
+            shouldDirty: true,
+            shouldTouch: true,
+          }),
+        validate: (names) => form.trigger(names as (keyof VisaApplicationInput)[]),
+        validateStep: (i) =>
+          form.trigger(vivid.current.steps[i].fields as (keyof VisaApplicationInput)[]),
+        showStep: (i) => setStep(i),
+        submit: async () => {
+          if (!(await form.trigger())) {
+            return { error: "Some fields are missing or invalid — call getFormState to see which." };
+          }
+          const ref = await vivid.current.submitApplication(form.getValues());
+          return ref
+            ? { reference: ref }
+            : { error: "The application was not accepted. Call getFormState for the reasons." };
+        },
+        reference: () => vivid.current.reference,
+        confirmRoute: (v) => vivid.current.confirmRoute(v),
+      }),
+    [form],
+  );
 
   if (reference) {
     return <SubmittedPanel reference={reference} verdict={verdict} />;
@@ -174,13 +238,7 @@ export function ApplicationForm() {
   // Nothing can be filled in until we know which of the three routes applies.
   if (!verdict) {
     return (
-      <RouteCheck
-        onConfirm={(v) => {
-          setVerdict(v);
-          form.setValue("targetCountry", v.destination?.name ?? "");
-          setStep(0);
-        }}
-      />
+      <RouteCheck onConfirm={confirmRoute} />
     );
   }
 
@@ -205,11 +263,7 @@ export function ApplicationForm() {
             </header>
 
             {step === 0 ? (
-              <ApplicantStep
-                form={form}
-                isEmailVerified={isEmailVerified}
-                setIsEmailVerified={setIsEmailVerified}
-              />
+              <ApplicantStep form={form} email={accountEmail} />
             ) : null}
             {step === 1 ? <PassportStep form={form} /> : null}
             {step === 2 ? <TripStep form={form} /> : null}
@@ -222,6 +276,7 @@ export function ApplicationForm() {
                 size="md"
                 onClick={() => setStep((s) => Math.max(s - 1, 0))}
                 disabled={step === 0}
+                data-vivid-target="form-back"
                 leftIcon={<ArrowLeft />}
               >
                 Back
@@ -234,6 +289,8 @@ export function ApplicationForm() {
                   size="md"
                   isLoading={isPending}
                   loadingText="Submitting…"
+                  data-vivid-target="form-submit"
+                  data-vivid-guard
                 >
                   {online ? "Submit application" : "Send my details"}
                 </Button>
@@ -244,6 +301,7 @@ export function ApplicationForm() {
                   size="md"
                   onClick={next}
                   rightIcon={<ArrowRight />}
+                  data-vivid-target="form-continue"
                 >
                   Continue
                 </Button>
@@ -321,6 +379,7 @@ function Text({
   type = "text",
   required,
   autoComplete,
+  readOnly,
 }: StepProps & {
   name: keyof VisaApplicationInput;
   label: string;
@@ -328,6 +387,7 @@ function Text({
   type?: string;
   required?: boolean;
   autoComplete?: string;
+  readOnly?: boolean;
 }) {
   return (
     <FormField
@@ -341,6 +401,7 @@ function Text({
               type={type}
               placeholder={placeholder}
               autoComplete={autoComplete}
+              readOnly={readOnly}
               {...field}
               value={typeof field.value === "string" ? field.value : ""}
             />
@@ -599,62 +660,7 @@ function DestinationSelect({ form }: StepProps) {
   );
 }
 
-function ApplicantStep({
-  form,
-  isEmailVerified,
-  setIsEmailVerified,
-}: StepProps & {
-  isEmailVerified: boolean;
-  setIsEmailVerified: (verified: boolean) => void;
-}) {
-  const emailValue = form.watch("email");
-  const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
-  const [otpSent, setOtpSent] = React.useState(false);
-  const [otpCode, setOtpCode] = React.useState("");
-  const [sendingOtp, setSendingOtp] = React.useState(false);
-  const [verifyingOtp, setVerifyingOtp] = React.useState(false);
-
-  React.useEffect(() => {
-    if (isEmailVerified && emailValue !== verifiedEmail) {
-      setIsEmailVerified(false);
-    }
-  }, [emailValue, isEmailVerified, verifiedEmail, setIsEmailVerified]);
-
-  const handleSendOtp = async () => {
-    if (!emailValue || !emailValue.includes("@")) {
-      toast.error("Please enter a valid email address first.");
-      return;
-    }
-    setSendingOtp(true);
-    try {
-      await internalApi.post<any>("/otp/send", { email: emailValue });
-      toast.success(`Verification code sent to ${emailValue}`);
-      setOtpSent(true);
-    } catch (err: any) {
-      toast.error(err?.message || "Could not send OTP code.");
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otpCode || otpCode.length !== 6) {
-      toast.error("Please enter the 6-digit OTP code.");
-      return;
-    }
-    setVerifyingOtp(true);
-    try {
-      await internalApi.post<any>("/otp/verify", { email: emailValue, code: otpCode });
-      toast.success("Email verified successfully!");
-      setVerifiedEmail(emailValue);
-      setIsEmailVerified(true);
-    } catch (err: any) {
-      toast.error(err?.message || "Invalid or expired OTP code.");
-    } finally {
-      setVerifyingOtp(false);
-    }
-  };
-
+function ApplicantStep({ form, email }: StepProps & { email: string | null }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2">
       <Text
@@ -674,6 +680,8 @@ function ApplicantStep({
         autoComplete="family-name"
       />
       <div className="space-y-2 sm:col-span-2">
+        {/* The application is filed under the WorldStreet account, whose email
+            WorldStreet has already verified — so it is shown, not typed. */}
         <Text
           form={form}
           name="email"
@@ -682,73 +690,14 @@ function ApplicantStep({
           type="email"
           placeholder="you@example.com"
           autoComplete="email"
+          readOnly
         />
-
-        <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 mt-2">
-          {isEmailVerified ? (
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
-              <Check className="size-4" strokeWidth={3} />
-              <span>Email Verified ({emailValue})</span>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground font-medium">
-                  Verify ownership of your email address
-                </span>
-                {!otpSent ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSendOtp}
-                    isLoading={sendingOtp}
-                    disabled={!emailValue || !emailValue.includes("@")}
-                    className="h-8 text-xs shrink-0"
-                  >
-                    Send OTP Code
-                  </Button>
-                ) : null}
-              </div>
-
-              {otpSent ? (
-                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
-                  <Input
-                    type="text"
-                    maxLength={6}
-                    placeholder="6-digit OTP"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                    className="h-9 font-mono tracking-widest text-center max-w-[140px]"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      onClick={handleVerifyOtp}
-                      isLoading={verifyingOtp}
-                      disabled={otpCode.length !== 6}
-                      className="h-9 text-xs"
-                    >
-                      Verify OTP
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSendOtp}
-                      isLoading={sendingOtp}
-                      className="h-9 text-xs text-muted-foreground"
-                    >
-                      Resend
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Check className="size-3.5 text-emerald-600" strokeWidth={3} />
+          {email
+            ? "Verified by your WorldStreet account — updates about this application go here."
+            : "Loading your WorldStreet account…"}
+        </p>
       </div>
       <Text
         form={form}
@@ -893,6 +842,7 @@ function DocumentsStep({ form }: StepProps) {
   ) => (
     <DocumentField
       key={name}
+      vividTarget={name}
       label={label}
       hint={hint}
       required={required}

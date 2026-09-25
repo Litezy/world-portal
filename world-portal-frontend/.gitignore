@@ -52,3 +52,6 @@ next-env.d.ts
 .idea
 *.swp
 .DS_Store
+
+# Clerk keyless-mode cache (created by `next dev` when no keys are set)
+/.clerk/

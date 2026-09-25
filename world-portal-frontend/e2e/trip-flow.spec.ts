@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { signInAsApplicant } from "./support/applicant";
+
 /**
  * The trip planner is the front door for anyone who does not know whether they
  * need a passport, a visa or both — so what matters is that each combination of
@@ -98,6 +100,9 @@ test.describe("trip planner", () => {
 });
 
 test.describe("passport application", () => {
+  // /passport needs a WorldStreet session.
+  test.beforeEach(async ({ page }) => signInAsApplicant(page));
+
   test("validates before it submits", async ({ page }) => {
     await page.goto("/passport");
     await page.getByRole("button", { name: /send my details/i }).click();

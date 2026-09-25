@@ -1,20 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { LogOut, Mail, ShieldCheck, User } from "lucide-react";
+import { ArrowUpRight, LogOut, Mail, ShieldCheck, User } from "lucide-react";
 
 import { PageHeader } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { ApplicantLoginModal } from "@/features/applicant/components/applicant-login-modal";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { WORLDSTREET_URL } from "@/config/auth";
+import { applicantSettings, worldStreetSignIn } from "@/content/applicant";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 
 export default function ApplicantSettingsPage() {
-  const email = useApplicantAuthStore((s) => s.email);
-  const profileId = useApplicantAuthStore((s) => s.profileId);
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
-  const logout = useApplicantAuthStore((s) => s.logout);
+  const { email, displayName, isAuthenticated, signOut } = useApplicantSession();
 
   const [loginModalOpen, setLoginModalOpen] = React.useState(false);
 
@@ -31,10 +30,10 @@ export default function ApplicantSettingsPage() {
           <Card variant="solid" radius="lg" padding="none" className="p-6 space-y-4 border border-border">
             <CardTitle className="text-base font-semibold text-ink-900 flex items-center gap-2">
               <User className="size-5 text-primary" />
-              Applicant Profile Information
+              {applicantSettings.identityTitle}
             </CardTitle>
             <CardDescription className="text-[13px]">
-              Your central account details used across visa applications and hired pro bookings.
+              {applicantSettings.identityBody}
             </CardDescription>
 
             <div className="grid gap-4 pt-2 sm:grid-cols-2">
@@ -50,26 +49,28 @@ export default function ApplicantSettingsPage() {
 
               <div className="rounded-xl border border-border bg-secondary/30 p-3.5 space-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Account Profile ID
+                  Name
                 </span>
-                <p className="font-mono text-[13px] font-semibold text-ink-900">
-                  {profileId || "GUEST"}
-                </p>
+                <p className="text-[14px] font-semibold text-ink-900">{displayName}</p>
               </div>
             </div>
 
             <div className="pt-4 border-t border-border flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                Session state is persisted locally on this device.
-              </span>
+              <a
+                href={WORLDSTREET_URL}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {applicantSettings.manageLabel}
+                <ArrowUpRight className="size-3.5" />
+              </a>
               <Button
                 variant="outline"
                 size="sm"
                 className="text-destructive hover:bg-destructive/10"
-                onClick={logout}
+                onClick={() => void signOut()}
                 leftIcon={<LogOut className="size-3.5" />}
               >
-                Sign Out
+                {worldStreetSignIn.signOutLabel}
               </Button>
             </div>
           </Card>
@@ -83,7 +84,7 @@ export default function ApplicantSettingsPage() {
             Sign in to view account settings
           </h2>
           <p className="text-[13.5px] text-muted-foreground max-w-sm mx-auto">
-            Log in with your email address to manage your profile and active sessions.
+            {applicantSettings.signedOutBody}
           </p>
           <div className="pt-2 flex justify-center">
             <Button
@@ -92,13 +93,13 @@ export default function ApplicantSettingsPage() {
               onClick={() => setLoginModalOpen(true)}
               leftIcon={<Mail className="size-4" />}
             >
-              Sign In with Email OTP
+              {worldStreetSignIn.title}
             </Button>
           </div>
         </Card>
       )}
 
-      <ApplicantLoginModal open={loginModalOpen} onOpenChange={setLoginModalOpen} />
+      <WorldStreetSignInDialog open={loginModalOpen} onOpenChange={setLoginModalOpen} />
     </div>
   );
 }

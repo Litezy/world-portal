@@ -40,9 +40,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { useSubmitPassportEnquiry } from "@/features/passport/api/submit-passport";
+import {
+  passportStepValidation,
+  passportVividFields,
+  passportVividSteps,
+} from "@/features/passport/vivid-fields";
 import { DocumentField } from "@/features/visa/components/document-field";
-import { internalApi } from "@/lib/api-client";
+import { registerVividForm } from "@/features/vivid/form-bridge";
 import { findNationality, nationalities } from "@/lib/nationalities";
 import { cn } from "@/lib/utils";
 import {
@@ -72,17 +78,10 @@ export function PassportForm({
 }: {
   defaultType?: (typeof passportApplicationTypes)[number];
 }) {
+  const { email: accountEmail } = useApplicantSession();
   const [step, setStep] = React.useState(0);
   const [reference, setReference] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
-
-  // Email OTP Verification State
-  const [isEmailVerified, setIsEmailVerified] = React.useState(false);
-  const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
-  const [otpSent, setOtpSent] = React.useState(false);
-  const [otpCode, setOtpCode] = React.useState("");
-  const [sendingOtp, setSendingOtp] = React.useState(false);
-  const [verifyingOtp, setVerifyingOtp] = React.useState(false);
 
   const form = useForm<PassportEnquiryInput>({
     resolver: zodResolver(passportEnquirySchema) as Resolver<PassportEnquiryInput>,
@@ -124,89 +123,18 @@ export function PassportForm({
   });
 
   const selectedType = useWatch({ control: form.control, name: "applicationType" });
-  const emailValue = useWatch({ control: form.control, name: "email" });
   const { mutateAsync, isPending } = useSubmitPassportEnquiry();
 
-  // Reset OTP verification if email is modified after being verified
+  // Filed under the WorldStreet account, whose email WorldStreet has already
+  // verified — fill it in rather than ask for it again.
   React.useEffect(() => {
-    if (isEmailVerified && emailValue !== verifiedEmail) {
-      setIsEmailVerified(false);
+    if (accountEmail && form.getValues("email") !== accountEmail) {
+      form.setValue("email", accountEmail, { shouldValidate: true });
     }
-  }, [emailValue, isEmailVerified, verifiedEmail]);
-
-  const handleSendOtp = async () => {
-    if (!emailValue || !emailValue.includes("@")) {
-      toast.error("Please enter a valid email address first.");
-      return;
-    }
-    setSendingOtp(true);
-    try {
-      await internalApi.post<any>("/otp/send", { email: emailValue });
-      toast.success(`Verification code sent to ${emailValue}`);
-      setOtpSent(true);
-    } catch (err: any) {
-      toast.error(err?.message || "Could not send OTP code.");
-    } finally {
-      setSendingOtp(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otpCode || otpCode.length !== 6) {
-      toast.error("Please enter the 6-digit OTP code.");
-      return;
-    }
-    setVerifyingOtp(true);
-    try {
-      await internalApi.post<any>("/otp/verify", { email: emailValue, code: otpCode });
-      toast.success("Email verified successfully!");
-      setVerifiedEmail(emailValue);
-      setIsEmailVerified(true);
-    } catch (err: any) {
-      toast.error(err?.message || "Invalid or expired OTP code.");
-    } finally {
-      setVerifyingOtp(false);
-    }
-  };
+  }, [accountEmail, form]);
 
   async function nextStep() {
-    let fieldsToValidate: (keyof PassportEnquiryInput)[] = [];
-
-    if (step === 0) {
-      fieldsToValidate = ["applicationType", "validity", "bookletType"];
-      if (selectedType !== "new") {
-        fieldsToValidate.push("existingPassportNumber");
-      }
-    } else if (step === 1) {
-      fieldsToValidate = [
-        "surname",
-        "firstName",
-        "sex",
-        "ninNumber",
-        "dateOfBirth",
-        "placeOfBirth",
-        "stateOfOrigin",
-        "homeTown",
-        "nationality",
-        "permanentAddress",
-        "occupation",
-        "contactPhone",
-        "email",
-        "maritalStatus",
-      ];
-      if (!isEmailVerified) {
-        toast.error("Please verify your email address with OTP before continuing.");
-        return;
-      }
-    } else if (step === 2) {
-      fieldsToValidate = [
-        "nextOfKinName",
-        "nextOfKinRelationship",
-        "nextOfKinPhone",
-        "nextOfKinAddress",
-      ];
-    }
-
+    const fieldsToValidate = passportStepValidation(step, selectedType);
     const isValid = await form.trigger(fieldsToValidate);
     if (isValid) {
       setStep((s) => Math.min(s + 1, passportSteps.length - 1));
@@ -219,30 +147,78 @@ export function PassportForm({
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  async function onSubmit(values: PassportEnquiryInput) {
-    if (!isEmailVerified) {
-      toast.error("Please verify your email address with OTP before submitting.");
-      setStep(1);
-      return;
-    }
-
+  /** Submits and returns the reference, or null when it was refused. */
+  async function submitApplication(values: PassportEnquiryInput): Promise<string | null> {
     try {
       const result = await mutateAsync(values);
       setReference(result.data.reference);
+      return result.data.reference;
     } catch (error) {
       const fieldErrors = (error as { errors?: Record<string, string[]> }).errors;
       if (fieldErrors) {
         for (const [field, messages] of Object.entries(fieldErrors)) {
           form.setError(field as keyof PassportEnquiryInput, { message: messages[0] });
         }
-        return;
+        return null;
       }
       toast.error("Could not submit your application", {
         description:
           error instanceof Error ? error.message : "Please try again shortly.",
       });
+      return null;
     }
   }
+
+  async function onSubmit(values: PassportEnquiryInput) {
+    await submitApplication(values);
+  }
+
+  // Vivid works this form through the bridge. The binding is registered once
+  // and reads the latest render through this ref, so it is never stale.
+  const vivid = React.useRef({ step, reference, submitApplication });
+  React.useEffect(() => {
+    vivid.current = { step, reference, submitApplication };
+  });
+  React.useEffect(
+    () =>
+      registerVividForm({
+        id: "passport",
+        title: "Passport application",
+        fields: passportVividFields,
+        stage: () => (vivid.current.reference ? "submitted" : "form"),
+        steps: () => passportVividSteps,
+        currentStep: () => vivid.current.step,
+        getValues: () => form.getValues() as Record<string, unknown>,
+        getErrors: () =>
+          Object.fromEntries(
+            passportVividFields.flatMap((f) => {
+              const message = form.getFieldState(f.name as keyof PassportEnquiryInput).error
+                ?.message;
+              return message ? [[f.name, message]] : [];
+            }),
+          ),
+        setValue: (name, value) =>
+          form.setValue(name as keyof PassportEnquiryInput, value as never, {
+            shouldDirty: true,
+            shouldTouch: true,
+          }),
+        validate: (names) => form.trigger(names as (keyof PassportEnquiryInput)[]),
+        validateStep: (i) =>
+          form.trigger(passportStepValidation(i, form.getValues("applicationType"))),
+        showStep: (i) => setStep(i),
+        submit: async () => {
+          if (!(await form.trigger())) {
+            return { error: "Some fields are missing or invalid — call getFormState to see which." };
+          }
+          const ref = await vivid.current.submitApplication(form.getValues());
+          return ref
+            ? { reference: ref }
+            : { error: "The application was not accepted. Call getFormState for the reasons." };
+        },
+        reference: () => vivid.current.reference,
+      }),
+    [form],
+  );
 
   if (reference) {
     return (
@@ -673,7 +649,7 @@ export function PassportForm({
                     <FormItem>
                       <FormLabel required>Email Address</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="you@example.com" {...field} />
+                        <Input type="email" placeholder="you@example.com" readOnly {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -681,72 +657,12 @@ export function PassportForm({
                 />
               </div>
 
-              {/* OTP Email Verification Box */}
-              <div className="rounded-xl border border-border/80 bg-muted/30 p-4 mt-1">
-                {isEmailVerified ? (
-                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
-                    <Check className="size-4" strokeWidth={3} />
-                    <span>Email Verified ({emailValue})</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        Verify ownership of your email address via OTP code
-                      </span>
-                      {!otpSent ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleSendOtp}
-                          isLoading={sendingOtp}
-                          disabled={!emailValue || !emailValue.includes("@")}
-                          className="h-8 text-xs shrink-0"
-                        >
-                          Send OTP Code
-                        </Button>
-                      ) : null}
-                    </div>
-
-                    {otpSent ? (
-                      <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
-                        <Input
-                          type="text"
-                          maxLength={6}
-                          placeholder="6-digit OTP"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                          className="h-9 font-mono tracking-widest text-center max-w-[140px]"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="primary"
-                            size="sm"
-                            onClick={handleVerifyOtp}
-                            isLoading={verifyingOtp}
-                            disabled={otpCode.length !== 6}
-                            className="h-9 text-xs"
-                          >
-                            Verify OTP
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleSendOtp}
-                            isLoading={sendingOtp}
-                            className="h-9 text-xs text-muted-foreground"
-                          >
-                            Resend Code
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
+              <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Check className="size-3.5 text-emerald-600" strokeWidth={3} />
+                {accountEmail
+                  ? "Verified by your WorldStreet account — updates about this application go here."
+                  : "Loading your WorldStreet account…"}
+              </p>
 
               <FormField
                 control={form.control}
@@ -919,6 +835,7 @@ export function PassportForm({
                   name="passportPhotoUrl"
                   render={({ field, fieldState }) => (
                     <DocumentField
+                      vividTarget="passportPhotoUrl"
                       label="Passport Photograph (White Background)"
                       hint="Recent passport photo with plain white background."
                       required
@@ -934,6 +851,7 @@ export function PassportForm({
                   name="ninDocumentUrl"
                   render={({ field, fieldState }) => (
                     <DocumentField
+                      vividTarget="ninDocumentUrl"
                       label="NIN Document / Slip"
                       hint="Official National Identification Number (NIN) slip or card."
                       required
@@ -949,6 +867,7 @@ export function PassportForm({
                   name="birthCertificateUrl"
                   render={({ field, fieldState }) => (
                     <DocumentField
+                      vividTarget="birthCertificateUrl"
                       label="Birth Certificate / Declaration of Age (Optional)"
                       hint="Optional attachment for verification."
                       required={false}
@@ -993,6 +912,7 @@ export function PassportForm({
                 size="md"
                 onClick={prevStep}
                 leftIcon={<ArrowLeft />}
+                data-vivid-target="form-back"
               >
                 Back
               </Button>
@@ -1007,6 +927,7 @@ export function PassportForm({
                 size="md"
                 onClick={nextStep}
                 rightIcon={<ArrowRight />}
+                data-vivid-target="form-continue"
               >
                 Continue to {passportSteps[step + 1].title}
               </Button>
@@ -1017,6 +938,8 @@ export function PassportForm({
                 size="lg"
                 isLoading={isPending}
                 loadingText="Submitting Application..."
+                data-vivid-target="form-submit"
+                data-vivid-guard
               >
                 Submit Passport Application
               </Button>

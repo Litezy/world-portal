@@ -36,8 +36,8 @@ import {
 import { useMounted } from "@/hooks/use-mounted";
 import { formatCurrency } from "@/lib/utils";
 
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
-import { ApplicantLoginModal } from "@/features/applicant/components/applicant-login-modal";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 
 const TYPE_ICON: Record<BasketItemType, typeof Plane> = {
   pro: Briefcase,
@@ -62,9 +62,7 @@ export function BasketDrawer({
   const clear = useBasketStore((s) => s.clear);
   const mounted = useMounted();
 
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
-  const profileId = useApplicantAuthStore((s) => s.profileId);
-  const email = useApplicantAuthStore((s) => s.email);
+  const { isAuthenticated, email, displayName } = useApplicantSession();
 
   const [loginModalOpen, setLoginModalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -77,12 +75,6 @@ export function BasketDrawer({
 
   const processCheckout = async () => {
     setIsSubmitting(true);
-    const safeEmail = email
-      ? email.includes("@")
-        ? email
-        : `${email}@example.com`
-      : "applicant@example.com";
-    const safeName = email ? email.split("@")[0] : "Applicant";
 
     const proItems = lines.filter((i) => i.type === "pro");
     for (const proItem of proItems) {
@@ -93,9 +85,10 @@ export function BasketDrawer({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             professionalId: proId,
-            profileId: profileId || undefined,
-            travellerName: safeName,
-            travellerEmail: safeEmail,
+            travellerName: displayName,
+            // The API files the booking under the WorldStreet session and its
+            // verified email; this is only the form's required field.
+            travellerEmail: email ?? "",
             destinationCity: proItem.city || "Destination",
             startsAt: new Date().toISOString(),
             endsAt: new Date(Date.now() + 86400000 * 3).toISOString(),
@@ -114,16 +107,14 @@ export function BasketDrawer({
     router.push(proItems.length > 0 ? "/applicant/hires" : "/applicant/applications");
   };
 
+  // Signing in leaves for WorldStreet and comes back to this page; the basket
+  // is persisted, so checkout picks up where it left off.
   const handleCheckoutClick = () => {
     if (!isAuthenticated) {
       setLoginModalOpen(true);
     } else {
-      processCheckout();
+      void processCheckout();
     }
-  };
-
-  const handleLoginSuccess = () => {
-    processCheckout();
   };
 
   return (
@@ -252,11 +243,7 @@ export function BasketDrawer({
         </DrawerContent>
       </Drawer>
 
-      <ApplicantLoginModal
-        open={loginModalOpen}
-        onOpenChange={setLoginModalOpen}
-        onSuccess={handleLoginSuccess}
-      />
+      <WorldStreetSignInDialog open={loginModalOpen} onOpenChange={setLoginModalOpen} />
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import type { VisaDocumentation } from "@/features/visa/types";
@@ -8,12 +9,20 @@ export type TrackedApplicationResult =
   | { type: "VISA"; data: VisaDocumentation }
   | { type: "PASSPORT"; data: BackendPassportApplication };
 
-/** Public submission — no auth, returns the record including `applicationNo`. */
+/**
+ * Submits as the signed-in WorldStreet applicant: the API files the record
+ * under their account and verified email. Returns it with `applicationNo`.
+ */
 export function useSubmitVisaApplication() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationKey: ["visa", "submit"],
-    mutationFn: (payload: Record<string, unknown>) =>
-      api.post<VisaDocumentation>("/visa-documentation", payload),
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const token = await getToken();
+      return api.post<VisaDocumentation>("/visa-documentation", payload, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+    },
   });
 }
 

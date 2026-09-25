@@ -16,20 +16,22 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { worldStreetSignIn } from "@/content/applicant";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { useBasketStore } from "@/features/basket/store";
 
 export function ApplicantTopbar() {
   const [open, setOpen] = React.useState(false);
 
-  const email = useApplicantAuthStore((s) => s.email);
-  const profileId = useApplicantAuthStore((s) => s.profileId);
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
-  const logout = useApplicantAuthStore((s) => s.logout);
+  const {
+    email,
+    isAuthenticated,
+    monogram,
+    displayName: name,
+    signOut,
+  } = useApplicantSession();
 
   const items = useBasketStore((s) => s.items);
-  const monogram = email ? email.slice(0, 2).toUpperCase() : "AP";
-  const name = email ? email.split("@")[0] : "Applicant";
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl backdrop-saturate-150">
@@ -72,7 +74,7 @@ export function ApplicantTopbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <NotificationCenter recipientId={email || profileId} recipientType="APPLICANT" />
+          <NotificationCenter recipientId={email} recipientType="APPLICANT" />
           <ThemeToggle />
 
           <Button asChild variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex">
@@ -97,8 +99,8 @@ export function ApplicantTopbar() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={logout}
-                title="Sign out"
+                onClick={() => void signOut()}
+                title={worldStreetSignIn.signOutLabel}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <LogOut className="size-4" />

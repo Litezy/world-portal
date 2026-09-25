@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { signInAsApplicant } from "./support/applicant";
+
 /**
  * The live API is a Cloudflare Quick Tunnel whose host changes on every
  * restart, so these stub it at the network layer using the exact response
@@ -31,6 +33,7 @@ async function pickCountry(page: Page, field: string, country: string) {
 
 /** Walks the route check and lands on step 1 of the chosen branch. */
 async function enterApplication(page: Page, to = "Turkey") {
+  await signInAsApplicant(page);
   await page.goto("/apply");
   await pickCountry(page, "Passport / travelling from", "Nigeria");
   await pickCountry(page, "Travelling to", to);
@@ -175,6 +178,9 @@ test.describe("visa application", () => {
 });
 
 test.describe("application tracking", () => {
+  // /track now lands on /applicant/applications, which needs a WorldStreet session.
+  test.beforeEach(async ({ page }) => signInAsApplicant(page));
+
   test("renders the status timeline and parses string decimals", async ({ page }) => {
     await page.route(`${API}/visa-documentation/**`, (route) =>
       route.fulfill({
@@ -224,6 +230,9 @@ test.describe("application tracking", () => {
 });
 
 test.describe("visa route check", () => {
+  // /apply needs a WorldStreet session.
+  test.beforeEach(async ({ page }) => signInAsApplicant(page));
+
   test("an embassy route drops the document step entirely", async ({ page }) => {
     await page.goto("/apply");
     await pickCountry(page, "Passport / travelling from", "Nigeria");

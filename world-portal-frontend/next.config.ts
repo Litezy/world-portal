@@ -25,8 +25,10 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
+            // Microphone for this origin only: Vivid, the voice assistant,
+            // listens once the applicant taps the orb. Camera stays off.
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+            value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
           },
           {
             key: "Strict-Transport-Security",

@@ -56,6 +56,20 @@ const clientSchema = z.object({
    * Set this to the real WorldSpace origin before launch.
    */
   NEXT_PUBLIC_WORLDSPACE_URL: z.url().default("https://worldspace.example"),
+  /**
+   * WorldStreet — the parent platform, and the only place anyone signs in.
+   * E-Embassy has no login of its own: it shares WorldStreet's Clerk instance
+   * (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY, read by Clerk
+   * directly) and sends signed-out applicants to these pages with a
+   * `redirect_url` back to where they were going.
+   */
+  NEXT_PUBLIC_WORLDSTREET_URL: z.url().default("https://www.worldstreetgold.com"),
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: z
+    .url()
+    .default("https://www.worldstreetgold.com/login"),
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: z
+    .url()
+    .default("https://www.worldstreetgold.com/register"),
 });
 
 const serverSchema = z
@@ -92,6 +106,19 @@ const serverSchema = z
      * API eventually needs never reaches the browser.
      */
     WORLDSPACE_API_URL: z.url().optional(),
+    /**
+     * Vivid voice — Sira, WorldStreet's voice session broker. The key is the
+     * same one the WorldStreet app uses and is read only by
+     * `src/server/vivid/sira.ts`; the browser only ever sees a single-use
+     * session token. Unset means the orb answers "unavailable", nothing more.
+     */
+    SIRA_API_KEY: z.string().min(1).optional(),
+    SIRA_API_URL: z.url().optional(),
+    /**
+     * Vivid is free on E-Embassy today. "true" makes it honour WorldStreet's
+     * paid Vivid subscription instead — see `src/server/vivid/access.ts`.
+     */
+    VIVID_REQUIRE_SUBSCRIPTION: z.enum(["true", "false"]).default("false"),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;
@@ -128,6 +155,9 @@ const clientEnv = clientSchema.safeParse(
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
     NEXT_PUBLIC_WORLDSPACE_URL: process.env.NEXT_PUBLIC_WORLDSPACE_URL,
+    NEXT_PUBLIC_WORLDSTREET_URL: process.env.NEXT_PUBLIC_WORLDSTREET_URL,
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
+    NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
   }),
 );
 

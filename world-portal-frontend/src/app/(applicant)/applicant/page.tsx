@@ -47,8 +47,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApplicantLoginModal } from "@/features/applicant/components/applicant-login-modal";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { worldStreetSignIn } from "@/content/applicant";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { BarList } from "@/features/dashboard/components/bar-list";
 import { ShareBar } from "@/features/dashboard/components/share-bar";
 import { StatCard } from "@/features/dashboard/components/stat-card";
@@ -119,9 +120,7 @@ function getMonogram(name: string): string {
 export default function ApplicantOverviewPage() {
   const mounted = useMounted();
 
-  const email = useApplicantAuthStore((s) => s.email);
-  const profileId = useApplicantAuthStore((s) => s.profileId);
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
+  const { isAuthenticated, displayName } = useApplicantSession();
 
   const [loginModalOpen, setLoginModalOpen] = React.useState(false);
   const [bookings, setBookings] = React.useState<HiredBookingRecord[]>([]);
@@ -135,12 +134,12 @@ export default function ApplicantOverviewPage() {
 
   // Auto-fetch applicant data when authenticated
   const fetchBookings = React.useCallback(() => {
-    if (!mounted || !isAuthenticated || !email) return;
+    if (!mounted || !isAuthenticated) return;
 
     setLoading(true);
-    const identifier = email || profileId;
 
-    fetch(`/api/hire/bookings/applicant/${encodeURIComponent(identifier!)}`)
+    // Whose records these are comes from the WorldStreet session.
+    fetch("/api/me/hires")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
@@ -151,7 +150,7 @@ export default function ApplicantOverviewPage() {
       })
       .catch(() => setBookings([]))
       .finally(() => setLoading(false));
-  }, [mounted, isAuthenticated, email, profileId]);
+  }, [mounted, isAuthenticated]);
 
   React.useEffect(() => {
     fetchBookings();
@@ -225,7 +224,7 @@ export default function ApplicantOverviewPage() {
     );
   }
 
-  const applicantName = email ? email.split("@")[0] : "Applicant";
+  const applicantName = displayName;
 
   return (
     <div className="flex flex-col gap-8">
@@ -254,7 +253,7 @@ export default function ApplicantOverviewPage() {
               onClick={() => setLoginModalOpen(true)}
               leftIcon={<Mail className="size-4" />}
             >
-              Sign In with Email OTP
+              {worldStreetSignIn.title}
             </Button>
           </div>
         </Card>
@@ -651,7 +650,7 @@ export default function ApplicantOverviewPage() {
         )}
       </Dialog>
 
-      <ApplicantLoginModal open={loginModalOpen} onOpenChange={setLoginModalOpen} />
+      <WorldStreetSignInDialog open={loginModalOpen} onOpenChange={setLoginModalOpen} />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { backend } from "@/server/api/backend";
+import { BackendError } from "@/server/api/backend";
+import { applicantBackend } from "@/server/applicant/backend";
 import type { BackendPassportApplication } from "@/server/data/backend-types";
 import { passportEnquirySchema } from "@/validations/passport";
 
@@ -69,7 +70,8 @@ export async function POST(request: Request) {
   };
 
   try {
-    const record = await backend<BackendPassportApplication>(
+    // Filed as the signed-in WorldStreet applicant, under their verified email.
+    const record = await applicantBackend<BackendPassportApplication>(
       "/passport-application",
       {
         method: "POST",
@@ -81,6 +83,15 @@ export async function POST(request: Request) {
       data: { reference: record.applicationNo || `PASSPORT-${Date.now()}` },
     });
   } catch (err: any) {
+    // A definite refusal — no session, a suspended account, a rejected field —
+    // must reach the form. Inventing a reference here would tell the applicant
+    // they had applied when nothing was filed.
+    if (err instanceof BackendError && err.status >= 400 && err.status < 500) {
+      return NextResponse.json(
+        { message: err.message, errors: err.errors },
+        { status: err.status },
+      );
+    }
     // If backend isn't reachable or errors out, fallback to local reference generation
     console.warn("[passport-application] API fallback:", err?.message);
     const reference = `PASSPORT-2026-${Math.floor(1000 + Math.random() * 9000)}`;

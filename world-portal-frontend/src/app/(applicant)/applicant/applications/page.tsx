@@ -42,8 +42,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApplicantLoginModal } from "@/features/applicant/components/applicant-login-modal";
-import { useApplicantAuthStore } from "@/features/applicant/store/applicant-auth-store";
+import { worldStreetSignIn } from "@/content/applicant";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-payment-info";
 import {
   paymentStatusCopy,
@@ -127,9 +128,7 @@ const passportStatusCopy: Record<
 export default function ApplicantApplicationsPage() {
   const mounted = useMounted();
 
-  const email = useApplicantAuthStore((s) => s.email);
-  const profileId = useApplicantAuthStore((s) => s.profileId);
-  const isAuthenticated = useApplicantAuthStore((s) => s.isAuthenticated);
+  const { isAuthenticated } = useApplicantSession();
 
   const [loginModalOpen, setLoginModalOpen] = React.useState(false);
   const [applications, setApplications] = React.useState<UnifiedApplication[]>([]);
@@ -142,12 +141,12 @@ export default function ApplicantApplicationsPage() {
   const debouncedSearch = useDebounce(search, 250);
 
   const fetchApplications = React.useCallback(() => {
-    if (!mounted || !isAuthenticated || !email) return;
+    if (!mounted || !isAuthenticated) return;
 
     setLoading(true);
-    const identifier = email || profileId;
 
-    fetch(`/api/applicant/applications/${encodeURIComponent(identifier!)}`)
+    // Whose records these are comes from the WorldStreet session.
+    fetch("/api/me/applications")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
@@ -158,7 +157,7 @@ export default function ApplicantApplicationsPage() {
       })
       .catch(() => setApplications([]))
       .finally(() => setLoading(false));
-  }, [mounted, isAuthenticated, email, profileId]);
+  }, [mounted, isAuthenticated]);
 
   React.useEffect(() => {
     fetchApplications();
@@ -229,7 +228,7 @@ export default function ApplicantApplicationsPage() {
               onClick={() => setLoginModalOpen(true)}
               leftIcon={<Mail className="size-4" />}
             >
-              Sign In with Email OTP
+              {worldStreetSignIn.title}
             </Button>
           </div>
         </Card>
@@ -585,7 +584,7 @@ export default function ApplicantApplicationsPage() {
         )}
       </Dialog>
 
-      <ApplicantLoginModal open={loginModalOpen} onOpenChange={setLoginModalOpen} />
+      <WorldStreetSignInDialog open={loginModalOpen} onOpenChange={setLoginModalOpen} />
     </div>
   );
 }

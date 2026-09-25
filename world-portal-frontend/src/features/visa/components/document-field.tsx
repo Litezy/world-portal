@@ -19,6 +19,8 @@ export type DocumentFieldProps = {
   value: string;
   onChange: (url: string) => void;
   error?: string;
+  /** Lets Vivid point at this upload (`data-vivid-target`); the field's name. */
+  vividTarget?: string;
 };
 
 /**
@@ -33,6 +35,7 @@ export function DocumentField({
   value,
   onChange,
   error,
+  vividTarget,
 }: DocumentFieldProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = React.useState<string | null>(null);
@@ -71,7 +74,11 @@ export function DocumentField({
   const shown = localError ?? error;
 
   return (
-    <div className="grid gap-2">
+    <div
+      className="grid gap-2"
+      data-vivid-target={vividTarget}
+      data-vivid-label={vividTarget ? `Upload: ${label}` : undefined}
+    >
       <label
         htmlFor={id}
         className="flex items-center gap-px text-[13px] font-semibold tracking-tight"

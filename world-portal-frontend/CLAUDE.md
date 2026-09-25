@@ -85,6 +85,61 @@ PDF/JPG/PNG/WEBP) _before_ submission; the returned `url` goes into the matching
 `*Url` field. `GET /visa-documentation/:id` is deliberately public — never add
 an auth header to it.
 
+## Applicants sign in with WorldStreet
+
+E-Embassy is a WorldStreet service and has **no login of its own**. It shares
+WorldStreet's Clerk instance (same keys), so a WorldStreet user on
+`*.worldstreetgold.com` arrives already signed in; a signed-out one is sent to
+WorldStreet's `/login` with `redirect_url` back. ADR 0014 in
+`worldPortal/docs/adr` has the full design.
+
+- **`src/proxy.ts` dispatches three audiences.** `/admin` and `/agency` (and
+  their `/api` proxies) keep their own cookies and never touch Clerk.
+  Everything else runs through `clerkMiddleware`; the prefixes in
+  `APPLICANT_PROTECTED_PREFIXES` (`src/config/auth.ts`) require a session.
+- **Identity is read, never stored.** `useApplicantSession()` wraps Clerk's
+  `useUser`; the API keys every applicant record by the Clerk user id. Do not
+  reintroduce an applicant store, an email-code login, or an email in a URL.
+- **Acting as the applicant means forwarding the session token.** Server
+  routes use `applicantBackend()` (`src/server/applicant/backend.ts`); the visa
+  submission passes `getToken()` per call. The status lookup and uploads stay
+  public — no token.
+- **The `(applicant)` layout joins on entry** (`POST /me/join`, idempotent).
+  That is the whole onboarding.
+- **Signing out is WorldStreet-wide** — it is the same session.
+- **Clerk keys are required** to serve any non-console page. Without them
+  `next dev` falls back to Clerk's keyless mode (`/.clerk/`, git-ignored).
+
+## Vivid — the voice assistant
+
+Vivid is WorldStreet's voice assistant, copied from Xtreme's integration (ADR
+0015). Sira brokers the voice session; the persona and tools go to it on the
+mint (`src/app/api/vivid/sira-session`), and tool calls come back over the
+session's WebSocket to run in the browser or on `/api/vivid/function`.
+
+- **Only `src/server/vivid/sira.ts` reads `SIRA_API_KEY`.** The mint response
+  is scrubbed to what the browser needs; no vendor, model or voice name may
+  reach the browser or Vivid's speech. After a build,
+  `grep -rioE "gemini|openai|gpt-|kore|fenrir" .next/static` must find nothing.
+- **Who may use it is decided in one place,** `hasVividAccess()` in
+  `src/server/vivid/access.ts`. Free today; `VIVID_REQUIRE_SUBSCRIPTION=true`
+  fails closed until the WorldStreet subscription lookup is written there.
+- **Tools live in `src/features/vivid/functions.ts`.** It is bundled for the
+  browser and read by the server for the tool list, so it may not import
+  server code or touch the DOM at import time. Server tools are stubs there;
+  their bodies are in `src/server/vivid/functions.server.ts`.
+- **The forms talk to Vivid through the form bridge**
+  (`src/features/vivid/form-bridge.ts`). The visa and passport wizards
+  register a binding while mounted; field names, labels and options are in
+  `features/{visa,passport}/vivid-fields.ts`. Add a field to a wizard → add it
+  there too. Passport's step validation is shared with the bridge
+  (`passportStepValidation`) so Continue and Vivid never disagree.
+- **Submitting is always two calls** — `confirmed=false` returns a read-back
+  and sends nothing; only `confirmed=true` submits, through the same
+  `submitApplication` the Submit button uses.
+- **The orb is hidden on `/admin` and `/agency`**, and needs
+  `Permissions-Policy: microphone=(self)` from `next.config.ts`.
+
 ## The admin console
 
 `/admin` is the other half of the product: the desk where the enquiries the

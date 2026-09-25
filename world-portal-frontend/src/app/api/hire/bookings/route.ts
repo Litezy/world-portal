@@ -1,25 +1,33 @@
 import { NextResponse } from "next/server";
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
+import { BackendError } from "@/server/api/backend";
+import { applicantBackend } from "@/server/applicant/backend";
 
+/**
+ * Places a hire booking as the signed-in WorldStreet applicant. The API files
+ * it under their account; without a session this is a 401.
+ */
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
+  }
 
-    const res = await fetch(`${BACKEND_API_URL}/hire/bookings`, {
+  try {
+    const booking = await applicantBackend<unknown>("/hire/bookings", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
-    if (res.ok) {
-      const data = await res.json();
-      return NextResponse.json(data, { status: 201 });
-    }
-
-    const err = await res.json().catch(() => ({ message: "Failed to create booking" }));
-    return NextResponse.json(err, { status: res.status || 400 });
+    return NextResponse.json(booking, { status: 201 });
   } catch (error) {
+    if (error instanceof BackendError) {
+      return NextResponse.json(
+        { message: error.message, errors: error.errors },
+        { status: error.status },
+      );
+    }
     return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
 }

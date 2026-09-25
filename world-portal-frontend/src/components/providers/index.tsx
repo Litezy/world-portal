@@ -5,6 +5,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { VividVoiceProvider } from "@/features/vivid/components/vivid-provider";
 
 /** Single mount point for every client-side provider the app needs. */
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryProvider>
         <TooltipProvider>
           <HashScroll />
-          {children}
+          {/* Vivid, WorldStreet's voice assistant — hidden on the consoles. */}
+          <VividVoiceProvider>{children}</VividVoiceProvider>
           <Toaster />
         </TooltipProvider>
       </QueryProvider>

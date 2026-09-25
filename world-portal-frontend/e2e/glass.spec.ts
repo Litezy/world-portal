@@ -30,7 +30,9 @@ test.describe("glass", () => {
   });
 
   test("the shared .glass utility blurs too", async ({ page }) => {
-    await page.goto("/apply");
+    // Any page of this app will do; /start is public (/apply now sends a
+    // signed-out visitor to WorldStreet's sign-in, off this origin).
+    await page.goto("/start");
 
     // `.glass` is defined in globals.css but nothing currently uses it — the
     // rebrand moved every surface onto a variant. Asserting against a page
