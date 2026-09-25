@@ -16,6 +16,8 @@ import { AgencyModule } from './agency/agency.module';
 import { HireModule } from './hire/hire.module';
 import { SeedModule } from './seed/seed.module';
 import { NotificationModule } from './notification/notification.module';
+import { ApplicantModule } from './applicant/applicant.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { NotificationModule } from './notification/notification.module';
     HireModule,
     SeedModule,
     NotificationModule,
+    ApplicantModule,
+    MeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

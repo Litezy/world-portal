@@ -7,23 +7,34 @@ import {
   Param,
   Query,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { HireService } from './hire.service';
 import { QueryProfessionalsDto } from './dto/query-professionals.dto';
 import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import {
+  ApplicantPrincipal,
+  CurrentApplicant,
+} from '../auth/decorators/current-applicant.decorator';
+import { ApplicantService } from '../applicant/applicant.service';
 
 @ApiTags('Hire & Professionals')
 @Controller('hire')
 export class HireController {
   private readonly logger = new Logger(HireController.name);
 
-  constructor(private readonly hireService: HireService) {}
+  constructor(
+    private readonly hireService: HireService,
+    private readonly applicants: ApplicantService,
+  ) {}
 
   @Get('professionals')
   @ApiOperation({ summary: 'Browse professionals directory with filtering' })
@@ -55,17 +66,23 @@ export class HireController {
   }
 
   @Post('bookings')
-  @ApiOperation({ summary: 'Submit a hire booking request' })
+  @ApiBearerAuth()
+  @UseGuards(ClerkAuthGuard)
+  @ApiOperation({
+    summary: 'Submit a hire booking request (signed-in WorldStreet applicant)',
+  })
   @ApiResponse({ status: 201, description: 'Hire booking created successfully' })
-  async createBooking(@Body() dto: CreateHireBookingDto) {
-    this.logger.log(`POST /hire/bookings called for proId=${dto.professionalId}`);
-    return this.hireService.createBooking(dto);
-  }
-
-  @Get('bookings/applicant/:identifier')
-  @ApiOperation({ summary: 'Get hire bookings for an applicant profile ID or email' })
-  @ApiParam({ name: 'identifier', description: 'Applicant Profile ID or Email address' })
-  async findBookingsByApplicant(@Param('identifier') identifier: string) {
-    return this.hireService.findBookingsByApplicant(identifier);
+  @ApiResponse({ status: 401, description: 'No valid WorldStreet session.' })
+  async createBooking(
+    @Body() dto: CreateHireBookingDto,
+    @CurrentApplicant() principal: ApplicantPrincipal,
+  ) {
+    const owner = await this.applicants.requireActiveApplicant(
+      principal.clerkUserId,
+    );
+    this.logger.log(
+      `POST /hire/bookings called for proId=${dto.professionalId} by clerkUserId=${owner.clerkUserId}`,
+    );
+    return this.hireService.createBooking(dto, owner);
   }
 }

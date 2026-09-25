@@ -19,6 +19,7 @@ import {
 import { randomInt } from 'crypto';
 import { SendGridService } from '../mail/sendgrid.service';
 import { OtpService } from '../otp/otp.service';
+import { ApplicationOwner } from '../applicant/applicant.service';
 import { InviteApplicantDto } from '../visa-documentation/dto/invite-applicant.dto';
 import { EvaluateVisaCostDto } from '../visa-documentation/dto/evaluate-visa-cost.dto';
 
@@ -33,11 +34,18 @@ export class PassportApplicationService {
   ) {}
 
 
+  /**
+   * `owner` is the signed-in WorldStreet applicant; see
+   * `VisaDocumentationService.createVisaApplication` for why their verified
+   * email replaces the one on the form.
+   */
   async createApplication(
     dto: CreatePassportApplicationDto,
-    creatorIdentifier?: string,
+    owner?: ApplicationOwner,
   ) {
-    if (!this.otpService.isEmailVerified(dto.email)) {
+    if (owner) {
+      dto = { ...dto, email: owner.email };
+    } else if (!this.otpService.isEmailVerified(dto.email)) {
       this.logger.warn(
         `Attempted passport application submission with unverified email=${dto.email}`,
       );
@@ -81,13 +89,14 @@ export class PassportApplicationService {
       }
     }
 
-    const createdBy = creatorIdentifier || dto.email;
+    const createdBy = dto.email;
 
     try {
       const record = await this.prisma.passportApplication.create({
         data: {
           applicationNo,
           profileId: dto.profileId || null,
+          clerkUserId: owner?.clerkUserId ?? null,
           passportCategory: dto.passportCategory,
           surname: dto.surname,
           firstName: dto.firstName,
@@ -479,18 +488,12 @@ export class PassportApplicationService {
     return record;
   }
 
-  async findApplicantPassportApplications(identifier: string) {
-    if (!identifier) return [];
-
-    const cleanIdentifier = identifier.trim();
+  /** Every passport application owned by one WorldStreet user, newest first. */
+  async findPassportApplicationsByClerkUser(clerkUserId: string) {
+    if (!clerkUserId) return [];
 
     return this.prisma.passportApplication.findMany({
-      where: {
-        OR: [
-          { profileId: cleanIdentifier },
-          { email: { equals: cleanIdentifier, mode: 'insensitive' } },
-        ],
-      },
+      where: { clerkUserId },
       orderBy: { createdAt: 'desc' },
       include: {
         profile: {

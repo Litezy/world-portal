@@ -27,6 +27,12 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import {
+  ApplicantPrincipal,
+  CurrentApplicant,
+} from '../auth/decorators/current-applicant.decorator';
+import { ApplicantService } from '../applicant/applicant.service';
 
 @ApiTags('Passport Application')
 @Controller('passport-application')
@@ -35,14 +41,17 @@ export class PassportApplicationController {
 
   constructor(
     private readonly passportApplicationService: PassportApplicationService,
+    private readonly applicants: ApplicantService,
   ) {}
 
   @Post()
+  @ApiBearerAuth()
+  @UseGuards(ClerkAuthGuard)
   @ApiOperation({
     summary:
-      'Submit a new passport application (Public Guest & Registered Applicants)',
+      'Submit a new passport application (signed-in WorldStreet applicant)',
     description:
-      'Submits a Nigeria Immigration Service e-Passport data form application with personal information, next of kin details, and uploaded document URLs (birth certificate, NIN, white background passport photo). Accessible by guest applicants, partners, and staff.',
+      'Submits a Nigeria Immigration Service e-Passport data form application with personal information, next of kin details, and uploaded document URLs (birth certificate, NIN, white background passport photo). Requires a WorldStreet session; the application is filed under the account and its verified email.',
   })
   @ApiResponse({
     status: 201,
@@ -52,11 +61,18 @@ export class PassportApplicationController {
     status: 400,
     description: 'Validation failed for required fields or document URLs.',
   })
-  async createApplication(@Body() dto: CreatePassportApplicationDto) {
-    this.logger.log(
-      `Public POST /passport-application called by email=${dto.email}`,
+  @ApiResponse({ status: 401, description: 'No valid WorldStreet session.' })
+  async createApplication(
+    @Body() dto: CreatePassportApplicationDto,
+    @CurrentApplicant() principal: ApplicantPrincipal,
+  ) {
+    const owner = await this.applicants.requireActiveApplicant(
+      principal.clerkUserId,
     );
-    return this.passportApplicationService.createApplication(dto);
+    this.logger.log(
+      `POST /passport-application called by clerkUserId=${owner.clerkUserId}`,
+    );
+    return this.passportApplicationService.createApplication(dto, owner);
   }
 
   @Get()
@@ -71,19 +87,6 @@ export class PassportApplicationController {
   @ApiResponse({ status: 200, description: 'List of passport applications.' })
   async findAll(@Query() query: QueryPassportApplicationDto) {
     return this.passportApplicationService.findAllApplications(query);
-  }
-
-  @Get('applicant/:identifier')
-  @ApiOperation({
-    summary: 'Get all passport applications for a specific applicant email or profile ID',
-  })
-  @ApiParam({
-    name: 'identifier',
-    description: 'Applicant profile ID or email address',
-  })
-  @ApiResponse({ status: 200, description: 'List of applicant passport applications.' })
-  async findApplicantApplications(@Param('identifier') identifier: string) {
-    return this.passportApplicationService.findApplicantPassportApplications(identifier);
   }
 
   @Get(':id')

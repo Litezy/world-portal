@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { VisaDocumentationController } from './visa-documentation.controller';
 import { VisaDocumentationService } from './visa-documentation.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ApplicantService } from '../applicant/applicant.service';
+import { ClerkTokenVerifier } from '../auth/clerk/clerk-token.verifier';
 import {
   VisaDocumentStatus,
   PaymentStatus,
@@ -38,6 +40,11 @@ describe('VisaDocumentationController', () => {
     inviteApplicant: jest.fn().mockResolvedValue(mockVisaRecord),
   };
 
+  const owner = { clerkUserId: 'user_abc', email: 'john.doe@gmail.com' };
+  const mockApplicantService = {
+    requireActiveApplicant: jest.fn().mockResolvedValue(owner),
+  };
+
   const mockPrismaService = {};
   const mockJwtService = { decode: jest.fn() };
   const mockConfigService = {
@@ -64,6 +71,14 @@ describe('VisaDocumentationController', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: ApplicantService,
+          useValue: mockApplicantService,
+        },
+        {
+          provide: ClerkTokenVerifier,
+          useValue: { verify: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -77,7 +92,7 @@ describe('VisaDocumentationController', () => {
   });
 
   describe('createVisaApplication', () => {
-    it('should delegate application creation to VisaDocumentationService', async () => {
+    it('should file the application under the signed-in WorldStreet applicant', async () => {
       const dto = {
         firstName: 'John',
         lastName: 'Doe',
@@ -99,9 +114,17 @@ describe('VisaDocumentationController', () => {
         proofOfFunds6MonthsUrl: 'https://s3.amazonaws.com/bucket/pof.pdf',
       };
 
-      const result = await controller.createVisaApplication(dto);
+      const result = await controller.createVisaApplication(dto, {
+        clerkUserId: 'user_abc',
+      });
       expect(result).toEqual(mockVisaRecord);
-      expect(mockVisaService.createVisaApplication).toHaveBeenCalledWith(dto);
+      expect(mockApplicantService.requireActiveApplicant).toHaveBeenCalledWith(
+        'user_abc',
+      );
+      expect(mockVisaService.createVisaApplication).toHaveBeenCalledWith(
+        dto,
+        owner,
+      );
     });
   });
 

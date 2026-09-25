@@ -82,5 +82,23 @@ describe('HireService', () => {
       expect(result.reference).toContain('HIRE-');
       expect(result.status).toBe('REQUESTED');
     });
+
+    it('files the booking under the signed-in applicant and their verified email', async () => {
+      const result = await service.createBooking(
+        {
+          professionalId: 'agency-001',
+          travellerName: 'John Doe',
+          travellerEmail: 'someone-else@example.com',
+          destinationCity: 'Lagos',
+          startsAt: '2026-10-01',
+          endsAt: '2026-10-05',
+          totalAmount: 500,
+        },
+        { clerkUserId: 'user_abc', email: 'john@example.com' },
+      );
+
+      expect(result.clerkUserId).toBe('user_abc');
+      expect(result.travellerEmail).toBe('john@example.com');
+    });
   });
 });

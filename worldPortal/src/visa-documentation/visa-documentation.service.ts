@@ -23,6 +23,7 @@ import { randomInt } from 'crypto';
 import { SendGridService } from '../mail/sendgrid.service';
 import { BankAccountService } from '../bank-account/bank-account.service';
 import { OtpService } from '../otp/otp.service';
+import { ApplicationOwner } from '../applicant/applicant.service';
 
 @Injectable()
 export class VisaDocumentationService {
@@ -36,11 +37,19 @@ export class VisaDocumentationService {
   ) {}
 
 
+  /**
+   * `owner` is the signed-in WorldStreet applicant. Their verified email
+   * replaces whatever the form sent, so the record, its notifications and
+   * "my applications" all agree. Without an owner the old email-code check
+   * still applies.
+   */
   async createVisaApplication(
     dto: CreateVisaDocumentationDto,
-    creatorIdentifier?: string,
+    owner?: ApplicationOwner,
   ) {
-    if (!this.otpService.isEmailVerified(dto.email)) {
+    if (owner) {
+      dto = { ...dto, email: owner.email };
+    } else if (!this.otpService.isEmailVerified(dto.email)) {
       this.logger.warn(
         `Attempted application submission with unverified email=${dto.email}`,
       );
@@ -82,13 +91,14 @@ export class VisaDocumentationService {
       }
     }
 
-    const createdBy = creatorIdentifier || dto.email;
+    const createdBy = dto.email;
 
     try {
       const record = await this.prisma.visaDocumentation.create({
         data: {
           applicationNo,
           profileId: dto.profileId || null,
+          clerkUserId: owner?.clerkUserId ?? null,
           firstName: dto.firstName,
           lastName: dto.lastName,
           email: dto.email,
@@ -497,18 +507,12 @@ export class VisaDocumentationService {
     return record;
   }
 
-  async findApplicantVisaApplications(identifier: string) {
-    if (!identifier) return [];
-
-    const cleanIdentifier = identifier.trim();
+  /** Every visa application owned by one WorldStreet user, newest first. */
+  async findVisaApplicationsByClerkUser(clerkUserId: string) {
+    if (!clerkUserId) return [];
 
     return this.prisma.visaDocumentation.findMany({
-      where: {
-        OR: [
-          { profileId: cleanIdentifier },
-          { email: { equals: cleanIdentifier, mode: 'insensitive' } },
-        ],
-      },
+      where: { clerkUserId },
       orderBy: { createdAt: 'desc' },
       include: {
         profile: {

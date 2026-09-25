@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { QueryProfessionalsDto } from './dto/query-professionals.dto';
 import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
+import { ApplicationOwner } from '../applicant/applicant.service';
 
 @Injectable()
 export class HireService {
@@ -77,7 +78,14 @@ export class HireService {
   /**
    * Create a hire booking request for a professional tied to an applicant profile / email
    */
-  async createBooking(dto: CreateHireBookingDto) {
+  /**
+   * `owner` is the signed-in WorldStreet applicant: the booking is filed
+   * under their account, and their verified email is where updates go.
+   */
+  async createBooking(dto: CreateHireBookingDto, owner?: ApplicationOwner) {
+    if (owner) {
+      dto = { ...dto, travellerEmail: owner.email };
+    }
     const reference = `HIRE-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // Resolve profileId if email matches an existing applicant Profile
@@ -180,6 +188,7 @@ export class HireService {
         reference,
         professionalId: resolvedProId,
         profileId: resolvedProfileId || null,
+        clerkUserId: owner?.clerkUserId ?? null,
         visaDocumentationId: dto.visaDocumentationId || null,
         travellerName: dto.travellerName || 'Applicant',
         travellerEmail: normalizedEmail,
@@ -260,16 +269,12 @@ export class HireService {
   /**
    * Query all hire bookings for a specific applicant profile ID or email
    */
-  async findBookingsByApplicant(profileIdOrEmail: string) {
-    const identifier = profileIdOrEmail.toLowerCase().trim();
+  /** Every hire booking owned by one WorldStreet user, newest first. */
+  async findBookingsByClerkUser(clerkUserId: string) {
+    if (!clerkUserId) return [];
 
     const bookings = await this.prisma.hireBooking.findMany({
-      where: {
-        OR: [
-          { profileId: identifier },
-          { travellerEmail: identifier },
-        ],
-      },
+      where: { clerkUserId },
       include: {
         professional: true,
         visaDocumentation: {

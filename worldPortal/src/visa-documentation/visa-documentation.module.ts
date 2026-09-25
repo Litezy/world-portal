@@ -7,6 +7,7 @@ import { MailModule } from '../mail/mail.module';
 import { BankAccountModule } from '../bank-account/bank-account.module';
 
 import { OtpModule } from '../otp/otp.module';
+import { ApplicantModule } from '../applicant/applicant.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { OtpModule } from '../otp/otp.module';
     MailModule,
     BankAccountModule,
     OtpModule,
+    ApplicantModule,
     forwardRef(() => PaymentModule),
   ],
   controllers: [VisaDocumentationController],

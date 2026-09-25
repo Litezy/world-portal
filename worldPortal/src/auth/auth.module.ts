@@ -5,6 +5,9 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { ExternalAuthGuard } from './guards/external-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { ClerkAuthGuard } from './guards/clerk-auth.guard';
+import { ClerkTokenVerifier } from './clerk/clerk-token.verifier';
+import { ClerkIdentityService } from './clerk/clerk-identity.service';
 
 @Global()
 @Module({
@@ -19,7 +22,22 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, ExternalAuthGuard, RolesGuard],
-  exports: [AuthService, JwtModule, ExternalAuthGuard, RolesGuard],
+  providers: [
+    AuthService,
+    ExternalAuthGuard,
+    RolesGuard,
+    ClerkAuthGuard,
+    ClerkTokenVerifier,
+    ClerkIdentityService,
+  ],
+  exports: [
+    AuthService,
+    JwtModule,
+    ExternalAuthGuard,
+    RolesGuard,
+    ClerkAuthGuard,
+    ClerkTokenVerifier,
+    ClerkIdentityService,
+  ],
 })
 export class AuthModule {}

@@ -27,6 +27,8 @@ All major technical decisions, architectural patterns, data model definitions, a
 - **0011 WorldSpace API Integration & Proxy Seam**: [Technical ADR](./0011-worldspace-api-proxy-integration.md) | [ADR for Dummies](./0011-worldspace-api-proxy-integration.dummies.md)
 - **0012 Frontend Seam Integration with NestJS Backend Services**: [Technical ADR](./0012-frontend-seam-integration.md) | [ADR for Dummies](./0012-frontend-seam-integration.dummies.md)
 - **0013 Admin Catalog Oversight for Agencies & Professional Services**: [Technical ADR](./0013-admin-catalog-oversight.md) | [ADR for Dummies](./0013-admin-catalog-oversight.dummies.md)
+- **0014 WorldStreet Applicant Authentication**: [Technical ADR](./0014-worldstreet-applicant-authentication.md) | [ADR for Dummies](./0014-worldstreet-applicant-authentication.dummies.md)
+- **0015 Vivid Voice Assistant**: [Technical ADR](./0015-vivid-voice-assistant.md) | [ADR for Dummies](./0015-vivid-voice-assistant.dummies.md)
 
 
 

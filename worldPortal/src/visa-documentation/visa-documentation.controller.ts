@@ -28,6 +28,12 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import {
+  ApplicantPrincipal,
+  CurrentApplicant,
+} from '../auth/decorators/current-applicant.decorator';
+import { ApplicantService } from '../applicant/applicant.service';
 
 @ApiTags('Visa Documentation')
 @Controller('visa-documentation')
@@ -36,14 +42,16 @@ export class VisaDocumentationController {
 
   constructor(
     private readonly visaDocumentationService: VisaDocumentationService,
+    private readonly applicants: ApplicantService,
   ) {}
 
   @Post()
+  @ApiBearerAuth()
+  @UseGuards(ClerkAuthGuard)
   @ApiOperation({
-    summary:
-      'Submit a new visa application (Public Guest & Registered Applicants)',
+    summary: 'Submit a new visa application (signed-in WorldStreet applicant)',
     description:
-      'Submits a traveler visa application with personal information, passport metadata, and uploaded S3 document URLs. Accessible by guest applicants, partners, and staff.',
+      'Submits a traveler visa application with personal information, passport metadata, and uploaded S3 document URLs. Requires a WorldStreet session; the application is filed under the account and its verified email.',
   })
   @ApiResponse({
     status: 201,
@@ -53,11 +61,18 @@ export class VisaDocumentationController {
     status: 400,
     description: 'Validation failed for required fields or document URLs.',
   })
-  async createVisaApplication(@Body() dto: CreateVisaDocumentationDto) {
-    this.logger.log(
-      `Public POST /visa-documentation called by email=${dto.email}`,
+  @ApiResponse({ status: 401, description: 'No valid WorldStreet session.' })
+  async createVisaApplication(
+    @Body() dto: CreateVisaDocumentationDto,
+    @CurrentApplicant() principal: ApplicantPrincipal,
+  ) {
+    const owner = await this.applicants.requireActiveApplicant(
+      principal.clerkUserId,
     );
-    return this.visaDocumentationService.createVisaApplication(dto);
+    this.logger.log(
+      `POST /visa-documentation called by clerkUserId=${owner.clerkUserId}`,
+    );
+    return this.visaDocumentationService.createVisaApplication(dto, owner);
   }
 
   @Get()
@@ -72,19 +87,6 @@ export class VisaDocumentationController {
   @ApiResponse({ status: 200, description: 'List of visa applications.' })
   async findAll(@Query() query: QueryVisaDocumentationDto) {
     return this.visaDocumentationService.findAllVisaApplications(query);
-  }
-
-  @Get('applicant/:identifier')
-  @ApiOperation({
-    summary: 'Get all visa applications for a specific applicant email or profile ID',
-  })
-  @ApiParam({
-    name: 'identifier',
-    description: 'Applicant profile ID or email address',
-  })
-  @ApiResponse({ status: 200, description: 'List of applicant visa applications.' })
-  async findApplicantApplications(@Param('identifier') identifier: string) {
-    return this.visaDocumentationService.findApplicantVisaApplications(identifier);
   }
 
   @Get(':id')

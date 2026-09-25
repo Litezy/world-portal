@@ -95,10 +95,26 @@ model Profile {
   @@index([role])
 }
 
+/// A WorldStreet user who has joined E-Embassy as an applicant.
+///
+/// Identity (name, email, password) belongs to WorldStreet and is read from
+/// Clerk per request — never copied here. This row only records that the
+/// person has started using E-Embassy, and E-Embassy-local suspension.
+model Applicant {
+  id          String   @id @default(uuid())
+  clerkUserId String   @unique
+  joinedAt    DateTime @default(now())
+  suspended   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model VisaDocumentation {
   id            String  @id @default(uuid())
   applicationNo String  @unique
   profileId     String?
+  /// WorldStreet (Clerk) user id of the applicant who owns this record.
+  clerkUserId   String?
 
   // Applicant Personal Information
   firstName        String
@@ -162,6 +178,7 @@ model VisaDocumentation {
   hireBookings        HireBooking[]
 
   @@index([profileId])
+  @@index([clerkUserId])
   @@index([status])
   @@index([paymentStatus])
   @@index([passportNumber])
@@ -173,6 +190,8 @@ model PassportApplication {
   id            String  @id @default(uuid())
   applicationNo String  @unique
   profileId     String?
+  /// WorldStreet (Clerk) user id of the applicant who owns this record.
+  clerkUserId   String?
 
   // Passport Category (Nigeria Immigration Service e-Passport Data Form)
   passportCategory PassportCategory
@@ -237,6 +256,7 @@ model PassportApplication {
   paymentTransactions PaymentTransaction[]
 
   @@index([profileId])
+  @@index([clerkUserId])
   @@index([status])
   @@index([paymentStatus])
   @@index([ninNumber])
@@ -641,6 +661,8 @@ model HireBooking {
   reference           String            @unique
   professionalId      String
   profileId           String?
+  /// WorldStreet (Clerk) user id of the applicant who owns this booking.
+  clerkUserId         String?
   visaDocumentationId String?
   travellerName       String
   travellerEmail      String
@@ -663,6 +685,7 @@ model HireBooking {
   @@index([reference])
   @@index([professionalId])
   @@index([profileId])
+  @@index([clerkUserId])
   @@index([visaDocumentationId])
   @@index([status])
   @@index([travellerEmail])

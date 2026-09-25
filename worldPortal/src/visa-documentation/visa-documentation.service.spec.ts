@@ -144,6 +144,36 @@ describe('VisaDocumentationService', () => {
       expect(result.status).toBe(VisaDocumentStatus.SUBMITTED);
       expect(result.paymentStatus).toBe(PaymentStatus.PENDING_EVALUATION);
     });
+
+    it('files a signed-in applicant’s application under their account and verified email', async () => {
+      const otp = (
+        service as unknown as { otpService: { isEmailVerified: jest.Mock } }
+      ).otpService;
+      otp.isEmailVerified.mockReturnValue(false);
+      mockPrismaService.visaDocumentation.findUnique.mockResolvedValue(null);
+      mockPrismaService.visaDocumentation.create.mockResolvedValue(
+        mockVisaRecord,
+      );
+
+      await service.createVisaApplication(
+        {
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'typed-by-hand@example.com',
+          targetCountry: 'Canada',
+        },
+        { clerkUserId: 'user_abc', email: 'john.doe@gmail.com' },
+      );
+
+      // The email-code check is for guests; a WorldStreet session replaces it.
+      expect(otp.isEmailVerified).not.toHaveBeenCalled();
+      expect(mockPrismaService.visaDocumentation.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          clerkUserId: 'user_abc',
+          email: 'john.doe@gmail.com',
+        }) as unknown,
+      });
+    });
   });
 
   describe('evaluateVisaCost', () => {

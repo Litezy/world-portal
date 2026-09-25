@@ -4,9 +4,10 @@ import { PassportApplicationService } from './passport-application.service';
 
 import { MailModule } from '../mail/mail.module';
 import { OtpModule } from '../otp/otp.module';
+import { ApplicantModule } from '../applicant/applicant.module';
 
 @Module({
-  imports: [MailModule, OtpModule],
+  imports: [MailModule, OtpModule, ApplicantModule],
   controllers: [PassportApplicationController],
   providers: [PassportApplicationService],
   exports: [PassportApplicationService],
