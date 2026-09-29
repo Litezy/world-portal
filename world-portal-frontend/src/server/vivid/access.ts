@@ -1,4 +1,4 @@
-import { serverEnv } from "@/config/env";
+import { applicantEnv } from "@/config/env";
 
 /**
  * Who may talk to Vivid on E-Embassy. The ONE place that decides it: both the
@@ -18,7 +18,7 @@ import { serverEnv } from "@/config/env";
  */
 export async function hasVividAccess(userId: string): Promise<boolean> {
   if (!userId) return false;
-  if (serverEnv().VIVID_REQUIRE_SUBSCRIPTION !== "true") return true;
+  if (applicantEnv().VIVID_REQUIRE_SUBSCRIPTION !== "true") return true;
   return hasWorldStreetVividSubscription(userId);
 }
 

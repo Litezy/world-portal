@@ -72,82 +72,79 @@ const clientSchema = z.object({
     .default("https://www.worldstreetgold.com/register"),
 });
 
-const serverSchema = z
-  .object({
-    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    /**
-     * The World Portal API, including its `/api` prefix. Server-side only:
-     * the console proxies through route handlers so the access token never
-     * reaches the browser. Falls back to the public value so one variable is
-     * enough in development.
-     */
-    WORLD_PORTAL_API_URL: z
-      .url()
-      // Same blank trap as above: a declared-but-empty NEXT_PUBLIC_API_URL
-      // would otherwise become an empty default and fail `z.url()`.
-      .default(
-        () => process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:4000/api",
-      ),
-    // Console credentials. The defaults exist so a fresh clone runs, and are
-    // refused in production below — shipping them would publish the password.
-    ADMIN_EMAIL: z.email().default("admin@worldportal.travel"),
-    ADMIN_PASSWORD: z.string().min(8).default(DEV_ADMIN_PASSWORD),
-    SESSION_SECRET: z.string().min(16).default(DEV_SESSION_SECRET),
-    /**
-     * The agency console (/agency). One shared password against the fixture
-     * agencies — the same stop-gap as ADMIN_PASSWORD, and refused in
-     * production below for the same reason. See src/server/agency/auth.ts.
-     */
-    AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
-    /**
-     * The future WorldSpace posts API origin. Optional on purpose: absent
-     * means the feed falls back to the curated placeholder posts, which is a
-     * supported state, not a misconfiguration. Server-side only so any key the
-     * API eventually needs never reaches the browser.
-     */
-    WORLDSPACE_API_URL: z.url().optional(),
-    /**
-     * Vivid voice — Sira, WorldStreet's voice session broker. The key is the
-     * same one the WorldStreet app uses and is read only by
-     * `src/server/vivid/sira.ts`; the browser only ever sees a single-use
-     * session token. Unset means the orb answers "unavailable", nothing more.
-     */
-    SIRA_API_KEY: z.string().min(1).optional(),
-    SIRA_API_URL: z.url().optional(),
-    /**
-     * Vivid is free on E-Embassy today. "true" makes it honour WorldStreet's
-     * paid Vivid subscription instead — see `src/server/vivid/access.ts`.
-     */
-    VIVID_REQUIRE_SUBSCRIPTION: z.enum(["true", "false"]).default("false"),
-  })
-  .superRefine((env, ctx) => {
-    if (env.NODE_ENV !== "production") return;
+const serverShape = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  /**
+   * The World Portal API, including its `/api` prefix. Server-side only:
+   * the console proxies through route handlers so the access token never
+   * reaches the browser. Falls back to the public value so one variable is
+   * enough in development.
+   */
+  WORLD_PORTAL_API_URL: z
+    .url()
+    // Same blank trap as above: a declared-but-empty NEXT_PUBLIC_API_URL
+    // would otherwise become an empty default and fail `z.url()`.
+    .default(
+      () => process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:4000/api",
+    ),
+  // Console credentials. The defaults exist so a fresh clone runs, and are
+  // refused in production below — shipping them would publish the password.
+  ADMIN_EMAIL: z.email().default("admin@worldportal.travel"),
+  ADMIN_PASSWORD: z.string().min(8).default(DEV_ADMIN_PASSWORD),
+  SESSION_SECRET: z.string().min(16).default(DEV_SESSION_SECRET),
+  /**
+   * The agency console (/agency). One shared password against the fixture
+   * agencies — the same stop-gap as ADMIN_PASSWORD, and refused in
+   * production below for the same reason. See src/server/agency/auth.ts.
+   */
+  AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
+  /**
+   * The future WorldSpace posts API origin. Optional on purpose: absent
+   * means the feed falls back to the curated placeholder posts, which is a
+   * supported state, not a misconfiguration. Server-side only so any key the
+   * API eventually needs never reaches the browser.
+   */
+  WORLDSPACE_API_URL: z.url().optional(),
+  /**
+   * Vivid voice — Sira, WorldStreet's voice session broker. The key is the
+   * same one the WorldStreet app uses and is read only by
+   * `src/server/vivid/sira.ts`; the browser only ever sees a single-use
+   * session token. Unset means the orb answers "unavailable", nothing more.
+   */
+  SIRA_API_KEY: z.string().min(1).optional(),
+  SIRA_API_URL: z.url().optional(),
+  /**
+   * Vivid is free on E-Embassy today. "true" makes it honour WorldStreet's
+   * paid Vivid subscription instead — see `src/server/vivid/access.ts`.
+   */
+  VIVID_REQUIRE_SUBSCRIPTION: z.enum(["true", "false"]).default("false"),
+});
 
-    if (env.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["ADMIN_PASSWORD"],
-        message:
-          "Set ADMIN_PASSWORD in production — the development default is public.",
-      });
-    }
-    if (env.AGENCY_PASSWORD === DEV_AGENCY_PASSWORD) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["AGENCY_PASSWORD"],
-        message:
-          "Set AGENCY_PASSWORD in production — the development default is public.",
-      });
-    }
-    if (env.SESSION_SECRET === DEV_SESSION_SECRET) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["SESSION_SECRET"],
-        message:
-          "Set SESSION_SECRET in production — the development default is public.",
-      });
-    }
-  });
+const serverSchema = serverShape.superRefine((env, ctx) => {
+  if (env.NODE_ENV !== "production") return;
+
+  if (env.ADMIN_PASSWORD === DEV_ADMIN_PASSWORD) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["ADMIN_PASSWORD"],
+      message: "Set ADMIN_PASSWORD in production — the development default is public.",
+    });
+  }
+  if (env.AGENCY_PASSWORD === DEV_AGENCY_PASSWORD) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["AGENCY_PASSWORD"],
+      message: "Set AGENCY_PASSWORD in production — the development default is public.",
+    });
+  }
+  if (env.SESSION_SECRET === DEV_SESSION_SECRET) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SESSION_SECRET"],
+      message: "Set SESSION_SECRET in production — the development default is public.",
+    });
+  }
+});
 
 const clientEnv = clientSchema.safeParse(
   withoutBlanks({
@@ -174,6 +171,38 @@ export const env = clientEnv.data;
 /** Server-only. Importing this from a client component is a build error. */
 export function serverEnv() {
   const parsed = serverSchema.safeParse(withoutBlanks(process.env));
+  if (!parsed.success) {
+    console.error(
+      "Invalid server environment variables:",
+      z.treeifyError(parsed.error),
+    );
+    throw new Error("Invalid server environment variables");
+  }
+  return parsed.data;
+}
+
+/**
+ * The server settings the applicant side reads — the backend URL, Vivid and
+ * WorldSpace — and nothing else.
+ *
+ * `serverEnv()` refuses to run at all in production while any console
+ * password is unset or a dev default, which is right for the consoles and
+ * wrong for everyone else: an unset AGENCY_PASSWORD once took down applicant
+ * sign-up, "My applications" and Vivid. So the applicant paths validate only
+ * what they use, and a console misconfiguration stays in the consoles.
+ */
+const applicantSchema = serverShape.pick({
+  NODE_ENV: true,
+  WORLD_PORTAL_API_URL: true,
+  WORLDSPACE_API_URL: true,
+  SIRA_API_KEY: true,
+  SIRA_API_URL: true,
+  VIVID_REQUIRE_SUBSCRIPTION: true,
+});
+
+/** Server-only. For applicant and Vivid code; the consoles use `serverEnv()`. */
+export function applicantEnv() {
+  const parsed = applicantSchema.safeParse(withoutBlanks(process.env));
   if (!parsed.success) {
     console.error(
       "Invalid server environment variables:",

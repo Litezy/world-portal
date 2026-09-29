@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { serverEnv } from "@/config/env";
+import { applicantEnv } from "@/config/env";
 import { worldSpacePosts } from "@/features/worldspace/fixtures";
 import type { WorldSpaceFeed, WorldSpacePost } from "@/features/worldspace/types";
 
@@ -79,9 +79,9 @@ function placeholderFeed(limit?: number): WorldSpaceFeed {
 export async function getWorldSpaceFeed(limit?: number): Promise<WorldSpaceFeed> {
   let apiUrl: string | undefined;
   try {
-    apiUrl = serverEnv().WORLDSPACE_API_URL;
+    apiUrl = applicantEnv().WORLDSPACE_API_URL;
   } catch {
-    // serverEnv() throws on an invalid environment. The rest of the app will
+    // applicantEnv() throws on an invalid environment. The rest of the app will
     // surface that loudly; this section must not be the thing that does.
     apiUrl = undefined;
   }

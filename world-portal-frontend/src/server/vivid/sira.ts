@@ -1,10 +1,10 @@
-import { serverEnv } from "@/config/env";
+import { applicantEnv } from "@/config/env";
 
 /**
  * Sira — WorldStreet's voice session broker at sira.vividintelligence.tech.
  *
  * Copied from Xtreme (lib/vivid/sira.ts), which copied it from the WorldStreet
- * app; only the env access changed (`serverEnv()`). Server-only: nothing under
+ * app; only the env access changed (`applicantEnv()`). Server-only: nothing under
  * src/features or src/components may import it.
  *
  * Sira is a thin session broker: one REST call mints a session, the browser
@@ -54,15 +54,15 @@ export class SiraError extends Error {
 }
 
 function apiUrl(): string {
-  return (serverEnv().SIRA_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
+  return (applicantEnv().SIRA_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
 }
 
 export function siraConfigured(): boolean {
-  return Boolean(serverEnv().SIRA_API_KEY);
+  return Boolean(applicantEnv().SIRA_API_KEY);
 }
 
 function headers(): HeadersInit {
-  const key = serverEnv().SIRA_API_KEY;
+  const key = applicantEnv().SIRA_API_KEY;
   if (!key) throw new SiraError("SIRA_API_KEY is not set", 503);
   return { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
 }

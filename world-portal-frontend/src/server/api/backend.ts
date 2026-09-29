@@ -1,4 +1,4 @@
-import { serverEnv } from "@/config/env";
+import { applicantEnv } from "@/config/env";
 
 export class BackendError extends Error {
   readonly status: number;
@@ -15,7 +15,7 @@ export class BackendError extends Error {
 type Envelope<T> = { success?: boolean; data?: T };
 
 function baseUrl() {
-  const url = serverEnv().WORLD_PORTAL_API_URL;
+  const url = applicantEnv().WORLD_PORTAL_API_URL;
   return url.replace(/\/$/, "");
 }
 

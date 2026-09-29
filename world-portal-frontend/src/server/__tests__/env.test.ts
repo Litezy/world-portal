@@ -62,3 +62,24 @@ describe("server env", () => {
     expect(serverEnv().SESSION_SECRET).toBe("a-real-production-secret-value");
   });
 });
+
+describe("applicant env", () => {
+  it("still works in production when a console password is missing", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.resetModules();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ADMIN_PASSWORD", "a-real-admin-password");
+    vi.stubEnv("SESSION_SECRET", "a-real-production-secret-value");
+    vi.stubEnv("AGENCY_PASSWORD", "");
+    vi.stubEnv("SIRA_API_KEY", "sira-key");
+    const { serverEnv, applicantEnv } = await import("@/config/env");
+
+    // The consoles refuse to run — that is their guard doing its job…
+    expect(() => serverEnv()).toThrow(/Invalid server environment/);
+    // …but applicant sign-up, "My applications" and Vivid are not affected.
+    expect(applicantEnv()).toMatchObject({
+      SIRA_API_KEY: "sira-key",
+      VIVID_REQUIRE_SUBSCRIPTION: "false",
+    });
+  });
+});
