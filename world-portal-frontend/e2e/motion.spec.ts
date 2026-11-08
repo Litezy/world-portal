@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
 test.describe("motion", () => {
   test("the WebGL layers mount once the browser is idle", async ({ page }) => {
     await page.goto("/");
-    // Hero: one layer only — the displacement shader over the photograph.
+    // Hero: one layer only — the folding paper plane.
     await expect(page.locator("section").first().locator("canvas")).toHaveCount(1, {
       timeout: 15000,
     });

@@ -35,6 +35,16 @@ export const agencySection = {
   cta: { label: "List your agency", href: "/agency/signup" },
   secondaryCta: { label: "Agency sign in", href: "/agency/login" },
   note: "Listing is free. You are paid per completed job.",
+  /**
+   * Labels for the three figures under the pitch. The numbers themselves are
+   * derived in the section (the catalog's category and base-document counts,
+   * and the free listing above), so they cannot drift from the product.
+   */
+  figures: {
+    categories: "Kinds of team you can list",
+    fee: "Fee to list your agency",
+    documents: "Documents every agency files",
+  },
 } as const;
 
 export const agencyAuth = {

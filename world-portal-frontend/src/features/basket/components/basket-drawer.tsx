@@ -119,7 +119,9 @@ export function BasketDrawer({
 
   return (
     <>
-      <Drawer open={open} onOpenChange={onOpenChange} direction="right">
+      {/* autoFocus: vaul leaves focus on the header button by default, behind
+          the drawer. */}
+      <Drawer open={open} onOpenChange={onOpenChange} direction="right" autoFocus>
         <DrawerContent className="flex flex-col sm:max-w-md">
           <DrawerHeader className="border-b border-border">
             <DrawerTitle className="flex items-center gap-2.5">

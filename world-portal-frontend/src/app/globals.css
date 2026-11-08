@@ -1,5 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* WorldStreet design system (vendored in src/ds, never edited). Only the
+ * tokens and the opt-in .cx-* components: everything is scoped to :root
+ * custom properties, .cx-* classes and [data-brand] wrappers, so nothing
+ * restyles until a screen opts in. Its theme.css is NOT imported, because it
+ * would redefine shared utilities (bg-primary, bg-muted, rounded-lg,
+ * shadow-lg…) under the admin and visa screens; the subset of its utilities
+ * that do not collide is declared in the @theme block below. */
+@import "../ds/styles/index.css" layer(components);
+@import "./e-embassy-brand.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -225,7 +234,10 @@
   --color-ink-900: var(--ink-900);
   --color-ink-950: var(--ink-950);
 
-  --font-sans: var(--font-sans-family), ui-sans-serif, system-ui, sans-serif;
+  /* Manrope (the design system's face). Noto Sans only supplies ₦, which
+   * Manrope lacks: the root layout loads that one glyph. */
+  --font-sans:
+    var(--font-sans-family), "Noto Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-display-family), Georgia, "Times New Roman", serif;
   --font-logo: var(--font-logo-family), Georgia, serif;
 
@@ -237,6 +249,45 @@
   --radius-3xl: 2rem;
 
   --ease-glass: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Design-system utilities (from src/ds/styles/theme.css), only the names
+   * that do not collide with this app's own. They resolve through the
+   * active data-brand, so inside data-brand="e-embassy" "ember" is the blue. */
+  --color-ember: var(--cx-ember);
+  /* A hint of WorldStreet gold (see e-embassy-brand.css for the rules). */
+  --color-gold: var(--ee-gold, #eab308);
+  --color-gold-hi: var(--ee-gold-hi, #facc15);
+  --color-gold-ink: var(--ee-gold-ink, #a16207);
+  --color-gold-wash: var(--ee-gold-wash, rgba(234, 179, 8, 0.12));
+  --color-ember-text: var(--cx-ember-text);
+  --color-ember-press: var(--cx-ember-press);
+  --color-on-primary: var(--cx-on-primary);
+  --color-brand-wash: var(--cx-brand-wash);
+  --color-halo: var(--cx-halo);
+  --color-elevated: var(--cx-elevated);
+  --color-surface-2: var(--cx-surface-2);
+  --color-surface-3: var(--cx-surface-3);
+  --color-hairline: var(--cx-hairline);
+  --color-text-2: var(--cx-text-2);
+  --color-text-3: var(--cx-text-3);
+  --radius-card: var(--cx-r-card);
+  --radius-pill: var(--cx-r-pill);
+  --radius-icon: var(--cx-r-icon);
+  --shadow-cta: var(--cx-glow-cta);
+  --ease-cx: var(--cx-ease);
+  --ease-cx-in-out: var(--cx-ease-in-out);
+  --text-h1: var(--cx-h1);
+  --text-h1--line-height: var(--cx-h1-lh);
+  --text-h1--letter-spacing: var(--cx-h1-ls);
+  --text-h2: var(--cx-h2);
+  --text-h2--line-height: var(--cx-h2-lh);
+  --text-h2--letter-spacing: var(--cx-h2-ls);
+  --text-h3: var(--cx-h3);
+  --text-h3--line-height: var(--cx-h3-lh);
+  --text-h3--letter-spacing: var(--cx-h3-ls);
+  --text-lead: var(--cx-lead);
+  --text-lead--line-height: var(--cx-lead-lh);
+  --text-lead--letter-spacing: var(--cx-lead-ls);
 }
 
 @layer base {

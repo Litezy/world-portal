@@ -81,7 +81,7 @@ export function DrawerTitle({
 }: React.ComponentProps<typeof DrawerPrimitive.Title>) {
   return (
     <DrawerPrimitive.Title
-      className={cn("font-display text-lg font-semibold", className)}
+      className={cn("text-lg font-semibold tracking-[-0.01em]", className)}
       {...props}
     />
   );

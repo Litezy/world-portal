@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+import { LOGO_GRID, WING_LOWER, WING_UPPER } from "@/components/common/logo-geometry";
 import { siteConfig } from "@/config/site";
 
 // Generated at request time — no static og.png to keep in sync.
@@ -24,23 +25,25 @@ export default function OpengraphImage() {
         fontFamily: "sans-serif",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-        <div
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 16,
-            background: "rgba(255,255,255,0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 34,
-          }}
+      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        {/* The mark in its one-colour-field form, as on the app icon: a white
+            upper wing and a pale cyan lower one, since the full-colour wings
+            would disappear into this gradient. */}
+        <svg
+          width={150}
+          height={(150 * LOGO_GRID.height) / LOGO_GRID.width}
+          viewBox={`0 0 ${LOGO_GRID.width} ${LOGO_GRID.height}`}
         >
-          🌍
-        </div>
-        <div style={{ fontSize: 34, fontWeight: 600, letterSpacing: -0.5 }}>
-          {siteConfig.name}
+          <path d={WING_LOWER} fill="#7DDCFF" />
+          <path d={WING_UPPER} fill="#FFFFFF" />
+        </svg>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 40, fontWeight: 700, letterSpacing: 0.5 }}>
+            {siteConfig.name.toUpperCase()}
+          </div>
+          <div style={{ fontSize: 20, color: "rgba(255,255,255,0.78)" }}>
+            {`by ${siteConfig.parent.toLowerCase()}`}
+          </div>
         </div>
       </div>
 

@@ -5,16 +5,19 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 
-import { ArrowRight } from "lucide-react";
-
-import { ParallaxImage } from "@/components/motion/parallax-image";
-import { Button } from "@/components/ui/button";
+import { playMockup } from "@/components/sections/journey-mockups";
+import {
+  JourneySceneFrame,
+  JourneyStage,
+  stepState,
+} from "@/components/sections/journey-stage";
 import { Container } from "@/components/ui/container";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { journey } from "@/content/landing";
+import { Icon } from "@/ds/components/icon";
 import { useGsap } from "@/hooks/use-gsap";
 import { useIdleMount } from "@/hooks/use-idle-mount";
-import { gsap } from "@/lib/motion/gsap";
+import { gsap, ScrollTrigger } from "@/lib/motion/gsap";
 import { cn } from "@/lib/utils";
 
 // Decoration only — never let it block first paint.
@@ -24,248 +27,533 @@ const JourneyWebgl = dynamic(
 );
 
 /**
- * The shared process, on a panel that opens near-black, passes through the
- * brand yellow as a lit band, and closes near-black again.
+ * The pinned layout's media query. The CSS side is every `lg:motion-safe:`
+ * class below; useGsap already refuses to run under reduced motion, so the
+ * two always agree on which layout is showing.
+ */
+const PINNED = "(min-width: 1024px)";
+const STACKED = "(max-width: 1023.98px)";
+
+/**
+ * How It Works: one example trip, Lagos to Dubai, played through the four
+ * steps on a live mock-up.
  *
- * Each step lifts into place on its own trigger rather than as one batch, so
- * the four arrive in sequence as you scroll. The rail between them fills to
- * track how far through the process you have read.
+ * - **lg+, motion allowed:** the track is ~360vh tall and the layered blue
+ *   panel is `position: sticky` inside it, filling the viewport under the
+ *   fixed header. Copy and a vertical step list on the left, the stage on the
+ *   right. One scrubbed timeline spans the whole pin: the step changes as
+ *   progress crosses each quarter, and inside each quarter that step's
+ *   mock-up plays out with progress, so scrolling back up rewinds it.
+ * - **Below lg, or reduced motion at any width:** no pin. The steps stack,
+ *   each with its mock-up on its photograph in its final state, with a
+ *   simple scrubbed reveal on phones and none at all under reduced motion.
  *
- * The first two steps sit on the yellow band and take ink type; the last two
- * sit on the dark end and take white — `onDark` below is derived from the
- * index, so adding a fifth step keeps the contrast correct automatically.
+ * Every mock-up renders final by default, so the section reads correctly if
+ * no animation ever runs (reduced motion, a hidden tab). The data is sample
+ * data from `journey.demo` and the stage says so ("Example trip").
+ *
+ * The panel follows the page theme: a daylight sky panel with ink type in
+ * light (the default), the night-blue panel with white type in dark. The
+ * mock-ups are kit cards and follow it too.
  */
 export function Journey() {
-  const railRef = React.useRef<HTMLSpanElement>(null);
   const webglReady = useIdleMount();
   // Written by ScrollTrigger, read by the WebGL trail every frame, so both
   // directions stay on one clock.
   const progressRef = React.useRef(0);
+  const [active, setActive] = React.useState(0);
+  const activeRef = React.useRef(0);
 
   const scopeRef = useGsap(({ scope }) => {
     if (!scope) return;
+    const rows = gsap.utils.toArray<HTMLElement>("[data-step]", scope);
+    const list = scope.querySelector<HTMLElement>("[data-journey-list]");
+    if (!rows.length || !list) return;
+    const count = rows.length;
+    const last = count - 1;
+    const parts = rows.map((row) => row.querySelector("[data-step-part]"));
 
-    // One scrubbed trigger drives both the rail and the WebGL trail, so
-    // scrolling back up rewinds them rather than leaving them filled.
-    if (railRef.current) {
+    const mm = gsap.matchMedia();
+
+    mm.add(PINNED, () => {
+      const track = scope.querySelector<HTMLElement>("[data-journey-track]");
+      const panel = scope.querySelector<HTMLElement>("[data-journey-panel]");
+      const stage = scope.querySelector<HTMLElement>("[data-journey-stage]");
+      const sizer = scope.querySelector<HTMLElement>("[data-journey-sizer]");
+      const fill = scope.querySelector<HTMLElement>("[data-journey-rail-fill]");
+      if (!track || !panel || !stage || !sizer || !fill) return;
+
+      // Arrival, while the panel scrolls up to its pin: the rows, then the stage.
       gsap.fromTo(
-        railRef.current,
-        { scaleY: 0 },
+        parts,
+        { y: 28, autoAlpha: 0 },
         {
-          scaleY: 1,
-          ease: "none",
+          y: 0,
+          autoAlpha: 1,
+          ease: "power3.out",
+          stagger: 0.14,
           scrollTrigger: {
-            trigger: railRef.current.parentElement,
-            start: "top 72%",
-            end: "bottom 72%",
-            scrub: 0.5,
-            onUpdate: (self) => {
-              progressRef.current = self.progress;
-            },
+            trigger: track,
+            start: "top 88%",
+            end: "top 32%",
+            scrub: 0.6,
           },
         },
       );
-    }
-
-    /**
-     * Each step is scrubbed across a short window rather than fired once, so
-     * the whole section plays in reverse on the way back up — the steps drop
-     * away in the order they arrived instead of staying frozen in place.
-     */
-    gsap.utils.toArray<HTMLElement>("[data-step]").forEach((step) => {
-      const dir = step.dataset.flipped === "true" ? -1 : 1;
-
-      gsap
-        .timeline({
+      gsap.fromTo(
+        stage,
+        { y: 56, autoAlpha: 0, scale: 0.96 },
+        {
+          y: 0,
+          autoAlpha: 1,
+          scale: 1,
+          ease: "power3.out",
           scrollTrigger: {
-            trigger: step,
-            start: "top 88%",
-            end: "top 52%",
+            trigger: track,
+            start: "top 96%",
+            end: "top 40%",
             scrub: 0.6,
           },
-        })
+        },
+      );
+
+      /*
+       * The active row's body opens under it, and the rows after it move down
+       * by `--journey-slot` (a transform, never a height change). The slot is
+       * the tallest body, measured by the invisible sizer at the foot of the
+       * list. The rail's fill follows the head of the trip: from the active
+       * node, down past its body, to where the next node sits.
+       */
+      let pitch = 0;
+      let slot = 0;
+      let progress = 0;
+      const measure = () => {
+        pitch = rows[0]?.offsetHeight ?? 0;
+        slot = sizer.offsetHeight;
+        list.style.setProperty("--journey-slot", `${slot}px`);
+      };
+      const railTarget = () => {
+        const length = last * pitch + slot;
+        if (!length) return 0;
+        const at = Math.min(progress * count, count);
+        const step = Math.min(Math.floor(at), last);
+        const within = at - step;
+        const reached =
+          step < last
+            ? step * pitch + within * (pitch + slot)
+            : last * pitch + within * slot;
+        return reached / length;
+      };
+      gsap.set(fill, { scaleY: 0 });
+      const fillTo = gsap.quickTo(fill, "scaleY", {
+        duration: 0.5,
+        ease: "power3.out",
+      });
+      measure();
+      const resize = new ResizeObserver(() => {
+        measure();
+        fillTo(railTarget());
+      });
+      resize.observe(sizer);
+
+      const stickyTop = () => parseFloat(getComputedStyle(panel).top) || 0;
+      const tl = gsap.timeline({
+        defaults: { ease: "none" },
+        scrollTrigger: {
+          trigger: track,
+          // Exactly the span the panel is stuck for.
+          start: () => `top ${stickyTop()}px`,
+          end: () => `bottom ${stickyTop() + panel.offsetHeight}px`,
+          scrub: 0.5,
+          invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            progress = self.progress;
+            progressRef.current = self.progress;
+            const next = Math.min(last, Math.floor(self.progress * count));
+            if (next !== activeRef.current) {
+              activeRef.current = next;
+              setActive(next);
+            }
+            fillTo(railTarget());
+          },
+        },
+      });
+
+      // One unit of timeline per step: the card drifts against the photo,
+      // and its mock-up plays out inside the unit.
+      gsap.utils.toArray<HTMLElement>("[data-scene]", stage).forEach((scene, i) => {
+        tl.fromTo(
+          scene.querySelector("[data-scene-drift]"),
+          { y: 16 },
+          { y: -16, duration: 1 },
+          i,
+        );
+        playMockup(tl, scene, i, i);
+      });
+      tl.fromTo(
+        stage.querySelector("[data-stage-photos]"),
+        { yPercent: -4 },
+        { yPercent: 4, duration: count },
+        0,
+      )
         .fromTo(
-          step.querySelector("[data-step-node]"),
-          { scale: 0.2, autoAlpha: 0 },
-          { scale: 1, autoAlpha: 1, ease: "back.out(2.2)", duration: 0.5 },
+          stage.querySelector('[data-fp="fill"]'),
+          { scaleX: 0 },
+          { scaleX: 1, duration: count },
           0,
         )
         .fromTo(
-          step.querySelectorAll("[data-step-part]"),
-          { y: 52, x: 18 * dir, autoAlpha: 0 },
-          {
-            y: 0,
-            x: 0,
-            autoAlpha: 1,
-            ease: "power3.out",
-            duration: 1,
-            stagger: 0.14,
-          },
-          0.05,
-        );
+          stage.querySelector('[data-fp="plane"]'),
+          { xPercent: 0 },
+          { xPercent: 100, duration: count },
+          0,
+        )
+        .set({}, {}, count);
+
+      return () => {
+        resize.disconnect();
+        list.style.removeProperty("--journey-slot");
+      };
+    });
+
+    mm.add(STACKED, () => {
+      // The trail draws down the panel as the steps go by.
+      ScrollTrigger.create({
+        trigger: list,
+        start: "top 72%",
+        end: "bottom 72%",
+        onUpdate: (self) => {
+          progressRef.current = self.progress;
+        },
+      });
+
+      rows.forEach((row) => {
+        gsap
+          .timeline({
+            scrollTrigger: {
+              trigger: row,
+              start: "top 88%",
+              end: "top 55%",
+              scrub: 0.6,
+            },
+          })
+          .fromTo(
+            row.querySelector("[data-step-node]"),
+            { scale: 0.2, autoAlpha: 0 },
+            { scale: 1, autoAlpha: 1, ease: "back.out(2.2)", duration: 0.5 },
+            0,
+          )
+          .fromTo(
+            row.querySelector("[data-step-part]"),
+            { y: 40, autoAlpha: 0 },
+            { y: 0, autoAlpha: 1, ease: "power3.out", duration: 1 },
+            0.05,
+          );
+
+        const scene = row.querySelector("[data-step-scene]");
+        if (scene) {
+          gsap.fromTo(
+            scene,
+            { y: 64, autoAlpha: 0, scale: 0.96 },
+            {
+              y: 0,
+              autoAlpha: 1,
+              scale: 1,
+              ease: "power3.out",
+              scrollTrigger: {
+                trigger: scene,
+                start: "top 96%",
+                end: "top 62%",
+                scrub: 0.6,
+              },
+            },
+          );
+        }
+      });
     });
   }, []);
 
   return (
-    <section id="journey" className="py-4">
+    <section
+      ref={scopeRef as React.Ref<HTMLElement>}
+      id="journey"
+      className={cn("py-4")}
+    >
       <Container size="panel" gutter="sm">
-        <div
-          ref={scopeRef as React.Ref<HTMLDivElement>}
-          className="grain relative isolate overflow-hidden rounded-[2rem] bg-[#061024] px-5 py-16 sm:px-10 lg:rounded-[2.5rem] lg:px-14 lg:py-24"
-        >
-          {/*
-            The panel used to be one tall multi-stop gradient, which banded into
-            visible stripes and read as flat. It is now three layers: a night
-            photograph for texture, a softer four-stop wash for the brand
-            colour, and two off-centre glows so the light has a direction. The
-            `grain` class dithers the whole thing so no band survives.
-          */}
-          <Image
-            src={journey.background.src}
-            alt=""
-            fill
-            sizes="(max-width: 1024px) 100vw, 1420px"
-            className="-z-30 object-cover opacity-45"
-          />
+        {/* The scroll track the pinned panel rides (desktop, motion allowed). */}
+        <div data-journey-track className={cn("lg:motion-safe:h-[360vh]")}>
           <div
-            aria-hidden="true"
-            className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,rgba(6,16,36,0.94)_0%,rgba(10,63,150,0.80)_28%,rgba(13,96,186,0.72)_50%,rgba(8,52,116,0.86)_74%,rgba(5,11,24,0.97)_100%)]"
-          />
-          {/* Warms the yellow at the top and deepens the black at the base. */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_38%_at_78%_22%,rgba(1,186,246,0.30),transparent_62%),radial-gradient(55%_34%_at_18%_58%,rgba(47,110,240,0.26),transparent_66%),radial-gradient(130%_44%_at_50%_0%,rgba(3,8,20,0.72),transparent_60%),radial-gradient(110%_40%_at_50%_100%,rgba(3,8,20,0.80),transparent_64%)]"
-          />
-
-          {webglReady ? (
-            <JourneyWebgl
-              progressRef={progressRef}
-              className="pointer-events-none absolute inset-0 -z-10 size-full opacity-70 mix-blend-screen"
-            />
-          ) : null}
-
-          <SectionHeading
-            eyebrow={journey.eyebrow}
-            lead={journey.headingLead}
-            accent={journey.headingAccent}
-            body={journey.body}
-            align="center"
-            onDark
-            size="md"
-            className="mx-auto max-w-xl"
-          />
-
-          <ol className="relative mx-auto mt-16 max-w-4xl">
-            {/* Rail track, plus the fill that tracks scroll progress. */}
-            <span
+            data-journey-panel
+            data-brand="e-embassy"
+            className={cn(
+              "grain relative isolate overflow-hidden rounded-[2rem] bg-brand-50 px-4 py-14 sm:px-8 sm:py-16 dark:bg-[#061024]",
+              "lg:rounded-[2.5rem] lg:px-12 lg:py-20",
+              // On the light page the daylight panel sits on a soft navy shadow,
+              // so it reads as an island lifted off the paper.
+              "shadow-[0_44px_90px_-56px_rgb(0_40_120/0.38),0_2px_6px_-2px_rgb(0_40_120/0.12)] dark:shadow-none",
+              // Pinned: sticks under the fixed header (6rem at lg) and fills the
+              // rest of the viewport, with a floor for short windows.
+              "lg:motion-safe:sticky lg:motion-safe:top-24 lg:motion-safe:h-[calc(100svh-7rem)]",
+              "lg:motion-safe:max-h-[60rem] lg:motion-safe:min-h-[34rem]",
+              "lg:motion-safe:px-10 lg:motion-safe:py-8 xl:motion-safe:px-12 xl:motion-safe:py-10",
+            )}
+          >
+            {/*
+              The panel used to be one tall multi-stop gradient, which banded into
+              visible stripes and read as flat. It is now four layers: a
+              photograph for texture (the hero's daylight sky in light, a night
+              sky in dark), a softer four-stop wash for the brand colour, two
+              off-centre glows so the light has a direction, and the `grain`
+              class, which dithers the whole thing so no band survives.
+            */}
+            {/* Wrapped: next/image's `fill` wants a relative or absolute
+                parent, and the panel itself is sticky when pinned. Each theme
+                hides the other's photograph, and a lazy image that is
+                display:none is never fetched. */}
+            <div
               aria-hidden="true"
-              className="absolute inset-y-2 left-[11px] w-px bg-[linear-gradient(180deg,rgba(255,255,255,0.30)_0%,rgba(4,20,44,0.30)_14%,rgba(4,20,44,0.30)_66%,rgba(255,255,255,0.22)_86%,rgba(255,255,255,0.30)_100%)] lg:left-1/2 lg:-translate-x-1/2"
+              className={cn("absolute inset-0 -z-30 dark:hidden")}
             >
-              <span
-                ref={railRef}
-                className="absolute inset-0 origin-top bg-[linear-gradient(180deg,rgba(255,255,255,0.70)_0%,rgba(4,20,44,0.58)_14%,rgba(4,20,44,0.58)_66%,rgba(255,255,255,0.55)_86%,rgba(255,255,255,0.70)_100%)]"
+              <Image
+                src={journey.backgroundDay.src}
+                alt=""
+                fill
+                sizes="(max-width: 1024px) 100vw, 1420px"
+                className={cn("object-cover opacity-60")}
               />
-            </span>
+            </div>
+            <div
+              aria-hidden="true"
+              className={cn("absolute inset-0 -z-30 hidden dark:block")}
+            >
+              <Image
+                src={journey.background.src}
+                alt=""
+                fill
+                sizes="(max-width: 1024px) 100vw, 1420px"
+                className={cn("object-cover opacity-45")}
+              />
+            </div>
+            <div
+              aria-hidden="true"
+              className={cn(
+                "absolute inset-0 -z-20 bg-[linear-gradient(180deg,rgba(238,244,255,0.9)_0%,rgba(216,230,255,0.66)_32%,rgba(204,236,255,0.6)_58%,rgba(238,244,255,0.92)_100%)]",
+                "dark:bg-[linear-gradient(180deg,rgba(6,16,36,0.94)_0%,rgba(10,63,150,0.80)_30%,rgba(13,96,186,0.72)_55%,rgba(8,52,116,0.86)_80%,rgba(5,11,24,0.97)_100%)]",
+              )}
+            />
+            {/* Cyan light from the top right, a softer blue pool lower left. */}
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(55%_50%_at_82%_8%,rgba(1,186,246,0.2),transparent_62%),radial-gradient(50%_55%_at_12%_78%,rgba(47,110,240,0.12),transparent_66%)]",
+                "dark:bg-[radial-gradient(55%_50%_at_82%_8%,rgba(1,186,246,0.30),transparent_62%),radial-gradient(50%_55%_at_12%_78%,rgba(47,110,240,0.26),transparent_66%),radial-gradient(130%_50%_at_50%_0%,rgba(3,8,20,0.6),transparent_60%),radial-gradient(110%_45%_at_50%_100%,rgba(3,8,20,0.75),transparent_64%)]",
+              )}
+            />
 
-            {journey.steps.map((step, i) => {
-              const flipped = i % 2 === 1;
-              // The panel is blue top to bottom now, so every step is light
-              // type — no half-way flip to keep in sync with the gradient.
-              const onDark = true;
+            {webglReady ? (
+              <JourneyWebgl
+                progressRef={progressRef}
+                className={cn(
+                  // Screen brightens the night panel; on the pale day panel a
+                  // screen blend would vanish, so the trail multiplies there.
+                  "pointer-events-none absolute inset-0 -z-10 size-full opacity-70 mix-blend-multiply dark:mix-blend-screen",
+                )}
+              />
+            ) : null}
 
-              return (
-                <li
-                  key={step.day}
-                  data-step
-                  data-flipped={flipped}
+            {/* Above the grain overlay, so cards and photographs stay crisp. */}
+            <div
+              className={cn(
+                // minmax(0, 1fr): an `auto` column grows to the widest mock-up's
+                // min-content and pushes the copy past the panel on phones.
+                "relative z-[1] grid grid-cols-[minmax(0,1fr)] gap-y-12",
+                "[grid-template-areas:'head'_'steps'_'cta']",
+                // lg, reduced motion: heading beside the CTA, step rows below.
+                "lg:motion-reduce:grid-cols-[minmax(0,1fr)_auto] lg:motion-reduce:gap-x-12 lg:motion-reduce:gap-y-14",
+                "lg:motion-reduce:[grid-template-areas:'head_cta'_'steps_steps']",
+                // lg, pinned: the copy column on the left, the stage on the right.
+                "lg:motion-safe:h-full lg:motion-safe:min-h-0 lg:motion-safe:gap-x-12 lg:motion-safe:gap-y-0 xl:motion-safe:gap-x-16",
+                "lg:motion-safe:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:motion-safe:grid-rows-[auto_minmax(0,1fr)_auto]",
+                "lg:motion-safe:[grid-template-areas:'head_stage'_'steps_stage'_'cta_stage']",
+              )}
+            >
+              <SectionHeading
+                eyebrow={journey.eyebrow}
+                lead={journey.headingLead}
+                accent={journey.headingAccent}
+                body={journey.body}
+                size="md"
+                className={cn("max-w-2xl [grid-area:head]")}
+              />
+
+              {/* The mock-ups are aria-hidden illustrations; this says what they show. */}
+              <p className={cn("sr-only")}>{journey.demo.description}</p>
+
+              <ol
+                data-journey-list
+                className={cn(
+                  "relative grid grid-cols-[minmax(0,1fr)] gap-14 [grid-area:steps]",
+                  "lg:motion-safe:block lg:motion-safe:self-center lg:motion-safe:py-6 lg:motion-safe:[--journey-slot:5.5rem]",
+                )}
+              >
+                {/* Pinned only: the rail down the node column, filled by progress. */}
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "relative pb-14 pl-10 last:pb-0",
-                    "lg:grid lg:grid-cols-2 lg:items-start lg:gap-16 lg:pl-0",
+                    "absolute top-11 bottom-11 left-3.5 hidden w-px bg-foreground/12 lg:motion-safe:block",
                   )}
                 >
                   <span
-                    data-step-node
-                    aria-hidden="true"
+                    data-journey-rail-fill
                     className={cn(
-                      "absolute top-1.5 left-0 z-10 size-[22px] rounded-full border-[5px] lg:left-1/2 lg:-translate-x-1/2",
-                      onDark
-                        ? "border-white/85 bg-white/25"
-                        : "border-ink-950/80 bg-ink-950/15",
+                      "absolute inset-0 origin-top bg-linear-to-b from-cyan-500 to-brand-600 dark:from-cyan-300 dark:to-white/80",
                     )}
                   />
+                </span>
 
-                  <span
-                    data-step-part
-                    aria-hidden="true"
-                    className={cn(
-                      "heading-serif absolute -top-2 left-10 text-[34px] leading-none lg:static lg:text-[42px]",
-                      onDark ? "text-white/75" : "text-ink-950/55",
-                      flipped
-                        ? "lg:col-start-2 lg:row-start-1 lg:justify-self-start lg:pt-1 lg:pl-2"
-                        : "lg:col-start-1 lg:row-start-1 lg:justify-self-end lg:pt-1 lg:pr-2",
-                    )}
-                  >
-                    {step.day}
-                  </span>
-
-                  <div
-                    className={cn(
-                      "pt-8 lg:pt-0",
-                      flipped
-                        ? "lg:col-start-1 lg:row-start-1 lg:text-right"
-                        : "lg:col-start-2 lg:row-start-1",
-                    )}
-                  >
-                    <h3
-                      data-step-part
+                {journey.steps.map((step, i) => {
+                  const number = String(step.day).padStart(2, "0");
+                  return (
+                    <li
+                      key={step.day}
+                      data-step
+                      data-state={stepState(i, active)}
                       className={cn(
-                        "text-[19px] font-semibold tracking-tight sm:text-xl",
-                        onDark ? "text-white" : "text-ink-950",
+                        "group/step relative",
+                        "lg:motion-reduce:grid lg:motion-reduce:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:motion-reduce:items-center lg:motion-reduce:gap-12",
+                        // Pinned: rows after the active one make room for its body.
+                        "lg:motion-safe:transition-[translate] lg:motion-safe:duration-700 lg:motion-safe:ease-(--cx-spring)",
+                        "lg:motion-safe:data-[state=next]:translate-y-(--journey-slot)",
                       )}
                     >
-                      {step.title}
-                    </h3>
+                      <div
+                        data-step-part
+                        className={cn("relative pl-12 lg:motion-safe:py-2")}
+                      >
+                        <span
+                          data-step-node
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute top-0 left-0 z-10 size-8",
+                            "lg:motion-safe:top-1.5 lg:motion-safe:size-7 lg:motion-safe:rounded-full lg:motion-safe:bg-brand-50 dark:lg:motion-safe:bg-brand-950",
+                          )}
+                        >
+                          {/* The stacked look, and the pinned "active" look. */}
+                          <span
+                            className={cn(
+                              "absolute inset-0 grid place-items-center rounded-full bg-brand-600 text-[12px] font-bold text-white tabular-nums shadow-[0_0_0_6px_rgb(0_184_248/0.14)] dark:bg-white dark:text-brand-800",
+                              "lg:motion-safe:text-[11px] lg:motion-safe:shadow-[0_0_0_5px_rgb(0_184_248/0.2),0_0_22px_rgb(0_184_248/0.5)]",
+                              "lg:motion-safe:transition-[opacity,scale] lg:motion-safe:duration-500 lg:motion-safe:ease-(--cx-spring)",
+                              "lg:motion-safe:group-data-[state=done]/step:scale-75 lg:motion-safe:group-data-[state=done]/step:opacity-0",
+                              "lg:motion-safe:group-data-[state=next]/step:scale-75 lg:motion-safe:group-data-[state=next]/step:opacity-0",
+                            )}
+                          >
+                            {number}
+                          </span>
+                          {/* Pinned, still to come. */}
+                          <span
+                            className={cn(
+                              "absolute inset-0 hidden place-items-center rounded-full text-[11px] font-bold text-foreground/55 tabular-nums opacity-0 shadow-[inset_0_0_0_1px_rgb(0_40_120/0.22)] dark:text-white/60 dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.22)]",
+                              "transition-opacity duration-500 group-data-[state=next]/step:opacity-100 lg:motion-safe:grid",
+                            )}
+                          >
+                            {number}
+                          </span>
+                          {/* Pinned, done. */}
+                          <span
+                            className={cn(
+                              "absolute inset-0 hidden scale-75 place-items-center rounded-full bg-cyan-300 text-brand-950 opacity-0",
+                              "transition-[opacity,scale] duration-500 ease-(--cx-spring) group-data-[state=done]/step:scale-100 group-data-[state=done]/step:opacity-100 lg:motion-safe:grid",
+                            )}
+                          >
+                            <Icon name="check" tone="current" size={14} />
+                          </span>
+                        </span>
+
+                        <h3
+                          className={cn(
+                            "text-[18px] leading-snug font-semibold tracking-[-0.02em] text-foreground",
+                            "lg:motion-safe:text-[17px] lg:motion-safe:leading-6 lg:motion-safe:transition-opacity lg:motion-safe:duration-500",
+                            "lg:motion-safe:group-data-[state=done]/step:opacity-75 lg:motion-safe:group-data-[state=next]/step:opacity-55",
+                          )}
+                        >
+                          {step.title}
+                        </h3>
+                        <p
+                          className={cn(
+                            "mt-2 text-[14px] leading-[1.65] text-pretty text-foreground/75",
+                            // Pinned: hangs under the title, shown only while active.
+                            "lg:motion-safe:pointer-events-none lg:motion-safe:absolute lg:motion-safe:inset-x-0 lg:motion-safe:top-full lg:motion-safe:mt-0 lg:motion-safe:pr-2 lg:motion-safe:pl-12 lg:motion-safe:leading-[1.6]",
+                            "lg:motion-safe:translate-y-1.5 lg:motion-safe:opacity-0 lg:motion-safe:blur-[3px]",
+                            "lg:motion-safe:transition-[opacity,translate,filter] lg:motion-safe:duration-500 lg:motion-safe:ease-cx",
+                            "lg:motion-safe:group-data-[state=active]/step:translate-y-0 lg:motion-safe:group-data-[state=active]/step:opacity-100 lg:motion-safe:group-data-[state=active]/step:blur-[0px]",
+                          )}
+                        >
+                          {step.body}
+                        </p>
+                      </div>
+
+                      {/* Stacked only: this step's mock-up, final, on its photograph. */}
+                      <div
+                        data-step-scene
+                        className={cn(
+                          "mt-6 lg:motion-safe:hidden lg:motion-reduce:mt-0",
+                        )}
+                      >
+                        <JourneySceneFrame index={i} />
+                      </div>
+                    </li>
+                  );
+                })}
+
+                {/* Pinned only: invisible, sized by the tallest body. It reserves
+                    the slot the open body sits in, and is measured for the shift. */}
+                <div
+                  data-journey-sizer
+                  aria-hidden="true"
+                  className={cn("invisible hidden pl-12 lg:motion-safe:grid")}
+                >
+                  {journey.steps.map((step) => (
                     <p
-                      data-step-part
+                      key={step.day}
                       className={cn(
-                        "mt-2.5 max-w-[42ch] text-[13.5px] leading-relaxed",
-                        onDark ? "text-white/80" : "text-ink-900/80",
-                        flipped && "lg:ml-auto",
+                        "pr-2 pb-3 text-[14px] leading-[1.6] text-pretty [grid-area:1/1]",
                       )}
                     >
                       {step.body}
                     </p>
+                  ))}
+                </div>
+              </ol>
 
-                    <div
-                      data-step-part
-                      className={cn(flipped && "lg:flex lg:justify-end")}
-                    >
-                      <ParallaxImage
-                        src={step.image.src}
-                        alt={step.image.alt}
-                        fill
-                        sizes="(max-width: 1024px) 88vw, 380px"
-                        strength={16}
-                        className={cn(
-                          "tint-brand mt-6 aspect-[4/3] w-full max-w-[380px] rounded-2xl",
-                          "shadow-[0_2px_10px_-2px_rgba(20,14,4,0.35),0_26px_50px_-26px_rgba(10,8,3,0.6)]",
-                          "ring-1 ring-white/15",
-                        )}
-                      />
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+              {/* The one primary on the panel: after the steps on a phone, beside
+                  the heading at lg with reduced motion, under the steps when
+                  pinned. Pinned below xl it is lifted clear of the fixed Ask
+                  Vivid pill (560px, bottom centre), which would cover its end. */}
+              <div
+                className={cn(
+                  "[grid-area:cta] lg:motion-reduce:self-end",
+                  "lg:motion-safe:pb-8 xl:motion-safe:pb-0",
+                )}
+              >
+                <Link
+                  href={journey.cta.href}
+                  className={cn(
+                    "cx-btn cx-btn--lg cx-btn--arrow w-full shadow-cta focus-visible:shadow-[var(--cx-focus-ring)] sm:w-auto",
+                  )}
+                >
+                  {journey.cta.label}
+                  <Icon name="arrow-right" tone="current" />
+                </Link>
+              </div>
 
-          <div className="mt-14 flex justify-center">
-            <Button asChild variant="primary" size="lg">
-              <Link href={journey.cta.href}>
-                {journey.cta.label}
-                <ArrowRight />
-              </Link>
-            </Button>
+              {/* Pinned only: the stage the example trip plays out on. */}
+              <div
+                className={cn("hidden min-h-0 [grid-area:stage] lg:motion-safe:block")}
+              >
+                <JourneyStage active={active} />
+              </div>
+            </div>
           </div>
         </div>
       </Container>

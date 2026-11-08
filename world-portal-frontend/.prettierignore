@@ -6,3 +6,5 @@ playwright-report
 test-results
 public
 next-env.d.ts
+# Vendored WorldStreet design system (pnpm ds:sync), never edited here
+src/ds

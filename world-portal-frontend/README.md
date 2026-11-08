@@ -23,10 +23,12 @@ three. **Contact** routes on which service you pick.
 
 ## The hero
 
-Two columns over the hero photograph: the pitch on the left — badge, two-tone
-heading, lead paragraph and the two CTAs — with a destination forecast card at
-the bottom right. The photograph carries a displacement shader; nothing else in
-the hero is WebGL.
+"Cleared for take-off": a pinned scroll scene. A stamped visa application
+floats beside the pitch (badge, two-tone heading, lead paragraph, the two CTAs
+and the Malé forecast card), folds into a paper plane as you scroll, launches
+through layered clouds and glides down to the Maldives lagoon. Scrolling back up
+unfolds it. The paper is the only WebGL in the hero; sky, clouds and lagoon are
+photo layers. Reduced motion gets a static composition with the plane mid-glide.
 
 **That card is placeholder copy, not a weather feed.** It reads from
 `hero.forecast` in `src/content/landing.ts` — there is no weather API here and
@@ -172,8 +174,8 @@ Two libraries, each doing the job it is actually good at.
 
 **Three.js** does two things:
 
-- `hero-webgl.tsx` — a scroll- and pointer-reactive displacement shader over
-  the hero photograph.
+- `hero-paper.tsx` — the hero's visa form that folds into a paper plane and
+  flies, scrubbed by scroll.
 - `journey-webgl.tsx` — the route trail drawn behind How It Works.
 
 Both are dynamically imported, mounted on idle, paused off-screen, and skipped

@@ -10,13 +10,14 @@ import type { AgencyUser } from "@/features/agency/types";
 export function AgencySidebar({ user }: { user: AgencyUser }) {
   return (
     <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col border-r border-border/60 bg-background/95 px-5 py-6 text-foreground backdrop-blur-2xl lg:flex">
-      <div className="flex items-center justify-between gap-2">
+      {/* Stacked: beside the full logo the pill had ~36px left and showed "Q…". */}
+      <div className="flex flex-col items-start gap-2">
         <Logo href="/agency" tone="dark" />
         {/* The console's pill says "Console"; this one says whose desk it is,
             so the two are never mistaken for each other. */}
         <span
           title={user.agencyName}
-          className="max-w-[104px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary"
+          className="max-w-full truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10.5px] font-semibold text-primary"
         >
           {user.agencyName}
         </span>

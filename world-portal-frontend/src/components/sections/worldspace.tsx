@@ -1,37 +1,60 @@
-import { ArrowUpRight } from "lucide-react";
-
-import { Reveal } from "@/components/motion/reveal";
-import { ComingSoonNotice } from "@/components/sections/coming-soon";
-import { Button } from "@/components/ui/button";
+import { WorldSpaceColumns } from "@/components/sections/worldspace-columns";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { worldspace } from "@/content/landing";
+import { Icon } from "@/ds/components/icon";
 import { WorldSpacePostCard } from "@/features/worldspace/components/post-card";
 import { WORLDSPACE } from "@/features/worldspace/config";
+import { cn } from "@/lib/utils";
 import { getWorldSpaceFeed } from "@/server/worldspace/client";
 
 /**
- * Six posts — two flush rows of three at `lg`, three rows of two at `sm`.
+ * Eight posts: four columns of two from xl, three of two at lg, two of three
+ * at sm, and a swipeable row on a phone. The last two only appear from xl,
+ * where the fourth column needs them; below that they are `display: none`, so
+ * the grid's auto-placement (and the drift, which follows it) never sees them.
  *
- * Every tile is the same width on purpose. An earlier version made the first
- * tile `lg:col-span-2`, which looks clever and is a trap: the card is a fixed
- * `aspect-[4/5]` box, so doubling a tile's width doubles its height, and
- * `auto-rows-fr` then stretched every other card in that row to match. Their
- * images kept their own aspect ratio and the leftover height rendered as a tall
- * dark void under the caption. Keep the tiles uniform and the rows resolve
- * themselves.
+ * Every tile is the same shape on purpose. An earlier version made the first
+ * tile `lg:col-span-2`, which looks clever and is a trap: the card owns a fixed
+ * `aspect-[5/6]` photograph, so doubling a tile's width doubles its height, and
+ * the rest of that row stretched to match with a dark void under the caption.
+ * The rhythm comes from the columns instead — staggered at rest (see
+ * `columnOffset`) and drifting at different speeds while the page moves.
  */
-const FEED_SIZE = 6;
+const FEED_SIZE = 8;
+const WIDE_ONLY_FROM = 6;
+
+/**
+ * Drops alternate columns down, so the wall reads as a feed someone is
+ * scrolling rather than a table of thumbnails — the resting rhythm, and the
+ * whole of it under reduced motion.
+ *
+ * It is the CSS `translate` property (Tailwind v4's `translate-y-*`), not
+ * `transform`, so it composes with the drift `WorldSpaceColumns` runs on the
+ * card wrapper instead of being overwritten by it. The list pads its own
+ * bottom by the same amount so the lowered column never hangs into the next
+ * section.
+ */
+function columnOffset(index: number) {
+  return cn(
+    index % 2 === 1 && "sm:max-lg:translate-y-10",
+    index % 3 === 1 && "lg:max-xl:translate-y-14",
+    index % 2 === 1 && "xl:translate-y-16",
+  );
+}
 
 /**
  * Posts from WorldSpace — the sister social platform under the same parent
- * company — shown as a wall of images that lead back out to the original post.
+ * company — shown as a wall of posts that lead back out to the original.
  *
  * The feed is fetched on the server and `getWorldSpaceFeed` never throws and
  * never comes back empty, so there is no error or empty state to design; the
  * one thing this section must not do is imply the posts are live when they are
  * not, which is what `placeholderNotice` is for.
+ *
+ * The section clips its own edges (`overflow-hidden`), because the drifting
+ * columns travel past the wall's box while the page moves.
  */
 export async function WorldSpace() {
   const feed = await getWorldSpaceFeed(FEED_SIZE);
@@ -39,69 +62,90 @@ export async function WorldSpace() {
   if (feed.posts.length === 0) return null;
 
   return (
-    // tone="muted": Experiences above is `default` (white) and Contact below is
-    // a dark photograph, so an ink band here would stack two dark surfaces and
-    // swallow the seam between them. The soft grey lifts the white tiles off
-    // the page, separates this section from Experiences, and lets Contact keep
-    // being the one dark moment before the footer.
+    // tone="muted": Experiences above is `default` (white) and Agency below is
+    // white around its dark island, so the soft grey is what lifts the white
+    // post cards off the page and marks the seam on both sides.
     <Section
       id="worldspace"
       spacing="md"
       tone="muted"
       data-worldspace-section=""
       data-worldspace-source={feed.source}
+      className="overflow-hidden"
     >
-      {/* size="content": a heading over a card grid is exactly what the 1200px
-          column is for. `panel` is reserved for the inset rounded panels (Why
-          Us, Journey) and this section has no panel — at 1200px the three
-          columns land near 380px, which is already generous for a photo tile. */}
       <Container>
-        <SectionHeading
-          eyebrow={worldspace.eyebrow}
-          lead={worldspace.headingLead}
-          accent={worldspace.headingAccent}
-          body={worldspace.body}
-          align="center"
-          size="md"
-        >
-          {feed.source === "placeholder" ? (
-            <ComingSoonNotice
-              data-worldspace-notice=""
-              notice={worldspace.placeholderNotice}
-            />
-          ) : null}
-        </SectionHeading>
+        {/* An editorial header row: the argument on the left, the way out to
+            WorldSpace on the right, both above the wall rather than one of
+            them stranded under a staggered bottom edge. */}
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between lg:gap-16">
+          <SectionHeading
+            eyebrow={worldspace.eyebrow}
+            lead={worldspace.headingLead}
+            accent={worldspace.headingAccent}
+            body={worldspace.body}
+            size="md"
+            className="max-w-2xl"
+          >
+            {feed.source === "placeholder" ? (
+              <p
+                data-worldspace-notice=""
+                className="mt-5 inline-flex max-w-lg items-start gap-2 rounded-2xl bg-surface-2 px-3.5 py-2 text-[13px] leading-snug text-muted-foreground sm:rounded-pill"
+              >
+                {/* The section's one gold touch. */}
+                <Icon
+                  name="info"
+                  tone="current"
+                  size={15}
+                  className="mt-px shrink-0 text-gold-ink"
+                />
+                {worldspace.placeholderNotice}
+              </p>
+            ) : null}
+          </SectionHeading>
 
-        <Reveal
-          as="ul"
-          stagger={0.07}
-          className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3"
+          {/* A plain <a>: it leaves this site, so next/link would only
+              prefetch a route that is not ours. */}
+          <a
+            href={WORLDSPACE.exploreUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cx-btn cx-btn--ghost cx-btn--arrow cx-btn--sm h-11 self-start px-5 lg:mb-1 lg:self-auto"
+          >
+            {worldspace.cta.label}
+            <Icon name="arrow-up-right" tone="current" size={18} />
+          </a>
+        </div>
+
+        {/* Below `sm` the wall is a swipeable row that bleeds to the screen
+            edge (-mx-5 cancels the container gutter, px-5 puts it back
+            inside the scroller), so six tall posts are not a 3,000px column. */}
+        <WorldSpaceColumns
+          className={cn(
+            "-mx-5 mt-10 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2",
+            "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            "sm:mx-0 sm:mt-12 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-10",
+            "lg:grid-cols-3 lg:gap-6 lg:pb-14 xl:grid-cols-4 xl:gap-5 xl:pb-16",
+          )}
         >
-          {feed.posts.map((post) => (
-            <li key={post.id}>
-              {/* No `h-full` and no `auto-rows-fr` on the grid: the card owns
-                  its own 4:5 ratio, so letting it size itself is what keeps
-                  every tile the same shape with nothing left over. */}
-              {/* No `priority` either. This section sits near the bottom of a
-                  long landing page, so preloading its tiles would put a
-                  preload link in competition with the Three.js hero during the
-                  exact window the basket drawer is kept lazy for. Below the
-                  fold, priority costs LCP rather than buying it. */}
-              <WorldSpacePostCard post={post} />
+          {feed.posts.map((post, index) => (
+            <li
+              key={post.id}
+              className={cn(
+                "w-[78%] shrink-0 snap-start sm:w-auto",
+                index >= WIDE_ONLY_FROM && "hidden xl:block",
+                columnOffset(index),
+              )}
+            >
+              <div data-ws-drift="" className="h-full will-change-transform">
+                {/* No `priority`: this section sits near the bottom of a long
+                    landing page, so preloading its tiles would compete with
+                    the Three.js hero for the window the basket drawer is kept
+                    lazy for. Below the fold, priority costs LCP. */}
+                <WorldSpacePostCard post={post} />
+              </div>
             </li>
           ))}
-        </Reveal>
-
-        <div className="mt-12 flex justify-center">
-          {/* asChild forwards a single child, so the icon goes inside the link
-              rather than through rightIcon. */}
-          <Button asChild variant="outline" size="lg">
-            <a href={WORLDSPACE.exploreUrl} target="_blank" rel="noopener noreferrer">
-              {worldspace.cta.label}
-              <ArrowUpRight />
-            </a>
-          </Button>
-        </div>
+        </WorldSpaceColumns>
       </Container>
     </Section>
   );

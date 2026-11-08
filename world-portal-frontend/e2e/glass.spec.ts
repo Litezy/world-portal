@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  */
 const SURFACES = [
   { name: "why-us cards", selector: "#why-us .glass-frost-dark" },
-  { name: "closing CTA card", selector: "#start-here .glass-frost-dark" },
+  { name: "closing CTA card", selector: "#start-here .glass-frost" },
 ];
 
 test.describe("glass", () => {

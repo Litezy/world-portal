@@ -1,0 +1,258 @@
+/*
+ * "Cleared for take-off": the hero's photographic planes.
+ *
+ * One daylight world, in both themes: late morning, the sun to the upper
+ * left, soft cumulus. Only the scrim under the copy changes with the theme.
+ *
+ * Every plane's base style here is its state at progress 0, which is also
+ * the whole reduced-motion composition: the sky, the far cloud band low in
+ * the frame, and (from hero.tsx) the copy, the card and a still of the plane.
+ * With motion on, `applyScene` in `components/motion/hero-scene.ts` writes
+ * each plane's transform and opacity from the shared scroll progress. Only
+ * transform and opacity ever change.
+ */
+
+/* The panel's own fill is the sky's colour, for the moment before the plate
+   paints. */
+.panel {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--brand-300) 70%, var(--brand-100)) 0%,
+    var(--brand-50) 75%
+  );
+}
+
+.plane {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* L0: the sky. Its horizon sits low, so the copy has calm, open daylight. */
+.sky {
+  transform-origin: 50% 35%;
+  transform: scale(1.01);
+}
+
+/*
+ * A gentle scrim under the copy, so its ink reads on any part of the world
+ * that happens to be behind it: a pale-sky wash in light (navy copy), a navy
+ * one in dark (white copy). Below lg the copy runs full width at the top, so
+ * the wash runs down from the top instead of in from the left. The scene
+ * fades it with the copy.
+ */
+.scrim {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--brand-50) 72%, transparent) 0%,
+    color-mix(in oklab, var(--brand-50) 40%, transparent) 30%,
+    transparent 58%
+  );
+}
+
+@media (min-width: 1024px) {
+  .scrim {
+    background: linear-gradient(
+      to right,
+      color-mix(in oklab, var(--brand-50) 62%, transparent) 0%,
+      color-mix(in oklab, var(--brand-50) 30%, transparent) 34%,
+      transparent 58%
+    );
+  }
+}
+
+:global(.dark) .scrim {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--brand-950) 72%, transparent) 0%,
+    color-mix(in oklab, var(--brand-950) 40%, transparent) 34%,
+    transparent 62%
+  );
+}
+
+@media (min-width: 1024px) {
+  :global(.dark) .scrim {
+    background: linear-gradient(
+      to right,
+      color-mix(in oklab, var(--brand-950) 70%, transparent) 0%,
+      color-mix(in oklab, var(--brand-950) 34%, transparent) 40%,
+      transparent 64%
+    );
+  }
+}
+
+/* L5: the lagoon, revealed under the cloud at the end. */
+.lagoon {
+  opacity: 0;
+  transform-origin: 62% 60%;
+  transform: scale(1.13);
+}
+
+/* A deck of cloud plates. Each plate is a 16:9 box covering the panel, so a
+   split in percentages lands on the same cloud at every viewport. */
+.deck {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  container-type: size;
+}
+
+.plate {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100cqw, 177.78cqh);
+  height: max(100cqh, 56.25cqw);
+  translate: -50% -50%;
+  will-change: transform, opacity;
+}
+
+/*
+ * L1: the far cloud band, both halves of one cloud field. The shading is the
+ * greyscale plate SCREENED over the sky's shade colour, so its highlights go
+ * to sunlit white and its shadows to the same soft blue as the cumulus deck
+ * in the sky plate (a multiply would turn them a dirty grey). The shape is
+ * the soft matte (a luminance mask), intersected with a wide gradient across
+ * the plate's own gap (so the halves can part with no hard edge) and a fade
+ * along the top (so at rest it sits in the frame as a band, not a rectangle).
+ */
+.far {
+  transform-origin: 52% 48%;
+  transform: translate3d(0, 58%, 0);
+  background-image:
+    var(--plate),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--brand-200) 72%, var(--brand-900)) 0%,
+      color-mix(in srgb, var(--brand-200) 62%, var(--brand-900)) 100%
+    );
+  background-size: 100% 100%;
+  background-blend-mode: screen;
+  mask-image:
+    var(--matte), var(--split), linear-gradient(to bottom, transparent 0%, black 30%);
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  mask-mode: luminance, alpha, alpha;
+  mask-composite: intersect;
+}
+
+@media (min-width: 1024px) {
+  .far {
+    transform: translate3d(0, 64%, 0);
+  }
+}
+
+.farA {
+  --split: linear-gradient(307deg, transparent 41%, black 55%);
+}
+
+.farB {
+  --split: linear-gradient(307deg, black 42%, transparent 56%);
+}
+
+/* L4: near wisps, pre-blurred, crossing in front of the paper. White
+   through the plate's luminance is a screen blend without a blend mode. */
+.near {
+  opacity: 0;
+  background-color: color-mix(in oklab, var(--brand-50) 45%, white);
+  mask-image: var(--plate);
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  mask-mode: luminance;
+}
+
+/* Phones and tablets get one near layer, not two. */
+@media (max-width: 1023.98px) {
+  .nearWisps {
+    display: none;
+  }
+}
+
+/* Without luminance masks a plate would paint as a grey rectangle, so the
+   cloud becomes plain mist instead. */
+@supports not (mask-mode: luminance) {
+  .far,
+  .near {
+    background-image: radial-gradient(
+      55% 48% at 50% 58%,
+      color-mix(in oklab, var(--brand-200) 40%, white) 0%,
+      transparent 72%
+    );
+    background-color: transparent;
+    mask-image: none;
+  }
+}
+
+/* L3: the paper canvas fades in once its first frame is drawn. */
+.paper {
+  opacity: 0;
+  transition: opacity 0.9s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.paper[data-ready] {
+  opacity: 1;
+}
+
+/* The copy rises in once, on load. Its finished state is the base style. */
+.stack > * {
+  animation: hero-rise 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stack > :nth-child(1) {
+  animation-delay: 0.1s;
+}
+.stack > :nth-child(2) {
+  animation-delay: 0.18s;
+}
+.stack > :nth-child(3) {
+  animation-delay: 0.28s;
+}
+.stack > :nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+.card {
+  animation: hero-rise 1s cubic-bezier(0.16, 1, 0.3, 1) 0.48s both;
+}
+
+/* Short desktop windows: the card drops its footnote so the copy and the
+   card both fit the pinned panel without touching. */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .card [data-forecast-note] {
+    display: none;
+  }
+}
+
+/* Phones and tablets, pinned: the card arrives over the lagoon as a short
+   caption (where, how warm, the sky), so the landing stays in view. */
+@media (max-width: 1023.98px) and (prefers-reduced-motion: no-preference) {
+  .card [data-forecast-detail],
+  .card [data-forecast-note] {
+    display: none;
+  }
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack > *,
+  .card {
+    animation: none;
+  }
+
+  .near,
+  .lagoon {
+    display: none;
+  }
+
+  .paper {
+    transition: none;
+  }
+}

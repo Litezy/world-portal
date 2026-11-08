@@ -28,14 +28,16 @@ out in `app/(site)/page.tsx`.
 | Route     | Layout     | Header                          |
 | --------- | ---------- | ------------------------------- |
 | `/`       | `(site)`   | overlay, scrolls away with hero |
-| `/apply`  | `(app)`    | solid sticky ink bar            |
-| `/track`  | `(app)`    | solid sticky ink bar            |
-| `/hire`   | `(app)`    | solid sticky ink bar            |
+| `/apply`  | `(app)`    | solid sticky glass bar          |
+| `/track`  | `(app)`    | solid sticky glass bar          |
+| `/hire`   | `(app)`    | solid sticky glass bar          |
 | `/admin`  | `(admin)`  | console shell — ink sidebar     |
 | `/agency` | `(agency)` | console shell — its own session |
 
-`SiteHeader` takes `variant="overlay" | "solid"`. The overlay variant's type is
-white for photography — never pin it over a light page.
+`SiteHeader` takes `variant="overlay" | "solid"`; the overlay is thinner glass
+over the hero. Either way the capsule follows the theme: frosted white with ink
+type in light, smoked glass with white type in dark. Nothing in it is a fixed
+white.
 
 ## The visa flow starts with a question, not a form
 
@@ -137,7 +139,28 @@ session's WebSocket to run in the browser or on `/api/vivid/function`.
 - **Submitting is always two calls** — `confirmed=false` returns a read-back
   and sends nothing; only `confirmed=true` submits, through the same
   `submitApplication` the Submit button uses.
-- **The orb is hidden on `/admin` and `/agency`**, and needs
+- **Vivid's mark is WorldStreet's gold dot globe** (`vivid-globe.tsx` +
+  `globe-draw.ts`, ported from the hub's `components/vivid/VividGlobe.tsx`),
+  on every surface: the pill, the corner button and the live capsule. Don't
+  bring back a shader orb or invent a blue mark (Owen, 2026-11-08: "the vivid
+  logo at the bottom is not correct"). One 2D canvas; it turns faster and
+  its dots swell with the voice when `active` + `getAudioLevels` are passed,
+  stops off-screen and when `still`, and holds one frame under reduced
+  motion. Two local changes from the hub: `backdrop` is a night-blue coin
+  (`--brand-950`, drawn in CSS, the same in both themes) instead of stone,
+  and the front dots warm to pale gold (`#FDE68A`) instead of near-white,
+  which read grey-blue on navy at 1x.
+- **On the landing page (md and up) Vivid is the Ask Vivid pill**
+  (`vivid-ask-pill.tsx`), adapted from WorldStreet's Ask Vivid dock. It sits
+  at the bottom centre, arrives once the hero has scrolled away, and cycles
+  the prompts in `content/vivid.ts`. The whole pill is one button that starts
+  the same voice session as the corner button (there is no text chat here).
+  Keep the prompts to things Vivid's tools can actually do.
+- **Phones and every other page keep the corner button** (60px globe). On
+  the landing page's phones it waits, like the pill, for the hero to pass
+  (`use-landing-scroll.ts`, shared by both), so it never covers the paper
+  plane or its arrival card. Elsewhere it is always there.
+- **Vivid is hidden on `/admin` and `/agency`**, and needs
   `Permissions-Policy: microphone=(self)` from `next.config.ts`.
 
 ## The admin console
@@ -341,11 +364,10 @@ arrive through the store, and that file is deleted rather than edited.
 
 ## Non-negotiables
 
-- **The app is light-only and forces it.** `ThemeProvider` sets
-  `forcedTheme="light"`, because `localhost:3000` is shared with every other
-  local project and a stale `theme` in localStorage otherwise renders screens
-  in a mode none were designed against. Drop it in the same change that mounts
-  a toggle — and check the fields first.
+- **Light, dark and system themes; light is the default** (Owen, 2026-11-08:
+  "change the website to light mode"). The header's toggle drives next-themes,
+  which sets both `.dark` (this app's tokens) and `data-theme` (the design
+  system's). Every screen has to work in both.
 - **A field's fill is `bg-field`, never a fixed light value.** `--field` /
   `--field-focus` move with `--foreground`; `bg-ink-50` plus `text-foreground`
   is how you get near-white text on a near-white input.
@@ -374,6 +396,57 @@ Because slot 1 sits below 3:1 on white, every chart value carries a visible
 label — that is the contrast relief, not decoration. Status is never colour
 alone: the badges pair a tone with a word, and an overdue date carries an icon.
 
+## The WorldStreet design system (landing page)
+
+The landing page (`(site)` layout: header, sections, footer) is on the
+WorldStreet design system, in E-Embassy's own colours.
+
+- **`src/ds/` is vendored. Never edit it.** Refresh it with `pnpm ds:sync` and
+  check it with `pnpm ds:check`. Both expect the WorldStreet workspace layout,
+  with `design-system/` two folders up. It is excluded from eslint and
+  prettier.
+- **Its CSS is opt-in.** `globals.css` imports only the tokens and the `.cx-*`
+  components, which restyle nothing until a screen uses them. Its `theme.css`
+  is deliberately not imported, because it would redefine shared utilities
+  (`bg-primary`, `bg-muted`, `rounded-lg`…) under the admin and visa screens.
+  The non-colliding subset (`bg-ember`, `rounded-card`, `shadow-cta`,
+  `text-h1`…) is declared in the `@theme` block.
+- **`data-brand="e-embassy"`** (`src/app/e-embassy-brand.css`) re-colours the
+  system blue: `--cx-ember` is `#0050C0`, the secondary is cyan `#00B8F8`,
+  text on blue is white, and icon gradients run cyan → blue. Plus a HINT of
+  WorldStreet gold (Owen, 2026-11-08): `--ee-gold` #EAB308 as `bg-gold`,
+  `text-gold-ink` (#A16207 on light, 4.9:1), `bg-gold-wash`. Accents only, at
+  most one gold touch per section (a dot, a rule, a star, a marker stroke),
+  never a button fill or a large area. Blue stays the action colour.
+- **No dark islands** (Owen, 2026-11-08: "some parts are still dark mode").
+  The header, Journey, Agency, Contact and the footer used to pin
+  `data-theme="dark"` and stayed dark on the light page. They now follow the
+  page theme: pale sky (`bg-brand-50`, white scrims) with ink type in light,
+  the old night treatment behind `dark:` in dark. Don't pin a section dark
+  again; give it a light face and put its dark look behind `dark:`. Copy that
+  sits directly on a photograph (the journey stage's flight path) stays white.
+  The Experiences deck's ink, blue and navy cards are a colour rhythm, not a
+  dark section.
+- **Icon gradients resolve where they are defined.** `<IconDefs brand="e-embassy" />`
+  therefore lives inside the brand wrapper in `app/(site)/layout.tsx`. Outside
+  it (the `(app)` pages), a gradient-tone icon paints nothing, so use
+  `tone="white"` there or add the defs inside that layout's own brand wrapper.
+- **Fonts:** Manrope (the system's face) for all sans text, with a single ₦
+  glyph from Noto Sans loaded in the root layout. Playfair italic stays as the
+  accent, and Fraunces stays for the wordmark.
+- **The logo is vector** (`components/common/logo.tsx`). The wings are
+  redrawn from the original artwork (the PNGs and
+  `E-EMBASSY_MAIN_AW.svg` in `public/images` are raster and now unused),
+  and the wordmark is live Manrope text. The wing paths live once in
+  `logo-geometry.ts`, which also feeds the share image. `src/app/icon.png` and
+  `apple-icon.png` are rendered from the same paths (blue tile, white and cyan
+  wings). Each `Logo` takes its gradient ids from `useId`, because a shared id
+  resolves to the first copy in the document, and when that copy is hidden
+  the wings paint nothing.
+- **Headless screenshots look wrong for glass.** Headless Chrome reports
+  `prefers-reduced-transparency: reduce`, so the system's glass renders nearly
+  solid there. Emulate `no-preference` before judging it.
+
 ## The three design signatures
 
 1. **Two-tone headings** — sans lead + serif-italic accent, always via
@@ -394,16 +467,77 @@ AVIF. The result is maddening: `curl` returns the new picture, the page shows
 the old one, and nothing looks broken. `rm -rf .next/cache` is not enough with a
 server running; stop every dev server, `rm -rf .next`, then start one.
 
-## The hero is two columns, and the forecast card is not a feed
+## The hero, and the forecast card is not a feed
 
-The hero was one centred column beneath an oversized WebGL EXPLORE. It is now
-side by side: the copy column on the left — badge, a two-tone `SectionHeading`
-`h1`, the lead, the two CTAs — carrying `data-hero-stack`, whose children GSAP
-staggers; and `HeroForecastCard` (`sections/hero-forecast-card.tsx`) at the
-bottom right. `HeroWebgl`, the displacement shader over the photograph, stays.
-The wordmark shader does not, so the hero now has **one** canvas rather than
-two; `e2e/motion.spec.ts` asserts that count, because a second one reappearing
-means a layer got mounted that nobody meant to ship.
+The hero is "Cleared for take-off": an inset rounded panel where a visa
+application floats in a bright late-morning sky above the cumulus, beside the
+copy, gets stamped APPROVED, folds into a paper plane as the visitor scrolls
+and flies through the cloud to the Maldives. The copy column (badge, a two-tone `SectionHeading` `h1`, the
+lead, the two CTAs) carries `data-hero-stack`, with `HeroForecastCard`
+(`sections/hero-forecast-card.tsx`) under it. `hero.jpg` stays in `public/`
+because the admin and agency login pages use it.
+
+**One clock.** With motion on, the section is a tall track (260vh from lg,
+180vh below) with a sticky panel. One rAF loop in `hero.tsx` reads one scroll
+progress p and hands it to both the DOM planes (`applyScene` in
+`motion/hero-scene.ts`: sky, far cloud band, copy, card, near wisps, lagoon,
+transform and opacity only) and the paper (`motion/hero-paper.tsx`, the hero's
+**one** canvas), so the two can never drift. Everything is a pure function of
+p, which is what makes scrolling back up unfold the plane into the form again.
+The beats live in `TIMELINE` in `hero-scene.ts`. The loop runs only while the
+panel is on screen and the tab is visible, and the paper mounts through
+`useIdleMount` and fades in on its first frame. `e2e/motion.spec.ts` asserts the
+canvas count, because a second one appearing means a layer got mounted that
+nobody meant to ship.
+
+**The paper is rigid pieces, not a cloth.** `hero-paper-folds.ts` clips the A4
+sheet along each flat crease (Sutherland–Hodgman) and reflects the moving side;
+animated, those pieces turn about the crease by 0 to π, which equals the
+reflection, so pose and bookkeeping agree. The keel and wings are a half → wing
+transform hierarchy on top. Its print (the form, the logo wings, the stamp) is
+drawn at runtime in `hero-paper-texture.ts`; the stamp lands as a decal 0.6 s
+after the canvas appears, then is baked into the texture. The `APPROVED` stamp
+sits low on the right of the sheet on purpose: that is the right wing's top
+once folded.
+
+**One daylight world (2026-11-08).** Every plate is one shoot: late morning,
+the sun high and out of frame to the upper left, soft cumulus. The paper is
+lit to match in `hero-paper.tsx`: a warm-white sun from the upper left, sky
+blue from above, cloud bounce from below, soft shading between the folds
+(`shadeFolds`, from per-vertex fold data in `pieceGeometry`), aerial haze with
+distance and a white contrail with sky-cyan edges. If a plate changes, keep
+its light and cloud type, or the paper stops belonging in it. The world is the
+same in both themes. Only the copy changes: navy (`brand-950`) on a pale-sky
+scrim in light, white on a navy scrim in dark. The chip, the secondary CTA and
+the forecast card are theme-following glass (`.glass .glass-frost`, no
+`cx-glass-dark`). The chip's dot is the hero's one gold touch.
+
+**Images.** `hero/sky-day.jpg` is the opening sky and the LCP image, and
+`hero/lagoon-day.jpg` is the arrival. Both were generated with Antigravity at
+its 1376 × 768 limit, upscaled 2× with sharp (Lanczos3 plus a light sharpen)
+to 2752 × 1536, and saved at q88 and q77 (both ≤ 400 KB). Both render with
+`quality={90}`, which `images.qualities` in `next.config.ts` has to list (Next
+16 coerces unlisted qualities). The old plate was 1376 px at 96 KB, served at
+q75 and stretched 2.2× on a 1536 px laptop at DPR 2: that was the softness.
+The cloud plates are greyscale luminance masks (Chrome 120+, Safari 15.4+;
+plain mist without them). The far band is SCREENED over the sky's shade
+colour, because a multiply turns daylight cumulus grey. `near-*.jpg` are
+pre-blurred copies, so no CSS blur runs per frame. Below lg the lagoon's crop
+slides to 72%, and `LAGOON.focus` in `hero-paper.tsx` must match that.
+`LAGOON.glide` is where the flight ends, in the plate's own pixels: open water
+inside the villas' arc, never on a roof or under the copy. Move it with the
+picture.
+
+**Below lg** the copy clears before the launch and the card returns at the
+arrival as a short caption (its detail columns hidden). **Reduced motion** has
+no pin and no extra height: the base CSS is the complete static scene, and
+`hero/paper-plane-day.webp` stands in for the paper. That still is rendered
+from the scene itself (`window.__heroPaperStill(4800, 3200)`, development
+only, then trimmed), and the same still flies a simple 2D path when WebGL
+fails. Re-render it under a new filename if the paper's look changes. The Ask Vivid pill (and, on phones, Vivid's corner button)
+waits until the hero's bottom edge is above the middle of the viewport
+(`features/vivid/components/use-landing-scroll.ts`), since `scrollY` alone no
+longer says the hero has gone.
 
 **`hero.forecast` is static copy in `src/content/landing.ts`, not weather.**
 There is no weather API behind this app and the numbers never refresh — the
@@ -412,17 +546,76 @@ placeholder lines, edited exactly like the rest of the copy. Do not wire the
 card to a fetch, a hook or an `/api` route that does not exist, and do not
 describe it anywhere as live.
 
-The card is revealed from `autoAlpha: 0`, so the usual rule binds it: it must
-already be correct in its final state, because reduced motion and a hidden tab
-both mean the tween never runs. Its root carries `data-hero-forecast` — that is
+The card is revealed from opacity 0 (a CSS rise on load, and below lg the
+scroll's arrival), so the usual rule binds it: it must already be correct in
+its final state, because reduced motion means neither ever runs. Its root carries `data-hero-forecast` — that is
 how the e2e guard finds it, so keep the attribute if you restyle the card.
+
+## Intro, Why us, Passports, Visas: one device each
+
+Owen (2026-11-08) wants the scroll to feel like a sequence of different
+experiences, so no two neighbours use the same trick. Each section's markup is
+its finished state (reduced motion, no JS); the motion only rewinds and replays
+it, scrubbed or state-driven, so every effect reverses on the way back up. Each
+has one gold touch.
+
+- **Intro — depth planes** (`intro-route.tsx`). Keep the four photographs and
+  their labels: Owen rejected replacing them. Each photo is a plane with its own
+  drift (`STEPS[].drift`, px across the section's pass; bigger reads nearer, and
+  carries the deeper shadow), plus the kit's `TiltCard` and a hover lift. From
+  lg the rail between the labels draws segment by segment and lights each node;
+  it ends on a gold dot at "Stay". Below lg: half the drift, nodes light as
+  each photo arrives, no rail.
+- **Why us — kinetic type** (`why-us.tsx` + `why-us-motion.tsx`). The photo
+  cell asks (the two-tone heading); `whyUs.body` answers, set big, one span per
+  word, inking from 14% to full opacity as it scrolls through. `whyUs.bodyMark`
+  gets the gold marker stroke; it must occur in `body` (a unit test checks).
+  The four reason cards settle into the row. The eyebrow on the photo stays
+  `.glass-frost-dark`: `e2e/glass.spec.ts` asserts it.
+- **Passports — sticky split** (`passports.tsx`, `passports-specimen.tsx` and
+  its CSS module, `passports-motion.tsx`). A specimen passport (HTML/SVG, no
+  images; "Specimen" on its face, aria-hidden with a description) is sticky
+  beside the three situations from lg; each one crossing 60% of the viewport
+  sets `data-stage` 1–3 (photo and details type in; dates roll forward and the
+  gold chip glints; a new number and the "Issued" stamp). Below lg it plays the
+  stages by its own position. Stage transitions are CSS, transform, opacity and
+  clip-path only. Its paper uses the brand ramp, which does not flip in dark.
+  The values live in `passports.specimen` and are sample data.
+- **Visas — the deck** (`visas.tsx` + `visas-picker.tsx`). The destination pills
+  are resolved **on the server** by `resolveVisaRoute` (the same ruleset as
+  `/apply`), for the passport in `visas.picker.passport`; the picker states
+  nothing of its own. The list avoids the ruleset's ETA countries, which are
+  wrong for a Nigerian passport (a unit test keeps it that way); the ETA card is
+  reached from the deck. Choosing deals that visa's card to the front; a
+  visa-free trip lays a "No visa needed" slip over the deck. The deck also takes
+  clicks on the cards behind, a horizontal swipe and the arrow buttons. The
+  picked pill carries the gold dot. No pin.
+
+## "How it works" is a pinned demo
+
+From lg up, with motion on, `#journey` is about 360vh tall with a sticky panel.
+One example trip (Lagos → Dubai, `journey.demo` in `landing.ts`, all sample
+data, always labelled "Example trip") plays through the four steps on
+mock-ups (`journey-mockups.tsx`, `journey-stage.tsx`), scrubbed by scroll so
+scrolling back rewinds it. Below lg and under reduced motion the steps stack,
+each mock-up in its final state. The mock-ups are rendered twice (stage and
+stacked), one copy always hidden. The Ask Vivid pill steps aside while the
+section is on screen (`use-landing-scroll.ts` measures `#journey`).
+
+The panel follows the theme: a daylight sky panel with ink type in light
+(lifted off the paper on a soft navy shadow), the night-blue panel with white
+type in dark. The mock-ups are kit cards and follow it too: white cards in
+light, dark cards in dark. Its one gold touch is the dot beside the
+destination code at the end of the flight path.
 
 ## The journey panel is layered, not a single gradient
 
 One tall multi-stop gradient banded into visible stripes and read as flat. It is
 now four layers, and all four matter:
 
-1. a dimmed night photograph (`journey/panel.jpg`) for texture,
+1. a photograph for texture: the hero's daylight sky (`hero/sky-day.jpg`,
+   `journey.backgroundDay`) in light, a dimmed night sky (`journey/panel.jpg`)
+   in dark. Each theme hides the other's, so only one is fetched,
 2. a soft four-stop wash for the brand colour,
 3. two off-centre radial glows so the light has a direction,
 4. `.grain`, which dithers the whole thing — remove it and the banding returns.
@@ -431,6 +624,60 @@ Step images come from different sources with different casts. `.tint-brand`
 pulls their hue toward the palette in `color` blend mode, preserving luminance,
 so a warm photograph sits next to a blue button without clashing. Prefer
 genuinely cool-toned source images; the tint is a finisher, not a rescue.
+
+## Flights & hotels to the footer: one device each
+
+The second half of the same score (Owen, 2026-11-08). Same rules as the first
+half: the markup is the finished state, every effect is scrubbed or
+state-driven so it rewinds, transforms/opacity/clip-path only, no pins, no new
+canvases, one gold touch each. The section files stay Server Components; the
+motion lives in a small client file beside each (`<section>-*.tsx`).
+
+- **Flights & hotels — the tear** (`flights-hotels-stage.tsx`). A boarding
+  pass (window-seat photo, `flightsHotels.stage.pass`) tears away along a
+  perforated edge as you scroll, and the room key for the same example trip is
+  underneath (same Lagos → Dubai trip as `journey.demo`, labelled "Example
+  booking"). One progress value sets the pass's `clip-path` polygon, the curl
+  shadow riding the tear, the hotel photo's settle and the seat → room rail.
+  The tickets use container queries: wide on the stage, tall in half width.
+  Reduced motion shows the two tickets side by side. Gold: the "held" dot.
+- **Experiences — sticky deck** (`experiences-stack.tsx`). Each card is a
+  sticky `<li>` a few px lower than the last, so it slides over the previous
+  one, which eases back and dims. The triggers are measured from the list plus
+  each card's natural offset, never from the sticky `<li>` (a stuck element
+  reports where it is stuck). Reduced motion is a flat 2-up grid. Gold: the
+  marker stroke under the heading's last word (`ExperiencesMarker`).
+- **WorldSpace — velocity columns** (`worldspace-columns.tsx`). Eight posts:
+  4 columns from xl, 3 at lg, 2 at sm (posts 7–8 are `hidden xl:block`), the
+  swipe row on a phone. Each column drifts at its own speed and direction, and
+  every card leans with scroll speed and settles when the page stops. The drift
+  is on a `[data-ws-drift]` wrapper inside each `<li>`; the cards are still the
+  plain server-rendered links. The section clips itself (`overflow-hidden`).
+  Gold: the placeholder notice's info icon.
+- **Agency — a light you carry** (`agency-spotlight.tsx`,
+  `agency-figures.tsx`). A brand light follows the pointer over the island
+  (screen-blended in dark, a faint normal-blend cyan pool in light, where a
+  screen blend vanishes and a multiply turns muddy), and `[data-magnetic]`
+  wrappers make the two CTAs lean toward it
+  (the wrapper moves, never the `.cx-btn`, whose own transforms stay). With
+  touch the light drifts down the band with scroll instead. The figures roll in
+  like an odometer; their numbers are derived (`allCategories.length`, the free
+  listing, `baseDocuments.length`) and their labels are
+  `agencySection.figures` in `content/agency.ts`. Gold: the "0" fee.
+- **Contact — kinetic close** (`contact-kinetic.tsx`). The headline is split
+  into masked words (`KineticWords`, passed as `SectionHeading`'s `lead` and
+  `accent`) that rise into place; a gold star lands after "go."; then the
+  card lifts and the six service doors arrive one by one. The star is raised
+  with a relative offset, not `vertical-align`, so its line is no taller.
+- **FAQ — the calm beat.** Nothing moves on its own. The open row's index is
+  gold, closed questions rest at 80% ink, and `faq.more` offers WhatsApp.
+- **Footer — the bookend** (`motion/site-footer-plane.tsx`). A plane drawn
+  from the logo's wings glides in over the last ~440px of scroll along a dotted
+  contrail and lands on the top bar of the ghost EXPLORE's final E, where a
+  gold runway light comes on. It is anchored inside the wordmark at
+  `bottom: calc(100% - 0.15em)` (the cap line) and `right: 6.5%`, so changing
+  `siteConfig.wordmark` or its type means re-aiming it. Reduced motion: the
+  plane is simply parked there, light on.
 
 ## Never hand-write a `-webkit-` prefix in globals.css
 
@@ -456,9 +703,10 @@ Same rule for the WebGL layers: they mount through `useIdleMount`, which waits
 for `requestIdleCallback` **and** for the tab to be visible, because rIC never
 fires in a background tab. Anything behind it must be pure decoration.
 
-The journey panel is blue top to bottom and every step is light type — there is
-no half-way tone flip to keep in sync with the gradient any more. If you
-brighten the mid-band, re-check white body copy against it.
+The journey panel is one tone top to bottom in each theme (pale sky with ink
+type in light, blue with white type in dark), so there is no half-way tone flip
+to keep in sync with the gradient. If you change the mid-band of either wash,
+re-check that theme's body copy against it.
 
 Journey steps are **scrubbed, not fired once** — `once: true` leaves a section
 frozen when you scroll back up. `e2e/motion.spec.ts` asserts a step goes

@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Brand: E-Embassy, on the WorldStreet design system (src/ds, vendored).
+
+   The system's engine (Manrope, 20px corner-lit cards, pill buttons, aurora,
+   duotone icons, spring motion) re-coloured with E-Embassy's own palette,
+   sampled from the logo's swoosh, exactly as brands/worldstreet.css re-colours
+   it gold.
+
+   A HINT of WorldStreet gold (Owen, 2026-11-08: "add a hint of the brand
+   colour yellow"): the parent brand's #EAB308, used sparingly as an accent,
+   never as a fill for buttons or large areas. At most one gold touch per
+   section: a dot, a rule, a small icon, a marker stroke under a word, a
+   star, a stamp of light. Blue stays the action colour. Gold TEXT on a light
+   background uses --ee-gold-ink (4.9:1 on white), never --ee-gold.
+
+     accent   #0050C0 deep blue (upper wing)   = --brand-600 in globals.css
+     second   #00B8F8 cyan (lower wing)        = --cyan-500
+     on blue  white (6.9:1 on #0050C0)
+
+   Activate with data-brand="e-embassy" on a wrapper. It lives in the app, not
+   in src/ds, because src/ds is a vendored copy that is never edited.
+   Only colour tokens and brand hooks belong here. Nothing structural.
+   ========================================================================== */
+
+/* Dark first, the same as the system: the base block is the dark theme, and
+   the light override below applies under data-theme="light". */
+[data-brand="e-embassy"] {
+  --ee-blue: #0050c0;
+  --ee-blue-hi: #2f6ef0;
+  --ee-blue-lo: #0040a8;
+  --ee-blue-deep: #003a96;
+  --ee-blue-night: #071f45;
+  --ee-blue-pale: #bcd4ff;
+  --ee-cyan: #00b8f8;
+  --ee-cyan-hi: #38ceff;
+  --ee-cyan-pale: #7ddcff;
+  --ee-gold: #eab308; /* WorldStreet gold: accents only */
+  --ee-gold-hi: #facc15;
+  --ee-gold-ink: #fcd34d; /* gold text on the dark base */
+  --ee-gold-wash: rgba(234, 179, 8, 0.14);
+
+  /* Brand palette slots */
+  --cx-black: #0b0c0e;
+  --cx-ember: var(--ee-blue);
+  --cx-ember-50: #0050c080;
+  --cx-flame: var(--ee-blue-hi);
+  --cx-amber: var(--ee-cyan);
+  --cx-peach: var(--ee-blue-pale);
+  --cx-green: #10b981;
+
+  /* Surfaces + text: the app's own dark neutrals, not the system's stone */
+  --cx-bg: #0b0c0e;
+  --cx-elevated: #141619;
+  --cx-text-muted: #94a3b8;
+
+  /* Accent in use. Blue fills keep white type in both themes. */
+  --cx-ember-text: #6ea2f0; /* #0050C0 is only ~2.7:1 on the dark base */
+  --cx-ember-press: var(--ee-blue-lo);
+  --cx-on-primary: #ffffff;
+  --cx-brand-wash: rgba(0, 80, 192, 0.2);
+  --cx-wash: linear-gradient(124deg, #0050c0 0%, rgba(0, 184, 248, 0.35) 100%);
+  --cx-halo: rgba(0, 184, 248, 0.3);
+  --cx-glow-cta: 0 8px 32px -6px rgba(0, 80, 192, 0.65);
+  --cx-focus-ring: 0 0 0 2px #0b0c0e, 0 0 0 4px var(--ee-cyan-pale);
+  --cx-focus-border: rgba(125, 220, 255, 0.6);
+  --cx-focus-halo: 0 0 0 3px rgba(0, 184, 248, 0.25);
+
+  /* Money direction, unchanged from the system */
+  --cx-gain: #10b981;
+  --cx-gain-wash: rgba(16, 185, 129, 0.14);
+  --cx-loss: #ef4444;
+  --cx-loss-wash: rgba(239, 68, 68, 0.12);
+  --cx-loss-border: rgba(239, 68, 68, 0.4);
+  --cx-warning: #f59e0b;
+  --cx-warning-wash: rgba(245, 158, 11, 0.12);
+
+  /* Effects */
+  --cx-aurora-core: rgba(205, 240, 255, 0.95);
+  --cx-aurora-mid: rgba(0, 184, 248, 0.7);
+  --cx-aurora-edge: rgba(0, 80, 192, 0.4);
+  --cx-ridge-line: var(--ee-cyan-pale);
+  --cx-spot: rgba(0, 184, 248, 0.14);
+
+  /* Brand hooks */
+  --cx-accent-rgb: 0, 80, 192;
+  --cx-accent-shade: 0, 30, 90;
+  --cx-metal-hi: #e6f6ff;
+  --cx-metal-top: #7ddcff;
+  --cx-metal: #0050c0;
+  --cx-metal-lo: #003a96;
+  --cx-metal-ink: #ffffff;
+  --cx-metal-chip: linear-gradient(135deg, #eef8ff, #5aa9e6 45%, #d8ecff);
+  --cx-icon-from: var(--ee-cyan);
+  --cx-icon-to: var(--ee-blue-hi);
+
+  /* Manrope carries the type; Noto Sans only fills the ₦ glyph Manrope lacks */
+  --cx-font: var(--font-sans-family, "Manrope"), "Noto Sans", system-ui, sans-serif;
+
+  font-family: var(--cx-font);
+  color: var(--cx-text);
+}
+
+[data-theme="light"]
+  [data-brand="e-embassy"]:not([data-theme="dark"], [data-theme="dark"] *) {
+  --cx-bg: #ffffff;
+  --cx-elevated: #ffffff;
+  --cx-text-muted: #6b7076; /* ink-500: 4.9:1 on white */
+  --cx-ember-text: var(--ee-blue); /* 6.9:1 on white */
+  --cx-ember-press: var(--ee-blue-lo);
+  --cx-brand-wash: rgba(0, 80, 192, 0.08);
+  --cx-halo: rgba(0, 184, 248, 0.22);
+  --cx-glow-cta: 0 10px 30px -8px rgba(0, 80, 192, 0.5);
+  --cx-focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--ee-blue);
+  --cx-focus-border: rgba(0, 80, 192, 0.5);
+  --cx-focus-halo: 0 0 0 3px rgba(0, 80, 192, 0.18);
+  --cx-gain: #047857;
+  --cx-gain-wash: rgba(4, 120, 87, 0.1);
+  --cx-loss: #b91c1c;
+  --cx-loss-wash: rgba(185, 28, 28, 0.08);
+  --cx-loss-border: rgba(185, 28, 28, 0.35);
+  --cx-warning: #b45309;
+  --cx-warning-wash: rgba(245, 158, 11, 0.16);
+  --cx-aurora-core: rgba(125, 220, 255, 0.75);
+  --cx-aurora-mid: rgba(0, 80, 192, 0.42);
+  --cx-aurora-edge: rgba(0, 64, 168, 0.16);
+  --cx-ridge-line: var(--ee-blue);
+  --cx-spot: rgba(0, 80, 192, 0.08);
+  --cx-icon-from: var(--ee-cyan);
+  --cx-icon-to: var(--ee-blue);
+  --ee-gold-ink: #a16207; /* gold text on white: 4.9:1 */
+  --ee-gold-wash: rgba(234, 179, 8, 0.12);
+}
+
+/* Icons: the gradient is defined per brand (<IconDefs brand="e-embassy" />,
+   id cx-ig-e-embassy), because an SVG gradient resolves its colours where it
+   is defined, not where it is used. */
+[data-brand="e-embassy"] .cx-icon--gradient .b,
+[data-brand="e-embassy"] .cx-icon--gradient .s {
+  fill: url(#cx-ig-e-embassy);
+}
+[data-brand="e-embassy"] .cx-icon--gradient .f {
+  stroke: url(#cx-ig-e-embassy);
+}

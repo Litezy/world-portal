@@ -46,7 +46,16 @@ export function DocumentViewerModal({ label, url }: Props) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl p-6 sm:max-w-4xl overflow-hidden border-border/80 bg-background/95 backdrop-blur-2xl">
+      <DialogContent
+        className="max-w-4xl p-6 sm:max-w-4xl overflow-hidden border-border/80 bg-background/95 backdrop-blur-2xl"
+        // Radix skips links when it picks the first thing to focus, which put
+        // focus inside the PDF iframe — and a key pressed in an iframe never
+        // reaches the dialog, so Escape stopped closing it. Focus the dialog.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogHeader className="flex flex-row items-center justify-between border-b border-border/60 pb-4 pr-8">
           <div>
             <DialogTitle className="text-base font-semibold flex items-center gap-2 text-foreground">

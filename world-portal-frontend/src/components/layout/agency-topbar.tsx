@@ -30,6 +30,7 @@ import {
 import { agencyAssignments } from "@/content/agency";
 import { useAgencyLogout } from "@/features/agency/api/use-agency-auth";
 import type { AgencyUser } from "@/features/agency/types";
+import { cn } from "@/lib/utils";
 
 export function AgencyTopbar({ user }: { user: AgencyUser }) {
   const [open, setOpen] = React.useState(false);
@@ -62,7 +63,9 @@ export function AgencyTopbar({ user }: { user: AgencyUser }) {
       <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-6">
         {/* Mobile navigation */}
         <div className="flex items-center gap-3 lg:hidden">
-          <Drawer open={open} onOpenChange={setOpen} direction="left">
+          {/* autoFocus: vaul leaves focus on the trigger by default, so a keyboard
+              user opened the menu and stayed behind it. */}
+          <Drawer open={open} onOpenChange={setOpen} direction="left" autoFocus>
             <DrawerTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Open navigation">
                 <Menu />
@@ -125,7 +128,9 @@ export function AgencyTopbar({ user }: { user: AgencyUser }) {
 
         <div className="ml-auto flex items-center gap-2">
           <NotificationCenter recipientId={user.agencyId} recipientType="AGENCY" />
-          <ThemeToggle />
+          {/* Icon-only on phones: with the bell and the avatar, the label pushed
+              the bar past 390px. The button keeps its aria-label. */}
+          <ThemeToggle className={cn("max-sm:px-2 max-sm:[&>span]:sr-only")} />
 
           <Button
             asChild

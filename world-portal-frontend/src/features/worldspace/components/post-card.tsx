@@ -1,7 +1,6 @@
 import Image from "next/image";
 
-import { ArrowUpRight, BadgeCheck, Heart, MapPin, MessageCircle } from "lucide-react";
-
+import { Icon } from "@/ds/components/icon";
 import { WorldSpaceAvatar } from "@/features/worldspace/components/post-avatar";
 import { WORLDSPACE } from "@/features/worldspace/config";
 import type { WorldSpacePost } from "@/features/worldspace/types";
@@ -39,7 +38,15 @@ function compact(value: number) {
 }
 
 /**
- * One traveller's WorldSpace post, as a photograph.
+ * One traveller's WorldSpace post, laid out the way a post looks on WorldSpace:
+ * the photograph inset in a corner-lit card, and the person, their words and
+ * the reactions underneath it on the card's own surface.
+ *
+ * The caption used to sit on a dark scrim over the photograph, where its
+ * contrast depended on whichever picture happened to be behind it. On the card
+ * surface it reads at full body contrast in both themes, and the photograph is
+ * left alone apart from the two pieces of chrome that belong on it (where it
+ * was taken, and where the link goes), each on E-Embassy's dark water glass.
  *
  * The whole card is a single link off this site, so it is a plain `<a>` with
  * `target="_blank"` — not `next/link`, which would prefetch a route that is not
@@ -73,88 +80,104 @@ export function WorldSpacePostCard({
       rel="noopener noreferrer"
       aria-label={`${author.name} (@${author.handle}) in ${where}: ${post.caption} — posted ${posted}. Opens on ${WORLDSPACE.name} in a new tab.`}
       className={cn(
-        "group relative block overflow-hidden rounded-[1.5rem] bg-ink-900 shadow-lg",
-        "transition-transform duration-500 ease-glass motion-safe:hover:-translate-y-1",
-        "focus-visible:ring-[3px] focus-visible:ring-ring/60 focus-visible:outline-none",
+        // The kit's corner-lit, elevated card (what <Card elevated interactive>
+        // renders), written out because Card's props have no `target`/`rel`.
+        "cx-card cx-lit cx-card--elevated cx-card--interactive group h-full gap-0 p-2",
         className,
       )}
     >
-      <div className="relative aspect-[4/5] w-full">
+      <span className="cx-lit-2" aria-hidden="true" />
+
+      {/* Inset photograph: 8px inside a 20px card, so a 12px radius keeps the
+          two corners concentric. */}
+      <div className="relative aspect-[5/6] w-full overflow-hidden rounded-[12px] bg-ink-950">
         <Image
           src={post.imageUrl}
           alt={post.imageAlt}
           fill
           priority={priority}
-          sizes="(max-width: 640px) 88vw, (max-width: 1024px) 44vw, (max-width: 1280px) 30vw, 22vw"
-          className="object-cover transition-transform duration-[900ms] ease-glass motion-safe:group-hover:scale-[1.05]"
+          sizes="(max-width: 640px) 80vw, (max-width: 1024px) 44vw, (max-width: 1280px) 30vw, 300px"
+          className="object-cover transition-transform duration-[900ms] ease-cx motion-safe:group-hover:scale-[1.04]"
         />
 
-        {/* Scrim. Deepens on hover so the type keeps its contrast while the
-            photograph underneath it moves. */}
+        {/* A soft floor under the place tag, so it seats on a bright beach as
+            well as on a dark jungle. The caption no longer lives on the photo. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-ink-950/92 via-ink-950/45 to-ink-950/5 transition-colors duration-500 group-hover:from-ink-950 group-hover:via-ink-950/60"
+          className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-ink-950/35 to-transparent"
         />
+
+        {/* Where it was taken sits at the foot of the photo and the way out
+            at the top, so on a narrow phone card the two never collide. */}
+        <span
+          aria-hidden="true"
+          className="glass-dark absolute bottom-3 left-3 flex h-7 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-pill pr-3 pl-2 text-[12px] font-medium text-white"
+        >
+          <Icon name="map-pin" tone="current" size={14} className="shrink-0" />
+          <span className="truncate">{where}</span>
+        </span>
 
         {/* "Opens on WorldSpace" — the visual half of the affordance. */}
         <span
           aria-hidden="true"
-          className="glass-dark absolute top-3 right-3 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white"
+          className="glass-dark absolute top-3 right-3 flex h-7 items-center gap-1 rounded-pill pr-2 pl-2.5 text-[12px] font-medium text-white"
         >
           {WORLDSPACE.name}
-          <ArrowUpRight className="size-3.5" strokeWidth={2.5} />
+          <Icon
+            name="arrow-up-right"
+            tone="current"
+            size={14}
+            className="transition-transform duration-300 ease-cx motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5"
+          />
         </span>
+      </div>
 
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 flex flex-col gap-2.5 p-4 sm:p-5"
-        >
-          <div className="flex items-center gap-2.5">
-            <WorldSpaceAvatar author={author} />
-            <span className="min-w-0">
-              <span className="flex items-center gap-1 text-[13px] leading-tight font-semibold text-white">
-                <span className="truncate">{author.name}</span>
-                {author.verified ? (
-                  <BadgeCheck className="size-3.5 shrink-0 text-cyan-300" />
-                ) : null}
-              </span>
-              <span className="block truncate text-[11.5px] text-white/65">
-                @{author.handle}
-              </span>
+      <div aria-hidden="true" className="flex flex-1 flex-col px-2.5 pt-4 pb-2.5">
+        <div className="flex items-center gap-3">
+          <WorldSpaceAvatar author={author} />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 text-[14px] leading-tight font-semibold tracking-tight text-foreground">
+              <span className="truncate">{author.name}</span>
+              {author.verified ? (
+                <Icon name="badge-check" size={15} className="shrink-0" />
+              ) : null}
             </span>
-          </div>
-
-          <p className="line-clamp-2 text-[13px] leading-snug text-white/90">
-            {post.caption}
-          </p>
-
-          {tags.length > 0 ? (
-            <p className="flex flex-wrap gap-x-2 text-[11px] text-white/55">
-              {tags.map((tag) => (
-                <span key={tag}>#{tag}</span>
-              ))}
-            </p>
-          ) : null}
-
-          <div className="flex items-center gap-3 text-[11.5px] text-white/70">
-            <span className="flex min-w-0 items-center gap-1">
-              <MapPin className="size-3.5 shrink-0" />
-              <span className="truncate">{where}</span>
-            </span>
-            <span className="ml-auto flex shrink-0 items-center gap-2.5">
-              <span className="flex items-center gap-1">
-                <Heart className="size-3.5" />
-                {compact(post.likes)}
-              </span>
-              <span className="flex items-center gap-1">
-                <MessageCircle className="size-3.5" />
-                {compact(post.comments)}
-              </span>
-              <time dateTime={post.postedAt} title={posted}>
+            <span className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+              <span className="truncate">@{author.handle}</span>
+              <span aria-hidden="true">·</span>
+              <time dateTime={post.postedAt} title={posted} className="shrink-0">
                 {postAge(post.postedAt)}
               </time>
             </span>
-          </div>
+          </span>
+        </div>
+
+        <p className="mt-3.5 line-clamp-3 text-[14.5px] leading-[1.55] text-pretty text-foreground/85">
+          {post.caption}
+        </p>
+
+        {/* mt-auto pins the reactions to the bottom edge, so cards in a row
+            share a baseline whatever the caption length. */}
+        <div className="mt-auto flex items-center gap-3 pt-4 text-[12.5px] text-muted-foreground">
+          {tags.length > 0 ? (
+            <span className="flex min-w-0 flex-wrap gap-x-2 gap-y-1">
+              {tags.map((tag) => (
+                <span key={tag} className="truncate">
+                  #{tag}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <span className="ml-auto flex shrink-0 items-center gap-3 tabular-nums">
+            <span className="flex items-center gap-1">
+              <Icon name="heart" tone="current" size={15} />
+              {compact(post.likes)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Icon name="chat" tone="current" size={15} />
+              {compact(post.comments)}
+            </span>
+          </span>
         </div>
       </div>
     </a>

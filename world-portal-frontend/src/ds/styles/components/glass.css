@@ -1,0 +1,189 @@
+/* VENDORED from worldstreet/design-system by scripts/vendor.mjs. Don't edit: change the design system and re-run it. */
+/* ---- Glass [ext] ---------------------------------------------------------
+   Liquid glass: the material of the WorldStreet iOS app's nav dial, launcher
+   and call controls, made for the web. A translucent tint over a blurred,
+   saturated backdrop, a specular rim that catches the light at the top-left
+   and bottom-right edges, a soft sheen pooled inside, and a lift shadow.
+
+   Glass only works over something: a photo, video, a hue field, an aurora,
+   content scrolling underneath. On flat stone it reads as grey, so use a Card.
+   One layer of glass, never glass on glass.
+
+   Tokens are primitives (an rgb tint plus alphas). The material composes
+   them ON the element, so a brand or a .cx-glass-light / .cx-glass-dark scope
+   can re-tint glass anywhere without re-declaring derived values.
+   ========================================================================== */
+
+/* Dark glass (default) */
+:root, .cx-dark, [data-theme="dark"], .cx-glass-dark {
+  --cx-glass-rgb: 20, 20, 20;          /* the tint */
+  --cx-glass-alpha: .42;               /* regular */
+  --cx-glass-alpha-clear: .16;         /* over media */
+  --cx-glass-blur: 24px;
+  --cx-glass-blur-clear: 14px;
+  --cx-glass-saturate: 180%;
+  --cx-glass-rim: .55;                 /* specular edge, at its brightest */
+  --cx-glass-sheen: .14;               /* the light pooled inside */
+  --cx-glass-line-rgb: 255, 255, 255;  /* the hairline that holds the edge */
+  --cx-glass-line: .10;
+  --cx-glass-hover: .12;               /* a quiet control's hover fill, in the line colour */
+  --cx-glass-shadow: .55;
+  --cx-glass-text: #ffffff;
+  --cx-glass-text-2: rgba(255, 255, 255, .72);
+}
+/* Light glass: frosted white with a dark hairline, so it still has an edge on paper */
+.cx-light, [data-theme="light"], .cx-glass-light {
+  --cx-glass-rgb: 255, 255, 255;
+  --cx-glass-alpha: .58;
+  --cx-glass-alpha-clear: .26;
+  --cx-glass-blur: 24px;
+  --cx-glass-blur-clear: 14px;
+  --cx-glass-saturate: 180%;
+  --cx-glass-rim: .95;
+  --cx-glass-sheen: .5;
+  --cx-glass-line-rgb: 10, 10, 10;
+  --cx-glass-line: .08;
+  --cx-glass-hover: .06;
+  --cx-glass-shadow: .18;
+  --cx-glass-text: #0a0a0a;
+  --cx-glass-text-2: rgba(10, 10, 10, .64);
+}
+
+/* ---- The material --------------------------------------------------------- */
+.cx-liquid, .cx-btn--glass, .cx-chip--glass {
+  --_rgb: var(--cx-glass-rgb);
+  --_a: var(--cx-glass-alpha);
+  --_blur: var(--cx-glass-blur);
+  --_rim: var(--cx-glass-rim);
+  --_sheen: var(--cx-glass-sheen);
+  position: relative; isolation: isolate;
+  color: var(--cx-glass-text);
+  background: rgba(var(--_rgb), var(--_a));
+  -webkit-backdrop-filter: blur(var(--_blur)) saturate(var(--cx-glass-saturate));
+  backdrop-filter: blur(var(--_blur)) saturate(var(--cx-glass-saturate));
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, calc(var(--_rim) * .45)),
+    inset 0 0 0 1px rgba(var(--cx-glass-line-rgb), var(--cx-glass-line)),
+    0 1px 2px rgba(0, 0, 0, calc(var(--cx-glass-shadow) * .35)),
+    0 16px 40px -16px rgba(0, 0, 0, var(--cx-glass-shadow));
+}
+/* Specular rim: a 1px ring, bright where the light enters and leaves.
+   Chips draw it on ::after, because a dot chip (.cx-chip--dot) uses ::before for its dot. */
+.cx-liquid::before, .cx-btn--glass::before, .cx-chip--glass::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(var(--cx-glass-angle, 155deg),
+    rgba(255, 255, 255, var(--_rim)) 0%,
+    rgba(255, 255, 255, calc(var(--_rim) * .14)) 24%,
+    rgba(255, 255, 255, 0) 46%,
+    rgba(255, 255, 255, 0) 62%,
+    rgba(255, 255, 255, calc(var(--_rim) * .4)) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+/* Sheen: light pooled under the top edge. Interactive glass moves it to the pointer. */
+.cx-liquid::after, .cx-btn--glass::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(130% 85% at var(--lg-x, 30%) var(--lg-y, -24%), rgba(255, 255, 255, var(--_sheen)), transparent 58%);
+  opacity: .8; transition: opacity var(--cx-dur) var(--cx-ease);
+}
+
+/* Variants */
+.cx-liquid--clear, .cx-btn--glass.cx-btn--clear {   /* over photos and video: let the picture through */
+  --_a: var(--cx-glass-alpha-clear);
+  --_blur: var(--cx-glass-blur-clear);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+}
+.cx-liquid--tinted, .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand {   /* gold glass: the active or primary thing on glass */
+  --_rgb: var(--cx-accent-rgb);
+  --_a: .3;
+  --_rim: .7;
+}
+.cx-liquid--thin { --_a: calc(var(--cx-glass-alpha) * .6); --_blur: 16px; }
+
+/* Shapes (card is the default) */
+.cx-liquid { border-radius: var(--cx-r-card); }
+.cx-liquid--panel { border-radius: var(--cx-r-lg); }
+.cx-liquid--pill { border-radius: var(--cx-r-pill); }
+.cx-liquid--circle { border-radius: 50%; aspect-ratio: 1; display: grid; place-items: center; }
+
+/* Interactive glass: lifts its sheen on hover, gives under the finger like a lens */
+.cx-liquid--interactive { cursor: pointer; text-decoration: none; transition: transform var(--cx-dur) var(--cx-spring-snappy); }
+.cx-liquid--interactive:hover::after, .cx-btn--glass:hover::after { opacity: 1; }
+.cx-liquid--interactive:hover, .cx-btn--glass:hover { --_sheen: calc(var(--cx-glass-sheen) * 1.6); }
+.cx-liquid--interactive:active { transform: scale(.98); }
+.cx-liquid--interactive:focus-visible { outline: none; box-shadow: var(--cx-focus-ring); }
+
+/* ---- Pieces --------------------------------------------------------------- */
+/* Glass button: <Button variant="glass">. Pressed toggles (aria-pressed) turn gold glass. */
+.cx-btn--glass { color: var(--cx-glass-text); }
+.cx-btn--glass:hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, calc(var(--_rim) * .55)),
+    inset 0 0 0 1px rgba(var(--cx-glass-line-rgb), calc(var(--cx-glass-line) * 1.4)),
+    0 1px 2px rgba(0, 0, 0, calc(var(--cx-glass-shadow) * .35)),
+    0 16px 40px -16px rgba(0, 0, 0, var(--cx-glass-shadow));
+}
+.cx-btn--glass:active { background: rgba(var(--_rgb), var(--_a)); transform: scale(.96); transition: transform var(--cx-dur-fast) var(--cx-spring-snappy); }
+.cx-btn--glass:focus-visible { box-shadow: var(--cx-focus-ring); }
+.cx-btn--glass svg { position: relative; }
+/* Loading: the spinner is ::after too, so take back the sheen's inset, layer and fill */
+.cx-btn--glass[aria-busy="true"]::after { inset: auto; z-index: auto; background: none; opacity: 1;
+  border-color: var(--cx-glass-text); border-right-color: transparent; }
+
+/* Dock: one glass capsule holding a row of controls (call controls, a player, a toolbar).
+   The controls inside are plain (quiet) buttons: the dock is the glass. */
+.cx-liquid-dock { display: inline-flex; align-items: center; gap: 4px; padding: 6px; border-radius: var(--cx-r-pill); }
+.cx-liquid-dock .cx-btn--quiet { color: var(--cx-glass-text); }
+/* From the dock's own tokens, so a dock pinned dark or light (tone) hovers right on either theme */
+.cx-liquid-dock .cx-btn--quiet:hover { background: rgba(var(--cx-glass-line-rgb), var(--cx-glass-hover)); }
+
+/* Bar: a floating navigation capsule (the iOS tab bar, a site header) */
+.cx-liquid-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 8px 8px 20px; border-radius: var(--cx-r-pill); }
+
+/* Chip: a small label over media (a rating, "Live", a level) */
+.cx-chip--glass { --_a: calc(var(--cx-glass-alpha) * .8); --_blur: 12px; color: var(--cx-glass-text); box-shadow: inset 0 0 0 1px rgba(var(--cx-glass-line-rgb), var(--cx-glass-line)); }
+
+/* ---- Brand ---------------------------------------------------------------- */
+/* WorldStreet glass is warm: the stone tint of the iOS app's frosted surfaces */
+[data-brand="worldstreet"], [data-brand="worldstreet"] .cx-glass-dark { --cx-glass-rgb: 28, 25, 23; }
+[data-theme="light"] [data-brand="worldstreet"]:not([data-theme="dark"], [data-theme="dark"] *),
+[data-brand="worldstreet"] .cx-glass-light { --cx-glass-rgb: 255, 255, 255; }
+
+/* ---- Fallbacks and preferences --------------------------------------------- */
+/* No backdrop blur: glass turns nearly solid so text keeps its contrast */
+/* (Gold glass is listed again where its own --_a would otherwise outrank the fallback.) */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .cx-liquid, .cx-btn--glass, .cx-chip--glass,
+  .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand { --_a: .92; }
+  .cx-liquid--tinted, .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand { --cx-glass-text: var(--cx-on-primary); --cx-glass-text-2: var(--cx-on-primary); }
+}
+/* Reduce transparency (an OS setting, as on iOS): solid surfaces, no sheen */
+@media (prefers-reduced-transparency: reduce) {
+  .cx-liquid, .cx-btn--glass, .cx-chip--glass,
+  .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand { --_a: .96; -webkit-backdrop-filter: none; backdrop-filter: none; text-shadow: none; }
+  .cx-liquid::after, .cx-btn--glass:not([aria-busy="true"])::after { display: none; }
+}
+/* Increase contrast: a firmer fill and a visible edge */
+@media (prefers-contrast: more) {
+  .cx-liquid, .cx-btn--glass, .cx-chip--glass,
+  .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand { --_a: .86; box-shadow: inset 0 0 0 1px var(--cx-text-muted); }
+  .cx-liquid::before, .cx-btn--glass::before, .cx-chip--glass::after { display: none; }
+}
+/* Near-solid gold takes the brand's on-accent text: white on solid gold fails contrast */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .cx-liquid--tinted, .cx-btn--glass[aria-pressed="true"], .cx-chip--glass.cx-chip--brand { --cx-glass-text: var(--cx-on-primary); --cx-glass-text-2: var(--cx-on-primary); }
+}
+@media (forced-colors: active) {
+  .cx-liquid, .cx-btn--glass, .cx-chip--glass { background: Canvas; color: CanvasText; border: 1px solid CanvasText; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .cx-liquid::before, .cx-liquid::after, .cx-btn--glass::before, .cx-btn--glass:not([aria-busy="true"])::after, .cx-chip--glass::after { display: none; }
+  /* Gold glass meant "active" or "on": keep that in system colours */
+  .cx-btn--glass[aria-pressed="true"] { background: Highlight; color: HighlightText; border-color: Highlight; }
+  .cx-liquid--tinted, .cx-chip--glass.cx-chip--brand { border-color: Highlight; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx-liquid--interactive, .cx-btn--glass { transition: none; }
+  .cx-liquid--interactive:active, .cx-btn--glass:active { transform: none; }
+  .cx-liquid::after, .cx-btn--glass::after { transition: none; }
+}

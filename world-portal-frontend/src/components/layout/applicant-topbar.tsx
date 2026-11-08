@@ -19,6 +19,7 @@ import {
 import { worldStreetSignIn } from "@/content/applicant";
 import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 import { useBasketStore } from "@/features/basket/store";
+import { cn } from "@/lib/utils";
 
 export function ApplicantTopbar() {
   const [open, setOpen] = React.useState(false);
@@ -38,7 +39,9 @@ export function ApplicantTopbar() {
       <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-6">
         {/* Mobile navigation toggle */}
         <div className="flex items-center gap-3 lg:hidden">
-          <Drawer open={open} onOpenChange={setOpen} direction="left">
+          {/* autoFocus: vaul leaves focus on the trigger by default, so a keyboard
+              user opened the menu and stayed behind it. */}
+          <Drawer open={open} onOpenChange={setOpen} direction="left" autoFocus>
             <DrawerTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Open navigation">
                 <Menu />
@@ -75,7 +78,9 @@ export function ApplicantTopbar() {
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <NotificationCenter recipientId={email} recipientType="APPLICANT" />
-          <ThemeToggle />
+          {/* Icon-only on phones: with the bell and the avatar, the label pushed
+              the bar past 390px. The button keeps its aria-label. */}
+          <ThemeToggle className={cn("max-sm:px-2 max-sm:[&>span]:sr-only")} />
 
           <Button asChild variant="ghost" size="sm" className="hidden text-muted-foreground sm:inline-flex">
             <Link href="/">

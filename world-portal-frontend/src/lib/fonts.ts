@@ -1,10 +1,13 @@
-import { Fraunces, Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
+import { Fraunces, Manrope, Playfair_Display } from "next/font/google";
 
-/** Body + UI. */
-export const fontSans = Plus_Jakarta_Sans({
+/**
+ * Body + UI: Manrope, the WorldStreet design system's face. It has no ₦, so
+ * the root layout loads that single glyph from Noto Sans.
+ */
+export const fontSans = Manrope({
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["300", "400", "500", "600", "700", "800"],
   variable: "--font-sans-family",
 });
 

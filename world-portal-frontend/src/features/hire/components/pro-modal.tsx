@@ -86,7 +86,7 @@ export function ProModal({
                 {pro.rating > 0 ? `${pro.rating} · ` : ""}{pro.jobs} jobs
               </Badge>
               <Badge variant="muted" size="sm">
-                {pro.years} years experience
+                {pro.years} {pro.years === 1 ? "year" : "years"} experience
               </Badge>
               <Badge variant="solid" size="sm">
                 {professionLabels[pro.profession]}
@@ -108,7 +108,7 @@ export function ProModal({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Fact icon={Languages} label="Languages" value={pro.languages.join(", ")} />
-            <Fact icon={Clock} label="Experience" value={`${pro.years} years`} />
+            <Fact icon={Clock} label="Experience" value={`${pro.years} ${pro.years === 1 ? "year" : "years"}`} />
             <Fact icon={CalendarClock} label="Availability" value={pro.availability} />
             <Fact icon={MapPin} label="Based in" value={pro.city} />
           </div>

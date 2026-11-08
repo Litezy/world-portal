@@ -1,67 +1,37 @@
-"use client";
-
-import * as React from "react";
-import Link from "next/link";
-
-import { ArrowRight } from "lucide-react";
-
-import { ParallaxImage } from "@/components/motion/parallax-image";
 import { Reveal } from "@/components/motion/reveal";
-import { ComingSoonNotice } from "@/components/sections/coming-soon";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ComingSoonLink, ComingSoonNotice } from "@/components/sections/coming-soon";
+import { FlightsHotelsStage } from "@/components/sections/flights-hotels-stage";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { flightsHotels } from "@/content/landing";
-import { useGsap } from "@/hooks/use-gsap";
-import { gsap } from "@/lib/motion/gsap";
+import { Card } from "@/ds/components/card";
+import { type IconName, IconTile } from "@/ds/components/icon";
+
+type StatLabel = (typeof flightsHotels.stats)[number]["label"];
+
+/** One duotone glyph per promise, keyed by the stat's own label. */
+const STAT_ICON: Record<StatLabel, IconName> = {
+  "Typical time to get your prices": "timer",
+  "Someone to call if a flight changes": "headset",
+  "Extra fees added at the end": "receipt",
+};
 
 /**
- * Service 2 — sold on speed. The two image rows slide horizontally in
- * opposite directions as the section passes the viewport: scroll-linked, not a
- * carousel, so there is nothing to click and nothing that can sit still.
+ * Service 2 — sold on speed. The page's seventh beat: a scroll-linked tear in
+ * normal flow. A boarding pass rips away as the visitor scrolls and the room
+ * key for the same trip is underneath (`FlightsHotelsStage`) — the seat and
+ * the room, sorted together, which is the whole pitch.
  *
- * Each row renders its images twice so there is always material either side of
- * the travel range and no edge is ever exposed.
+ * Underneath, the three promises are design-system stat cards: a glyph, a
+ * strong Manrope numeral and the caption, so a service that is not open yet
+ * still reads as finished and specific.
  */
 export function FlightsHotels() {
-  const topRef = React.useRef<HTMLDivElement>(null);
-  const bottomRef = React.useRef<HTMLDivElement>(null);
-
-  const scopeRef = useGsap(({ scope }) => {
-    if (!scope) return;
-
-    const trigger = {
-      trigger: scope,
-      start: "top bottom",
-      end: "bottom top",
-      scrub: 0.8,
-    };
-
-    if (topRef.current) {
-      gsap.fromTo(
-        topRef.current,
-        { xPercent: 0 },
-        { xPercent: -28, ease: "none", scrollTrigger: trigger },
-      );
-    }
-    if (bottomRef.current) {
-      gsap.fromTo(
-        bottomRef.current,
-        { xPercent: -28 },
-        { xPercent: 0, ease: "none", scrollTrigger: trigger },
-      );
-    }
-  }, []);
-
   return (
     <Section id="flights-hotels" spacing="md" className="overflow-hidden">
       <Container>
-        <Badge variant="muted" size="sm" className="mb-4 sm:hidden">
-          Coming soon
-        </Badge>
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
             eyebrow={flightsHotels.eyebrow}
             lead={flightsHotels.headingLead}
@@ -70,43 +40,44 @@ export function FlightsHotels() {
             size="md"
             className="max-w-xl"
           >
-            <ComingSoonNotice notice={flightsHotels.notice} />
+            <ComingSoonNotice soon notice={flightsHotels.notice} />
           </SectionHeading>
-          <Button
-            asChild
-            variant="outline"
-            size="md"
-            className="shrink-0 self-start sm:self-end"
-          >
-            <Link href={flightsHotels.cta.href}>
-              {flightsHotels.cta.label}
-              <ArrowRight />
-            </Link>
-          </Button>
+          <ComingSoonLink
+            href={flightsHotels.cta.href}
+            label={flightsHotels.cta.label}
+            className="self-start lg:self-end"
+          />
         </div>
-      </Container>
 
-      <div
-        ref={scopeRef as React.Ref<HTMLDivElement>}
-        className="mt-12 flex flex-col gap-4 sm:gap-5"
-      >
-        <MarqueeRow trackRef={topRef} items={flightsHotels.marqueeTop} />
-        <MarqueeRow trackRef={bottomRef} items={flightsHotels.marqueeBottom} />
-      </div>
+        <div className="mt-10 sm:mt-14">
+          <FlightsHotelsStage />
+        </div>
 
-      <Container>
         <Reveal
           stagger={0.1}
-          as="dl"
-          className="mt-14 grid gap-8 border-t border-border pt-10 sm:grid-cols-3"
+          className="mt-10 grid gap-4 sm:mt-12 sm:grid-cols-3 sm:gap-5"
         >
           {flightsHotels.stats.map((stat) => (
-            <div key={stat.label}>
-              <dt className="heading-serif text-[38px] leading-none font-normal text-ink-900">
-                {stat.value}
-              </dt>
-              <dd className="mt-2 text-[13.5px] text-muted-foreground">{stat.label}</dd>
-            </div>
+            <Card
+              key={stat.label}
+              className="flex-row items-start justify-between gap-4 p-6 sm:p-7"
+            >
+              {/* Label first in the DOM so it reads "caption: value"; the
+                  value is shown first. */}
+              <dl className="flex flex-col-reverse">
+                <dt className="mt-3 text-[14px] leading-snug text-muted-foreground">
+                  {stat.label}
+                </dt>
+                <dd>
+                  <StatValue value={stat.value} />
+                </dd>
+              </dl>
+              <IconTile
+                name={STAT_ICON[stat.label] ?? "sparkle"}
+                variant="glass"
+                size="sm"
+              />
+            </Card>
           ))}
         </Reveal>
       </Container>
@@ -114,31 +85,18 @@ export function FlightsHotels() {
   );
 }
 
-function MarqueeRow({
-  items,
-  trackRef,
-}: {
-  items: readonly { src: string; alt: string }[];
-  trackRef: React.RefObject<HTMLDivElement | null>;
-}) {
+/** "4 hrs" sets the number large and the unit beside it; "24/7" and "0" stay whole. */
+function StatValue({ value }: { value: string }) {
+  const [, figure, unit] = /^(\S+)\s+(.+)$/.exec(value) ?? [null, value, null];
+
   return (
-    <div className="w-full overflow-hidden">
-      <div ref={trackRef} className="flex w-max gap-4 will-change-transform sm:gap-5">
-        {/* Duplicated so the row still covers the viewport at either extreme of
-            its travel. The copy is decorative, so it is hidden from AT. */}
-        {[...items, ...items].map((item, i) => (
-          <ParallaxImage
-            key={`${item.src}-${i}`}
-            src={item.src}
-            alt={i < items.length ? item.alt : ""}
-            aria-hidden={i >= items.length || undefined}
-            fill
-            sizes="(max-width: 640px) 62vw, 420px"
-            strength={8}
-            className="h-[210px] w-[300px] shrink-0 rounded-2xl sm:h-[260px] sm:w-[400px]"
-          />
-        ))}
-      </div>
-    </div>
+    <span className="flex items-baseline gap-1.5 text-[44px] leading-none font-semibold tracking-[-0.045em] text-foreground tabular-nums sm:text-[52px]">
+      {figure}
+      {unit ? (
+        <span className="text-[20px] font-medium tracking-[-0.01em] text-text-3">
+          {unit}
+        </span>
+      ) : null}
+    </span>
   );
 }

@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
 
   images: {
     formats: ["image/avif", "image/webp"],
+    // Next 16 only serves listed qualities (anything else is coerced to the
+    // nearest). 75 is the default; 90 is for the hero's full-bleed plates,
+    // whose smooth sky bands and blocks visibly at 75.
+    qualities: [75, 90],
     // Add the CDN/CMS hosts that will serve destination imagery.
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },

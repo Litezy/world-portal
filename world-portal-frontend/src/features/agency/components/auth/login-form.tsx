@@ -116,8 +116,11 @@ export function AgencyLoginForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel required>{agencyAuth.fields.email}</FormLabel>
-              <FormControl>
-                <div className="relative">
+              {/* FormControl wraps the input itself: it carries the id the label
+                  points at, and aria-invalid / aria-describedby. On the wrapper
+                  div, the label named nothing. */}
+              <div className="relative">
+                <FormControl>
                   <Input
                     type="email"
                     autoComplete="email"
@@ -125,17 +128,17 @@ export function AgencyLoginForm() {
                     placeholder="agency@example.com"
                     {...field}
                   />
-                  {otpSent && (
-                    <button
-                      type="button"
-                      onClick={() => setOtpSent(false)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary underline"
-                    >
-                      Change
-                    </button>
-                  )}
-                </div>
-              </FormControl>
+                </FormControl>
+                {otpSent && (
+                  <button
+                    type="button"
+                    onClick={() => setOtpSent(false)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary underline"
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
               <FormMessage />
             </FormItem>
           )}

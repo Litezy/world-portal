@@ -50,8 +50,10 @@ const FRAG = /* glsl */ `
     if (r > 0.25) discard;
     float soft = smoothstep(0.25, 0.02, r);
 
-    vec3 warm = mix(vec3(1.0, 0.85, 0.30), vec3(1.0, 0.98, 0.90), vSeed);
-    gl_FragColor = vec4(warm, vAlpha * soft);
+    // E-Embassy cyan (#7DDCFF, --cyan-300) into a cool near-white, so the
+    // trail belongs to the brand's blue panel rather than reading as gold.
+    vec3 tint = mix(vec3(0.49, 0.86, 1.0), vec3(0.92, 0.97, 1.0), vSeed);
+    gl_FragColor = vec4(tint, vAlpha * soft);
   }
 `;
 

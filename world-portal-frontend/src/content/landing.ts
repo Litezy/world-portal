@@ -20,9 +20,44 @@ export const hero = {
   cta: { label: "Start my trip", href: "/start" },
   navCta: { label: "Get started", href: "/start" },
   secondaryCta: { label: "See what we do", href: "#visas" },
+  /**
+   * "Cleared for take-off": the scene behind the copy. A visa form gets
+   * stamped, folds into a paper plane as the visitor scrolls, and flies
+   * through the cloud to the lagoon. All of it is decoration (aria-hidden).
+   */
+  scene: {
+    // The opening sky, and the LCP image. Generated with Antigravity
+    // (2026-11-08): late-morning daylight just above a cumulus deck, a low
+    // flat horizon with the reef showing on the right, open sky for the
+    // headline and the paper. Upscaled 2x (Lanczos3, light sharpen) to
+    // 2752 x 1536 and saved at q88, so a 1536 px laptop at DPR 2 is not
+    // stretching a 1376 px plate.
+    sky: "/images/hero/sky-day.jpg",
+    // Greyscale cumulus plates (Antigravity, 2026-11-07), the same cloud type
+    // as the sky's deck, used as luminance masks so their dark gaps are
+    // see-through; hero.module.css colours them for daylight. The near ones
+    // are blurred.
+    clouds: {
+      body: "/images/hero/arrival-clouds.jpg",
+      matte: "/images/hero/arrival-clouds-matte.jpg",
+      nearWisps: "/images/hero/near-wisps.jpg",
+      nearBank: "/images/hero/near-bank.jpg",
+    },
+    // The folded plane mid-glide, rendered from the hero's own 3D scene (in
+    // its daylight, 2026-11-08) at 2x and trimmed. It is the whole plane
+    // under reduced motion, and the fallback without WebGL.
+    still: "/images/hero/paper-plane-day.webp",
+  },
+  /** Where the flight lands: revealed under the cloud at the end. */
   image: {
-    src: "/images/hero.jpg",
-    alt: "Islands scattered across a turquoise lagoon seen from above",
+    // Generated with Antigravity (2026-11-08) in the same shoot as the sky:
+    // the same late-morning light and the same soft cumulus, so the flight
+    // lands in the world it took off from. Upscaled 2x like the sky, q77.
+    // `LAGOON` in hero-paper.tsx holds where its villas are; move it with
+    // the picture. A new filename rather than overwriting, because
+    // next/image caches per format (see CLAUDE.md, "Swapping an image?").
+    src: "/images/hero/lagoon-day.jpg",
+    alt: "Thatched overwater villas curving across a turquoise Maldives lagoon in morning sun, seen from the air",
   },
   /**
    * Static placeholder copy for the hero forecast card — a hand-written sample
@@ -60,25 +95,32 @@ export const intro = {
   headingBreak: "a lot of paperwork —",
   headingAccent: "we do it for you.",
   body: "A passport. Then a visa. Then a flight and somewhere to stay. Most people give up somewhere in the middle. Tell us where you are going and we handle every step, in the right order, and tell you what is happening as it happens.",
+  /**
+   * One photograph per step of the route the body copy describes (passport,
+   * visa, flight, stay), in that order. Generated with Antigravity
+   * (2026-11-07) to show the step itself; the landscapes that used to sit
+   * here (temple.jpg and co.) did not match their labels and still serve
+   * WorldSpace.
+   */
   thumbnails: [
     {
-      src: "/images/intro/temple.jpg",
-      alt: "A temple reflected in still water at dawn",
+      src: "/images/intro/passport.jpg",
+      alt: "A plain navy passport on a linen bedspread beside sunglasses and a folded map",
       position: "top-left",
     },
     {
-      src: "/images/intro/rice.jpg",
-      alt: "Sunlit terraces lined with palm trees",
+      src: "/images/intro/visa.jpg",
+      alt: "An open passport page covered in colourful entry stamps, with a rubber stamp beside it",
       position: "top-right",
     },
     {
-      src: "/images/intro/beach.jpg",
-      alt: "A cliff above turquoise water",
+      src: "/images/intro/flight.jpg",
+      alt: "An aircraft wing over a sea of clouds at golden hour, seen through the cabin window",
       position: "bottom-left",
     },
     {
-      src: "/images/intro/falls.jpg",
-      alt: "A waterfall falling through dense forest",
+      src: "/images/intro/stay.jpg",
+      alt: "An overwater villa bedroom with its doors open onto a turquoise lagoon",
       position: "bottom-right",
     },
   ],
@@ -89,6 +131,8 @@ export const whyUs = {
   headingLead: "Why people let us",
   headingAccent: "do it for them.",
   body: "Because chasing embassies, forms and fares is a full-time job, and you already have one.",
+  /** The words in `body` that get the gold marker stroke as it inks in. Must occur in `body`. */
+  bodyMark: "a full-time job",
   background: {
     src: "/images/why-us.jpg",
     alt: "Mist rising over open country at first light",
@@ -134,6 +178,38 @@ export const visas = {
   body: "A visa is permission to enter another country. Which one you need depends on your passport, where you are going and why. Tell us those three things and we will say exactly which visa applies, fill in the forms, and follow it up until there is a decision.",
   cta: { label: "Start a visa application", href: "/apply" },
   secondaryCta: { label: "Track an application", href: "/track" },
+  /**
+   * The destination picker. Which visa a destination needs comes from the
+   * application's own ruleset (`resolveVisaRoute` in
+   * src/features/visa/requirement.ts), for the passport below — the same one
+   * the example trip in `journey.demo` uses. Nothing here states a requirement
+   * of its own.
+   *
+   * The destinations are the pairs that ruleset gets right for a Nigerian
+   * passport. Its ETA list (UK, US, Canada…) is for visa-exempt passports, so
+   * no ETA destination is offered here: the ETA card is reached from the deck.
+   */
+  picker: {
+    passport: "NG",
+    prompt: "Where are you going?",
+    passportNote: "On a Nigerian passport",
+    destinations: [
+      { code: "AE", city: "Dubai" },
+      { code: "FR", city: "Paris" },
+      { code: "IN", city: "Delhi" },
+      { code: "ZA", city: "Cape Town" },
+      { code: "TH", city: "Bangkok" },
+      { code: "GH", city: "Accra" },
+    ],
+    resultLabel: "What happens next",
+    note: "Based on the usual rules for this pair. A consultant confirms it against the current requirements before anything is filed — and before you pay.",
+    browsing: "Pick a destination to see which of the three applies to you.",
+    visaFree: "No visa needed",
+    deckLabel: "The three kinds of visa",
+    showCard: "Show",
+    previous: "Previous visa",
+    next: "Next visa",
+  },
   items: [
     {
       name: "eVisa",
@@ -150,7 +226,7 @@ export const visas = {
       body: "The kind you apply for at an embassy in person. We prepare the paperwork, book your appointment, and run you through the interview beforehand.",
       image: {
         src: "/images/visas/consular.jpg",
-        alt: "A consular building behind wrought-iron gates",
+        alt: "Automated immigration gates in an airport arrivals hall",
       },
     },
     {
@@ -172,6 +248,32 @@ export const passports = {
   headingAccent: "Start here.",
   body: "Your passport is the one thing you cannot travel without, and every visa is stamped into it. If you do not have one, or it runs out within six months of your trip, this is the first thing to fix. We handle the forms, the photos and the appointment.",
   cta: { label: "Start a passport application", href: "/passport" },
+  /**
+   * The passport drawn beside the three situations, filling in as they scroll
+   * past. Illustration only: every value is specimen data, the page says
+   * "Specimen" on its face, and the drawing is hidden from assistive tech
+   * behind `description`. Never wire it to a record.
+   */
+  specimen: {
+    description:
+      "Illustration of a specimen passport: the photo and details fill in, the dates renew, and an issued stamp lands on the visa page.",
+    watermark: "Specimen",
+    title: "Passport",
+    visaPage: "Visas",
+    fields: {
+      surname: { label: "Surname", value: "SPECIMEN" },
+      given: { label: "Given names", value: "YOUR NAME" },
+      birth: { label: "Date of birth", value: "01 JAN 1995" },
+      number: { label: "Passport no.", value: "A00000000", renewed: "B00000000" },
+      issue: { label: "Date of issue", value: "12 MAR 2016", renewed: "12 MAR 2026" },
+      expiry: { label: "Date of expiry", value: "12 MAR 2026", renewed: "12 MAR 2036" },
+    },
+    mrz: [
+      "P<<<SPECIMEN<<YOUR<NAME<<<<<<<<<<<<<<<<<<<<<",
+      "B00000000<0<<<9501010<3603120<<<<<<<<<<<<<<0",
+    ],
+    stamp: { word: "Issued", detail: "E-Embassy" },
+  },
   items: [
     {
       name: "First passport",
@@ -211,9 +313,14 @@ export const journey = {
   headingAccent: "the whole thing.",
   body: "No jargon, no chasing. Here is exactly what happens once you get in touch.",
   cta: { label: "Start my trip", href: "/start" },
-  /** Sits behind the whole panel, heavily dimmed — texture, not subject. */
+  /** Sits behind the whole panel in dark, heavily dimmed — texture, not subject. */
   background: {
     src: "/images/journey/panel.jpg",
+    alt: "",
+  },
+  /** The light theme's texture: the hero's daylight sky, under a pale wash. */
+  backgroundDay: {
+    src: "/images/hero/sky-day.jpg",
     alt: "",
   },
   steps: [
@@ -254,6 +361,97 @@ export const journey = {
       },
     },
   ],
+  /**
+   * The example trip the section plays through, one mock-up per step.
+   *
+   * Every value here is illustrative sample data, exactly like
+   * `hero.forecast`: not a booking, not a record and not a live status. The
+   * stage always shows the `label` chip so it can never be read as one, and
+   * the mock-ups are hidden from assistive tech behind `description`. Edit it
+   * like the rest of the copy; never wire it to an API.
+   */
+  demo: {
+    label: "Example trip",
+    description:
+      "Illustration of an example trip from Lagos to Dubai moving through the four steps. Sample details only, not a real booking.",
+    from: { city: "Lagos", code: "LOS", country: "NG" },
+    to: { city: "Dubai", code: "DXB", country: "AE" },
+    dates: "12–19 Mar",
+    /** Step 1 — the trip request filling in. */
+    plan: {
+      title: "Plan a trip",
+      subtitle: "About five minutes",
+      draft: "Draft",
+      sent: "Sent",
+      labels: {
+        from: "From",
+        to: "To",
+        dates: "Dates",
+        travellers: "Travellers",
+        passport: "Passport",
+      },
+      travellers: "1 adult",
+      passport: "Nigerian",
+      action: "Send my plan",
+      confirmation: "Sent to your consultant",
+      confirmationTime: "Just now",
+    },
+    /** Step 2 — the route checklist, in the order it has to happen. */
+    route: {
+      title: "Your route",
+      count: "4 items",
+      next: "Next",
+      items: [
+        { key: "passport", label: "Passport", detail: "Valid until 2029" },
+        { key: "visa", label: "Visa", detail: "Tourist eVisa · 3–7 days" },
+        { key: "flight", label: "Flight", detail: "LOS → DXB" },
+        { key: "stay", label: "Stay", detail: "7 nights" },
+      ],
+      note: "One clear list, in the order it has to happen.",
+    },
+    /** Step 3 — the application moving to approved, seats and rooms held. */
+    filing: {
+      title: "UAE eVisa",
+      subtitle: "Tourist visa",
+      statuses: ["Submitted", "Under review", "Approved"],
+      stages: ["Filed", "Review", "Decision"],
+      outcome: "Outcome",
+      awaiting: "Awaiting decision",
+      stamp: "Approved",
+      holds: [
+        { key: "seat", label: "Seat held", detail: "LOS → DXB · 12 Mar" },
+        { key: "room", label: "Room held", detail: "7 nights · 12–19 Mar" },
+      ],
+    },
+    /** Step 4 — the boarding pass, the consultant's message, the plan. */
+    travel: {
+      pass: {
+        title: "Boarding pass",
+        date: "12 Mar",
+        details: [
+          { label: "Date", value: "12 Mar" },
+          { label: "Gate", value: "E14" },
+          { label: "Seat", value: "23A" },
+          { label: "Boards", value: "08:40" },
+        ],
+      },
+      message: {
+        from: "Your consultant",
+        channel: "WhatsApp",
+        // A no-break space keeps the plane on the same line as "travels".
+        body: "Your visa is approved. Safe travels ✈",
+        time: "09:12",
+      },
+      plan: {
+        title: "Day by day",
+        days: [
+          { day: "Day 1", text: "Land, check in, marina walk" },
+          { day: "Day 2", text: "Old Dubai and the souks" },
+          { day: "Day 3", text: "An evening in the desert" },
+        ],
+      },
+    },
+  },
 } as const;
 
 /** Service 2 — sells speed and reliability. */
@@ -271,38 +469,50 @@ export const flightsHotels = {
     { value: "24/7", label: "Someone to call if a flight changes" },
     { value: "0", label: "Extra fees added at the end" },
   ],
-  marqueeTop: [
-    {
-      src: "/images/travel/flight-cloud.jpg",
-      alt: "An airliner above a layer of cloud",
+  /**
+   * The stage: a boarding pass that tears away, as you scroll, to the room key
+   * under it. Same example trip as `journey.demo` (Lagos → Dubai, 12–19 Mar),
+   * sample details only and always labelled as an example.
+   */
+  stage: {
+    label: "Example booking",
+    description:
+      "Illustration of an example booking: a boarding pass from Lagos to Dubai that gives way, as you scroll, to the room key for the stay. Sample details only, not a real booking.",
+    pass: {
+      kicker: "Boarding pass",
+      step: "The seat",
+      from: { code: "LOS", city: "Lagos" },
+      to: { code: "DXB", city: "Dubai" },
+      rows: [
+        { label: "Date", value: "12 Mar" },
+        { label: "Seat", value: "23A" },
+        { label: "Gate", value: "E14" },
+        { label: "Boards", value: "08:40" },
+      ],
+      note: "Fare held at today's price",
+      image: {
+        src: "/images/intro/flight.jpg",
+        alt: "The view from a window seat: a wing over the clouds at golden hour",
+      },
     },
-    {
-      src: "/images/stays/ocean-villa.jpg",
-      alt: "A modern villa with a long infinity pool",
+    room: {
+      kicker: "Room key",
+      step: "The room",
+      name: "Ocean villa",
+      place: "Dubai · 7 nights",
+      rows: [
+        { label: "Check-in", value: "12 Mar" },
+        { label: "Room", value: "1204" },
+        { label: "Nights", value: "7" },
+        { label: "Guests", value: "1 adult" },
+      ],
+      status: "Held while you decide",
+      image: {
+        src: "/images/stays/ocean-villa.jpg",
+        alt: "A modern villa with a long infinity pool",
+      },
     },
-    { src: "/images/visas/evisa.jpg", alt: "An airport concourse lit at night" },
-    {
-      src: "/images/stays/grand-palace.jpg",
-      alt: "A glass-fronted suite at golden hour",
-    },
-    { src: "/images/travel/cabin.jpg", alt: "A private cabin interior" },
-  ],
-  marqueeBottom: [
-    { src: "/images/travel/arrival.jpg", alt: "A lit resort entrance at dusk" },
-    {
-      src: "/images/travel/flight-dusk.jpg",
-      alt: "An aircraft climbing through a dusk sky",
-    },
-    {
-      src: "/images/stays/jungle-retreat.jpg",
-      alt: "A thatched pavilion beside a curved pool",
-    },
-    {
-      src: "/images/visas/eta.jpg",
-      alt: "A departure hall with flight information boards",
-    },
-    { src: "/images/gallery/1.jpg", alt: "A hut above a secluded beach" },
-  ],
+  },
 } as const;
 
 /** Service 3 — sells curation and quality. */
@@ -321,31 +531,46 @@ export const experiences = {
     "Small groups, not coach parties",
     "Or built entirely around you",
   ],
-  images: [
+  /**
+   * The stacking cards, one per highlight and in the same order. Each slides
+   * up over the one before it as the visitor scrolls.
+   */
+  stack: [
     {
-      src: "/images/gallery/1.jpg",
-      alt: "A hut above a secluded beach with kayaks",
-      span: "small",
+      title: "Private guides and drivers",
+      body: "Someone who knows the place meets you at arrivals and stays with you for the day, instead of a script read off a clipboard.",
+      image: {
+        src: "/images/gallery/3.jpg",
+        alt: "A tiered temple against a misty mountain",
+      },
     },
     {
-      src: "/images/gallery/2.jpg",
-      alt: "Dancers in ceremonial dress and gold headpieces",
-      span: "small",
+      title: "Tickets booked ahead, no queues",
+      body: "The ceremony, the gallery, the sunset slot: booked before you fly, so the day is spent there and not in a line.",
+      image: {
+        src: "/images/gallery/2.jpg",
+        alt: "Dancers in ceremonial dress and gold headpieces",
+      },
     },
     {
-      src: "/images/gallery/3.jpg",
-      alt: "A tiered temple against a misty mountain",
-      span: "tall",
+      title: "Small groups, not coach parties",
+      body: "A handful of people on the terraces at first light, not a coachload, and a pace that leaves time to stop and look.",
+      image: {
+        src: "/images/gallery/5.jpg",
+        alt: "Sunlight over palm-lined terraces",
+      },
     },
     {
-      src: "/images/gallery/4.jpg",
-      alt: "A clifftop temple above a breaking surf line",
-      span: "small",
-    },
-    {
-      src: "/images/gallery/5.jpg",
-      alt: "Sunlight over palm-lined terraces",
-      span: "small",
+      title: "Or built entirely around you",
+      body: "Tell us how you like to travel and we plan the days from scratch, slow mornings and empty afternoons included.",
+      image: {
+        src: "/images/gallery/1.jpg",
+        alt: "A hut above a secluded beach with kayaks",
+      },
+      inset: {
+        src: "/images/gallery/4.jpg",
+        alt: "A clifftop temple above a breaking surf line",
+      },
     },
   ],
 } as const;
@@ -409,6 +634,8 @@ export const faq = {
   headingLead: "Things people ask",
   headingAccent: "before they book.",
   body: "Short answers, no jargon.",
+  /** The quiet way out under the heading, for a question that is not here. */
+  more: { lead: "Something we have not covered?", cta: "Ask us on WhatsApp" },
   items: [
     {
       question: "What is the difference between a passport and a visa?",

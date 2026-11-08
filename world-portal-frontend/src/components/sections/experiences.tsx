@@ -1,19 +1,61 @@
-import Link from "next/link";
+import Image from "next/image";
 
-import { ArrowRight, Check } from "lucide-react";
-
-import { ParallaxImage } from "@/components/motion/parallax-image";
-import { Reveal } from "@/components/motion/reveal";
-import { ComingSoonNotice } from "@/components/sections/coming-soon";
-import { Button } from "@/components/ui/button";
+import { ComingSoonLink, ComingSoonNotice } from "@/components/sections/coming-soon";
+import {
+  ExperiencesMarker,
+  ExperiencesStack,
+} from "@/components/sections/experiences-stack";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { experiences } from "@/content/landing";
+import { Icon, type IconName } from "@/ds/components/icon";
+import { cn } from "@/lib/utils";
 
-/** Service 3 — sold on curation, so the imagery does most of the talking. */
+type Highlight = (typeof experiences.highlights)[number];
+
+/** One duotone glyph per highlight, keyed by the highlight itself. */
+const HIGHLIGHT_ICON: Record<Highlight, IconName> = {
+  "Private guides and drivers": "user-star",
+  "Tickets booked ahead, no queues": "ticket",
+  "Small groups, not coach parties": "users",
+  "Or built entirely around you": "compass",
+};
+
+/**
+ * Each card's text panel has its own tone, so a card sliding over the last
+ * reads as a new thing arriving rather than the same slab again: ink, the
+ * brand blue, the page's own paper, and a deep night blue.
+ */
+const PANEL_TONES = [
+  { panel: "bg-ink-950 text-white", body: "text-white/75", dark: true },
+  { panel: "bg-brand-600 text-white", body: "text-white/80", dark: true },
+  { panel: "bg-elevated text-foreground", body: "text-muted-foreground", dark: false },
+  { panel: "bg-brand-950 text-white", body: "text-white/75", dark: true },
+] as const;
+
+/** "planned properly." → ["planned", "properly."], so the last word gets the marker. */
+function splitLastWord(text: string) {
+  const at = text.lastIndexOf(" ");
+  return at === -1 ? ["", text] : [text.slice(0, at), text.slice(at + 1)];
+}
+
+/**
+ * Service 3 — sold on curation. The page's eighth beat: sticky stacking cards.
+ *
+ * One card per promise, each a photograph beside a panel in its own tone.
+ * They are sticky, so as the visitor scrolls each card slides up over the one
+ * before it, which eases back and dims (`ExperiencesStack` owns that motion).
+ * Normal flow, no pin.
+ *
+ * Under reduced motion the deck is laid out flat: a two-up grid of the same
+ * cards from sm, one column on a phone. The cards size themselves with
+ * container queries, so a card is wide (panel beside photo) on the stage and
+ * tall (photo over panel) in half the width or on a phone.
+ */
 export function Experiences() {
-  const [a, b, tall, c, d] = experiences.images;
+  const [accentLead, accentLast] = splitLastWord(experiences.headingAccent);
+  const total = String(experiences.stack.length).padStart(2, "0");
 
   return (
     <Section id="experiences" spacing="md">
@@ -21,84 +63,138 @@ export function Experiences() {
         <SectionHeading
           eyebrow={experiences.eyebrow}
           lead={experiences.headingLead}
-          accent={experiences.headingAccent}
+          accent={
+            <>
+              {accentLead ? `${accentLead} ` : null}
+              <ExperiencesMarker>{accentLast}</ExperiencesMarker>
+            </>
+          }
           body={experiences.body}
           align="center"
           size="md"
         >
-          <ComingSoonNotice notice={experiences.notice} />
+          <ComingSoonNotice
+            soon
+            notice={experiences.notice}
+            className="justify-center"
+          />
         </SectionHeading>
 
-        <Reveal
-          stagger={0.08}
-          as="ul"
-          className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3"
+        <ExperiencesStack
+          className={cn(
+            "mt-10 sm:mt-14",
+            "[--stack-step:12px] [--stack-top:5.25rem] lg:[--stack-step:16px] lg:[--stack-top:6.75rem]",
+            "motion-reduce:grid motion-reduce:gap-4 motion-reduce:sm:grid-cols-2 motion-reduce:sm:gap-5",
+          )}
         >
-          {experiences.highlights.map((item) => (
-            <li
-              key={item}
-              className="flex items-center gap-2 text-[13px] font-medium text-ink-800"
-            >
-              <Check className="size-4 text-primary" strokeWidth={2.5} />
-              {item}
-            </li>
-          ))}
-        </Reveal>
+          {experiences.stack.map((card, index) => {
+            const tone = PANEL_TONES[index % PANEL_TONES.length]!;
+            const inset = "inset" in card ? card.inset : null;
 
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
-          <div className="grid gap-4 sm:gap-5">
-            <Tile image={a} className="aspect-square" strength={14} />
-            <Tile image={b} className="aspect-square" strength={8} />
-          </div>
+            return (
+              <li
+                key={card.title}
+                style={{ "--i": index } as React.CSSProperties}
+                className={cn(
+                  "motion-safe:sticky motion-safe:top-[calc(var(--stack-top)+var(--i)*var(--stack-step))]",
+                  "motion-safe:mb-[6vh] motion-safe:last:mb-0 motion-safe:last:pb-[12vh]",
+                )}
+              >
+                <article
+                  data-stack-card=""
+                  className={cn(
+                    "@container relative isolate overflow-hidden rounded-[24px] will-change-transform sm:rounded-[28px]",
+                    "ring-1 ring-ink-950/[0.06] dark:ring-white/10",
+                    "shadow-[0_-18px_50px_-28px_rgb(8_20_50/0.55)]",
+                    "motion-safe:h-[min(74svh,560px)]",
+                  )}
+                >
+                  <div className="grid h-full grid-rows-[minmax(13rem,1fr)_auto] @2xl:grid-cols-[5fr_7fr] @2xl:grid-rows-1">
+                    {/* The photograph: on top in a narrow card, on the right
+                        in a wide one. */}
+                    <div className="relative min-h-[13rem] overflow-hidden bg-ink-950 motion-reduce:aspect-[4/3] @2xl:order-2 @2xl:motion-reduce:aspect-auto">
+                      <div data-stack-image="" className="absolute inset-0">
+                        <Image
+                          src={card.image.src}
+                          alt={card.image.alt}
+                          fill
+                          sizes="(max-width: 768px) 92vw, 700px"
+                          className="object-cover"
+                        />
+                      </div>
+                      {inset ? (
+                        <div className="absolute right-5 bottom-5 hidden aspect-[4/5] w-[28%] max-w-[190px] rotate-[4deg] overflow-hidden rounded-[14px] shadow-[0_24px_48px_-16px_rgb(2_8_23/0.7)] ring-4 ring-white @2xl:block">
+                          <Image
+                            src={inset.src}
+                            alt={inset.alt}
+                            fill
+                            sizes="190px"
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
 
-          <div className="order-first col-span-2 lg:order-none lg:col-span-1">
-            <Tile
-              image={tall}
-              className="aspect-[4/5] h-full lg:aspect-auto"
-              sizes="(max-width: 1024px) 92vw, 380px"
-              strength={11}
-            />
-          </div>
+                    <div
+                      className={cn(
+                        "flex flex-col justify-between gap-8 p-6 sm:p-8 @2xl:order-1 @4xl:p-10",
+                        tone.panel,
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <span
+                          aria-hidden="true"
+                          className="text-[13px] font-semibold tracking-[0.14em] tabular-nums opacity-70"
+                        >
+                          {String(index + 1).padStart(2, "0")} / {total}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "grid size-11 place-items-center rounded-[14px]",
+                            tone.dark ? "bg-white/12" : "cx-itile cx-itile--brand",
+                          )}
+                        >
+                          <Icon
+                            name={HIGHLIGHT_ICON[card.title] ?? "compass"}
+                            tone="white"
+                            size={22}
+                          />
+                        </span>
+                      </div>
 
-          <div className="grid gap-4 sm:gap-5">
-            <Tile image={c} className="aspect-square" strength={8} />
-            <Tile image={d} className="aspect-square" strength={14} />
-          </div>
-        </div>
+                      <div>
+                        <h3 className="text-[26px] leading-[1.06] font-semibold tracking-[-0.03em] text-balance sm:text-[32px] @4xl:text-[40px]">
+                          {card.title}
+                        </h3>
+                        <p
+                          className={cn(
+                            "mt-3 max-w-sm text-[15px] leading-relaxed text-pretty sm:mt-4 sm:text-base",
+                            tone.body,
+                          )}
+                        >
+                          {card.body}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-        <div className="mt-12 flex justify-center">
-          <Button asChild variant="outline" size="lg">
-            <Link href={experiences.cta.href}>
-              {experiences.cta.label}
-              <ArrowRight />
-            </Link>
-          </Button>
+                  {/* Dims the card once the next one has slid over it. */}
+                  <div
+                    data-stack-shade=""
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 z-10 bg-ink-950 opacity-0"
+                  />
+                </article>
+              </li>
+            );
+          })}
+        </ExperiencesStack>
+
+        <div className="mt-10 flex justify-center sm:mt-12">
+          <ComingSoonLink href={experiences.cta.href} label={experiences.cta.label} />
         </div>
       </Container>
     </Section>
-  );
-}
-
-function Tile({
-  image,
-  className,
-  strength = 12,
-  sizes = "(max-width: 640px) 46vw, (max-width: 1024px) 46vw, 300px",
-}: {
-  image: { src: string; alt: string };
-  className?: string;
-  strength?: number;
-  sizes?: string;
-}) {
-  return (
-    <ParallaxImage
-      src={image.src}
-      alt={image.alt}
-      fill
-      sizes={sizes}
-      strength={strength}
-      className={`group rounded-[1.5rem] ${className ?? ""}`}
-      imageClassName="transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
-    />
   );
 }

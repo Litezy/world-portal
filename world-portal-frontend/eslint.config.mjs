@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "next-env.d.ts",
+    // Vendored WorldStreet design system: never edited here (pnpm ds:sync).
+    "src/ds/**",
   ]),
 
   ...nextVitals,

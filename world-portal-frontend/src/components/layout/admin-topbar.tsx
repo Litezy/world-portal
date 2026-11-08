@@ -75,7 +75,9 @@ export function AdminTopbar({ user }: { user: AdminUser }) {
       <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-6">
         {/* Mobile Navigation Drawer Trigger */}
         <div className="flex items-center gap-3 lg:hidden">
-          <Drawer open={open} onOpenChange={setOpen} direction="left">
+          {/* autoFocus: vaul leaves focus on the trigger by default, so a keyboard
+              user opened the menu and stayed behind it. */}
+          <Drawer open={open} onOpenChange={setOpen} direction="left" autoFocus>
             <DrawerTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Open navigation">
                 <Menu />

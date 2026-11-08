@@ -24,7 +24,9 @@ export default function GlobalError({
         <AlertTriangle className="size-7" />
       </div>
       <div className="space-y-2">
-        <h1 className="font-display text-2xl font-semibold">Something went wrong</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-ink-900">
+          Something went wrong
+        </h1>
         <p className="max-w-md text-sm text-pretty text-muted-foreground">
           We hit an unexpected error. Try again — if it keeps happening, get in touch
           and we&apos;ll sort it out.

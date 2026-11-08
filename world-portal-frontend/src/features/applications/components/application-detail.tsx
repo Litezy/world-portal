@@ -60,7 +60,7 @@ export function ApplicationDetail({ id }: { id: string }) {
         </Link>
       </Button>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         <Card variant="solid" radius="lg" padding="none" className="gap-0 p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -131,7 +131,7 @@ export function ApplicationDetail({ id }: { id: string }) {
               Review files and verification attachments submitted by applicant.
             </CardDescription>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {application.documents && application.documents.length > 0 ? (
                 application.documents.map((doc, idx) => (
                   <div
@@ -153,7 +153,7 @@ export function ApplicationDetail({ id }: { id: string }) {
                 ))
 
               ) : (
-                <div className="col-span-2 rounded-xl border border-dashed border-border/70 bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                <div className="col-span-full rounded-xl border border-dashed border-border/70 bg-muted/20 p-4 text-center text-xs text-muted-foreground">
                   No uploaded document files attached to this application.
                 </div>
               )}
@@ -208,7 +208,7 @@ export function ApplicationDetail({ id }: { id: string }) {
 
 function DetailSkeleton() {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
       <div className="rounded-2xl border border-border bg-card p-6">
         <Skeleton shape="text" className="w-36" />
         <Skeleton className="mt-3 h-7 w-52" />
