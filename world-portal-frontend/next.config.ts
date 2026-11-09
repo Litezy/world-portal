@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   // ("next-server.js.nft.json" not found).
   output: process.env.VERCEL ? undefined : "standalone",
 
+  // `next dev` only: let a phone on the same Wi-Fi or tailnet open the dev
+  // site by IP. Next 16 otherwise answers its script files with 403, so the
+  // page renders but never runs (2026-11-09, http://192.168.1.5:3005).
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "100.*.*.*"],
+
   images: {
     formats: ["image/avif", "image/webp"],
     // Next 16 only serves listed qualities (anything else is coerced to the
