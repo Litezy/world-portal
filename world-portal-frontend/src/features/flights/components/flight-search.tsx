@@ -56,7 +56,15 @@ const FIELD = cn(
   "bg-background/80 ring-1 ring-border/70 transition-[box-shadow,background-color] duration-200",
   "hover:bg-background hover:ring-primary/45",
   "focus-visible:ring-2 focus-visible:ring-ring/70 data-[state=open]:bg-background data-[state=open]:ring-2 data-[state=open]:ring-primary/60",
+  // Phones (2026-11-09, Owen: "the mobile view looks terrible"): rows of one
+  // block with hairlines between them, the way booking apps lay it out, not
+  // four floating tiles.
+  "max-sm:h-[3.25rem] max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0",
+  "max-sm:hover:bg-primary/[0.05] max-sm:hover:ring-0 max-sm:focus-visible:ring-inset",
+  "max-sm:data-[state=open]:bg-primary/[0.07] max-sm:data-[state=open]:ring-0",
 );
+/** The hairline between rows on phones. */
+const ROW = "max-sm:border-border/70";
 const LABEL =
   "block text-[0.6875rem] leading-none font-semibold tracking-[0.12em] text-muted-foreground uppercase";
 const VALUE =
@@ -130,9 +138,13 @@ export function FlightSearch({ className }: { className?: string }) {
     <form
       role="search"
       aria-label="Book a flight"
+      // Tapped before the page is interactive, it still lands on the planner.
+      action="/start"
       onSubmit={submit}
       noValidate
       data-flight-search
+      // The hero keeps the search on screen while a picker is open.
+      data-picking={panel ? "" : undefined}
       className={cn(
         "glass glass-frost w-full rounded-[1.375rem] p-2.5 text-foreground sm:p-3",
         className,
@@ -146,81 +158,97 @@ export function FlightSearch({ className }: { className?: string }) {
       </div>
 
       <div className="grid gap-2">
-        {/* From and to, with the swap between them. */}
-        <div className="relative grid gap-2 sm:grid-cols-2">
-          <AirportField
-            label="From"
-            icon={<PlaneTakeoff className={ICON} />}
-            value={search.from}
-            exclude={toAirport?.country}
-            placeholder="Flying from"
-            className="max-sm:pr-14"
-            open={panel === "from"}
-            onOpenChange={(o) => openPanel(o ? "from" : null)}
-            onChange={(code) => {
-              const picked = findAirport(code);
-              update({
-                from: code,
-                // A trip abroad: the same country on both ends clears the other.
-                ...(picked && picked.country === toAirport?.country ? { to: "" } : {}),
-              });
-            }}
-          />
-          <AirportField
-            label="To"
-            icon={<PlaneLanding className={ICON} />}
-            value={search.to}
-            exclude={fromAirport?.country}
-            placeholder="Where to?"
-            className="max-sm:pr-14"
-            open={panel === "to"}
-            onOpenChange={(o) => openPanel(o ? "to" : null)}
-            onChange={(code) => {
-              update({ to: code });
-              // Next question straight away, as booking sites do.
-              if (search.depart) return false;
-              setPanel("dates");
-              return true;
-            }}
-          />
-          <button
-            type="button"
-            onClick={swap}
-            disabled={!search.to}
-            aria-label="Swap from and to"
+        {/* On phones the fields are one white block; from sm, tiles. */}
+        <div
+          className={cn(
+            "grid gap-2",
+            "max-sm:gap-0 max-sm:overflow-hidden max-sm:rounded-2xl max-sm:bg-background max-sm:shadow-[0_1px_3px_rgb(0_0_0/0.06)] max-sm:ring-1 max-sm:ring-border/70",
+          )}
+        >
+          {/* From and to, with the swap between them. */}
+          <div className="relative grid gap-2 max-sm:gap-0 sm:grid-cols-2">
+            <AirportField
+              label="From"
+              icon={<PlaneTakeoff className={ICON} />}
+              value={search.from}
+              exclude={toAirport?.country}
+              placeholder="Flying from"
+              className={cn("max-sm:border-b max-sm:pr-14", ROW)}
+              open={panel === "from"}
+              onOpenChange={(o) => openPanel(o ? "from" : null)}
+              onChange={(code) => {
+                const picked = findAirport(code);
+                update({
+                  from: code,
+                  // A trip abroad: the same country on both ends clears the other.
+                  ...(picked && picked.country === toAirport?.country
+                    ? { to: "" }
+                    : {}),
+                });
+              }}
+            />
+            <AirportField
+              label="To"
+              icon={<PlaneLanding className={ICON} />}
+              value={search.to}
+              exclude={fromAirport?.country}
+              placeholder="Where to?"
+              className="max-sm:pr-14"
+              open={panel === "to"}
+              onOpenChange={(o) => openPanel(o ? "to" : null)}
+              onChange={(code) => {
+                update({ to: code });
+                // Next question straight away, as booking sites do.
+                if (search.depart) return false;
+                setPanel("dates");
+                return true;
+              }}
+            />
+            <button
+              type="button"
+              onClick={swap}
+              disabled={!search.to}
+              aria-label="Swap from and to"
+              className={cn(
+                "absolute z-10 grid size-9 place-items-center rounded-full bg-background text-primary shadow-md ring-1 ring-border/70",
+                "transition-[transform,box-shadow] duration-200 hover:ring-primary/50 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none",
+                "disabled:pointer-events-none disabled:opacity-0",
+                // Stacked on phones: on the right, on the line between the rows.
+                "top-1/2 right-3 -translate-y-1/2 rotate-90 max-sm:size-8 max-sm:shadow-sm",
+                // Side by side: in the gap between the two fields.
+                "sm:right-auto sm:left-1/2 sm:-translate-x-1/2 sm:rotate-0",
+              )}
+            >
+              <ArrowLeftRight className="size-4" />
+            </button>
+          </div>
+
+          <div
             className={cn(
-              "absolute z-10 grid size-9 place-items-center rounded-full bg-background text-primary shadow-md ring-1 ring-border/70",
-              "transition-[transform,box-shadow] duration-200 hover:ring-primary/50 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none",
-              "disabled:pointer-events-none disabled:opacity-0",
-              // Stacked on phones: on the right, between the two rows.
-              "top-1/2 right-4 -translate-y-1/2 rotate-90",
-              // Side by side: in the gap between the two fields.
-              "sm:right-auto sm:left-1/2 sm:-translate-x-1/2 sm:rotate-0",
+              "grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1.15fr]",
+              "max-sm:gap-0 max-sm:border-t",
+              ROW,
             )}
           >
-            <ArrowLeftRight className="size-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1.15fr]">
-          <DatesField
-            search={search}
-            open={panel === "dates"}
-            onOpenChange={(o) => openPanel(o ? "dates" : null)}
-            onAddReturn={() => {
-              setTrip("return");
-              setPanel("dates");
-            }}
-            onChange={(patch) => update(patch)}
-          />
-          <TravellersField
-            value={search.travellers}
-            cabin={search.cabin}
-            open={panel === "travellers"}
-            onOpenChange={(o) => openPanel(o ? "travellers" : null)}
-            onChange={(patch) => update(patch)}
-            className="col-span-2 sm:col-span-1"
-          />
+            <DatesField
+              search={search}
+              open={panel === "dates"}
+              onOpenChange={(o) => openPanel(o ? "dates" : null)}
+              onAddReturn={() => {
+                setTrip("return");
+                setPanel("dates");
+              }}
+              onChange={(patch) => update(patch)}
+            />
+            <TravellersField
+              value={search.travellers}
+              cabin={search.cabin}
+              open={panel === "travellers"}
+              onOpenChange={(o) => openPanel(o ? "travellers" : null)}
+              onChange={(patch) => update(patch)}
+              className="col-span-2 sm:col-span-1"
+            />
+          </div>
         </div>
 
         <button
@@ -228,7 +256,7 @@ export function FlightSearch({ className }: { className?: string }) {
           disabled={going}
           className={cn(
             "cx-btn cx-btn--aurora cx-btn--lg w-full justify-center gap-2.5",
-            "h-[3.25rem] px-6 text-[1.0625rem]",
+            "h-[3.25rem] px-6 text-[1.0625rem] max-sm:h-12 max-sm:text-base",
           )}
         >
           <Search className="size-[1.125rem]" strokeWidth={2.4} />
@@ -317,6 +345,7 @@ function AirportField({
 }) {
   const [query, setQuery] = React.useState("");
   const handoff = React.useRef(false);
+  const searchRef = React.useRef<HTMLInputElement>(null);
   const selected = findAirport(value);
   const results = React.useMemo(
     () => searchAirports(query, exclude).slice(0, 60),
@@ -350,6 +379,7 @@ function AirportField({
       </PopoverTrigger>
 
       <PopoverContent
+        collisionPadding={12}
         align="start"
         className="w-[min(23rem,calc(100vw-2rem))] p-0"
         // A pick that opens the next picker keeps focus moving forward, not back here.
@@ -357,16 +387,28 @@ function AirportField({
           if (handoff.current) e.preventDefault();
           handoff.current = false;
         }}
+        // With a mouse, straight into the search box. On a touch screen, no:
+        // focused before the list is placed, the box sat off-screen and the
+        // phone scrolled ~380px to reach it (preventScroll or not), carrying
+        // the whole flight search out of the hero (2026-11-09). There the list
+        // shows and a tap on the box brings the keyboard, as booking apps do.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          if (window.matchMedia("(pointer: fine)").matches) {
+            searchRef.current?.focus({ preventScroll: true });
+          }
+        }}
       >
         <div className="border-b border-border p-2">
           <Input
-            autoFocus
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="City, airport or country"
             aria-label={`${label}: search airports`}
             leftIcon={<Search />}
             size="sm"
+            className="max-sm:h-10 max-sm:text-base"
           />
         </div>
 
@@ -457,9 +499,14 @@ function DatesField({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
-        <div className="col-span-2 grid grid-cols-2 gap-2">
+        <div
+          className={cn(
+            "col-span-2 grid grid-cols-2 gap-2 max-sm:gap-0 max-sm:border-b",
+            ROW,
+          )}
+        >
           <PopoverTrigger asChild>
-            <button type="button" className={FIELD}>
+            <button type="button" className={cn(FIELD, "max-sm:border-r", ROW)}>
               <CalendarDays className={ICON} />
               <span className="min-w-0 flex-1">
                 <span className={LABEL}>Depart</span>
@@ -491,6 +538,7 @@ function DatesField({
       </PopoverAnchor>
 
       <PopoverContent
+        collisionPadding={12}
         align="start"
         className="w-auto max-w-[calc(100vw-1rem)] p-3 sm:p-4"
       >
@@ -587,7 +635,11 @@ function TravellersField({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))] p-0">
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        className="w-[min(20rem,calc(100vw-2rem))] p-0"
+      >
         <ul className="divide-y divide-border px-4">
           {PEOPLE.map(({ key, label, hint }) => (
             <li key={key} className="flex items-center justify-between gap-4 py-3">

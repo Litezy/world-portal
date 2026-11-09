@@ -11,8 +11,10 @@ import type { HeroPaperApi } from "@/components/motion/hero-paper";
 import {
   applyScene,
   clamp01,
+  PHONE_HOLD,
   type SceneElements,
   type SceneMode,
+  sceneProgress,
 } from "@/components/motion/hero-scene";
 import { HeroForecastCard } from "@/components/sections/hero-forecast-card";
 import { Container } from "@/components/ui/container";
@@ -42,6 +44,7 @@ function plateVars(vars: Record<string, string>) {
 }
 
 const WIDE = "(min-width: 1024px)";
+const PHONE = "(max-width: 639.98px)";
 
 /**
  * "Cleared for take-off".
@@ -134,8 +137,10 @@ export function Hero() {
       copy: panel.querySelector<HTMLElement>("[data-hero-copy]"),
       card: panel.querySelector<HTMLElement>("[data-hero-card]"),
       fallback: failed ? pick("fallback") : null,
+      paper: pick("paper"),
     };
     const wide = window.matchMedia(WIDE);
+    const phone = window.matchMedia(PHONE);
 
     // The scroll the pin consumes: the track's height less the panel's and
     // the track's own padding. Measured on resize, not per frame.
@@ -151,14 +156,23 @@ export function Hero() {
     let inView = false;
     let lastP = -1;
     let lastMode: SceneMode | null = null;
+    let lastHold = -1;
+
+    const search = panel.querySelector<HTMLElement>("[data-flight-search]");
 
     const draw = (now: number) => {
-      const p = progress();
       const mode: SceneMode = wide.matches ? "wide" : "compact";
-      if (p !== lastP || mode !== lastMode) {
-        applyScene(els, p, mode);
-        lastP = p;
+      // Phones hold the scene while the flight search has the screen.
+      const hold = mode === "compact" && phone.matches ? PHONE_HOLD : 0;
+      // And while one of its pickers is open, the search stays whatever the
+      // page does underneath (a phone keyboard can scroll it).
+      const raw = hold && search?.hasAttribute("data-picking") ? 0 : progress();
+      const p = sceneProgress(raw, hold);
+      if (raw !== lastP || mode !== lastMode || hold !== lastHold) {
+        applyScene(els, p, mode, { raw, hold });
+        lastP = raw;
         lastMode = mode;
+        lastHold = hold;
       }
       apiRef.current?.render(p, now);
     };
@@ -220,7 +234,7 @@ export function Hero() {
       ref={sectionRef}
       data-hero
       className={cn(
-        "relative p-2 motion-safe:h-[180vh] sm:p-3 lg:motion-safe:h-[260vh]",
+        "relative p-2 motion-safe:h-[230vh] sm:p-3 sm:motion-safe:h-[180vh] lg:motion-safe:h-[260vh]",
       )}
     >
       <div
@@ -384,7 +398,10 @@ export function Hero() {
             className={cn(
               "pointer-events-none relative",
               "lg:absolute lg:top-[14%] lg:right-[2%] lg:bottom-[13%] lg:left-[55%]",
-              "max-lg:mt-6 max-lg:min-h-[9rem] max-lg:flex-1",
+              "max-lg:mt-6 max-lg:min-h-[13rem] max-lg:flex-1",
+              // Phones: no room under the flight search, so the paper rests
+              // mid-panel, hidden until the search has scrolled away.
+              "max-sm:motion-safe:absolute max-sm:motion-safe:inset-x-[9%] max-sm:motion-safe:top-[24%] max-sm:motion-safe:bottom-[20%] max-sm:motion-safe:mt-0 max-sm:motion-safe:min-h-0",
             )}
           >
             <div
@@ -418,20 +435,27 @@ export function Hero() {
           </div>
         </Container>
 
-        {/* L3 — the paper. */}
-        {idle && !reduced && !failed ? (
-          <HeroPaper
-            apiRef={apiRef}
-            slotRef={slotRef}
-            onReady={onReady}
-            onFail={onFail}
-            className={cn(
-              styles.paper,
-              "pointer-events-none absolute inset-0 z-[5] size-full",
-            )}
-            ready={paper === "ready"}
-          />
-        ) : null}
+        {/* L3 — the paper. Its wrapper is what the scene hides on phones
+            while the flight search has the screen. */}
+        <div
+          data-layer="paper"
+          aria-hidden="true"
+          className={cn("pointer-events-none absolute inset-0 z-[5]")}
+        >
+          {idle && !reduced && !failed ? (
+            <HeroPaper
+              apiRef={apiRef}
+              slotRef={slotRef}
+              onReady={onReady}
+              onFail={onFail}
+              className={cn(
+                styles.paper,
+                "pointer-events-none absolute inset-0 size-full",
+              )}
+              ready={paper === "ready"}
+            />
+          ) : null}
+        </div>
 
         {/* L4 — near wisps, crossing in front of the paper. */}
         <div aria-hidden="true" className={cn(styles.deck, "z-[6]")}>

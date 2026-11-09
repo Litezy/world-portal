@@ -1,4 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
+
+/**
+ * Taps a control in the hero's flight search the way a finger does. Inside
+ * the pinned hero, locator.click()'s own scroll-into-view sometimes smooth-
+ * scrolls a phone page ~380px although the control is already on screen,
+ * which carries the scene on and the search away (2026-11-09: 0 of 20 real
+ * or scripted taps scrolled, about 4 in 10 locator clicks did).
+ */
+async function tap(target: Locator) {
+  // A picker fading out still sits over the form, and would take the tap.
+  await expect(
+    target.page().locator("[data-radix-popper-content-wrapper]"),
+  ).toHaveCount(0);
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  if (!box) throw new Error("no box to tap");
+  await target.page().mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
 
 const SECTIONS = [
   "why-us",
@@ -89,7 +107,7 @@ test.describe("landing page", () => {
     const search = page.getByRole("search", { name: /book a flight/i });
 
     // Nothing picked yet: it says what is missing and opens that picker.
-    await search.getByRole("button", { name: /search flights/i }).click();
+    await tap(search.getByRole("button", { name: /search flights/i }));
     await expect(search.getByText(/pick where you are flying to/i)).toBeVisible();
     const open = page.locator('[role="dialog"][data-state="open"]');
     await open.getByPlaceholder(/city, airport or country/i).fill("dubai");
@@ -105,7 +123,7 @@ test.describe("landing page", () => {
     await days.nth(9).click();
     await days.nth(16).click();
 
-    await search.getByRole("button", { name: /search flights/i }).click();
+    await tap(search.getByRole("button", { name: /search flights/i }));
     await expect(page).toHaveURL(
       /\/start\?from=LOS&to=DXB&trip=return&depart=\d{4}-\d{2}-10&return=\d{4}-\d{2}-17/,
     );
@@ -124,8 +142,8 @@ test.describe("landing page", () => {
   test("a one-way search needs no return date", async ({ page }) => {
     await page.goto("/");
     const search = page.getByRole("search", { name: /book a flight/i });
-    await search.getByRole("radio", { name: /one way/i }).click();
-    await search.getByRole("button", { name: /^to/i }).click();
+    await tap(search.getByRole("radio", { name: /one way/i }));
+    await tap(search.getByRole("button", { name: /^to/i }));
     const open = page.locator('[role="dialog"][data-state="open"]');
     await open.getByPlaceholder(/city, airport or country/i).fill("lhr");
     await open
@@ -140,7 +158,7 @@ test.describe("landing page", () => {
       .locator(".rdp-day:not(.rdp-outside) button")
       .nth(4)
       .click();
-    await search.getByRole("button", { name: /search flights/i }).click();
+    await tap(search.getByRole("button", { name: /search flights/i }));
     await expect(page).toHaveURL(/to=LHR&trip=one-way&depart=/);
     await expect(page).not.toHaveURL(/return=/);
   });

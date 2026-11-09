@@ -75,7 +75,23 @@ export type SceneElements = {
   card?: HTMLElement | null;
   scrim?: HTMLElement | null;
   fallback?: HTMLElement | null;
+  /** The paper canvas's wrapper: hidden behind the booking form on phones. */
+  paper?: HTMLElement | null;
 };
+
+/**
+ * Phones: the share of the scroll the booking form keeps before the scene's
+ * clock starts (2026-11-09). The flight search fills a phone's first screen,
+ * so there is no room left for the paper there: it waits out of sight behind
+ * the form, is revealed flat and stamped as the form clears, and only then
+ * starts folding. Tablets and up have room for both and do not hold.
+ */
+export const PHONE_HOLD = 0.28;
+
+/** The scene's clock for a raw scroll progress, after any hold. */
+export function sceneProgress(raw: number, hold: number) {
+  return hold ? clamp01((raw - hold) / (1 - hold)) : raw;
+}
 
 function set(el: HTMLElement | null | undefined, transform: string, opacity: number) {
   if (!el) return;
@@ -102,8 +118,16 @@ function setContent(
  * swells as the camera sinks into it, and the near wisps cross the frame in
  * a fraction of the scroll, in front of the paper.
  */
-export function applyScene(els: SceneElements, p: number, mode: SceneMode) {
+export function applyScene(
+  els: SceneElements,
+  p: number,
+  mode: SceneMode,
+  { raw = p, hold = 0 }: { raw?: number; hold?: number } = {},
+) {
   const wide = mode === "wide";
+  // How much of the paper shows: all of it, except on a phone during the hold.
+  const reveal = hold ? smooth(hold * 0.6, hold, raw) : 1;
+  set(els.paper, "none", reveal);
 
   // L0: the sky, slowest. A slight sink and swell, never past ~1.07×.
   const drift = smooth(0, 0.86, p);
@@ -176,8 +200,9 @@ export function applyScene(els: SceneElements, p: number, mode: SceneMode) {
     );
   } else {
     // Phones and tablets: the paper launches up through where the copy is,
-    // so the copy clears first, and the arrival belongs to the card.
-    const away = smooth(0.44, 0.56, p);
+    // so the copy clears first, and the arrival belongs to the card. On a
+    // phone the copy (and its flight search) clears during the hold instead.
+    const away = hold ? smooth(hold * 0.4, hold * 0.9, raw) : smooth(0.44, 0.56, p);
     setContent(
       els.copy,
       `translate3d(0, ${(-24 * away).toFixed(2)}px, 0) scale(${(1 - 0.03 * away).toFixed(4)})`,
@@ -195,7 +220,7 @@ export function applyScene(els: SceneElements, p: number, mode: SceneMode) {
     set(
       els.fallback,
       `translate3d(${(-30 * go).toFixed(2)}%, ${(-55 * go).toFixed(2)}%, 0) scale(${(1 - 0.78 * go).toFixed(4)})`,
-      1 - smooth(0.74, 0.84, p),
+      (1 - smooth(0.74, 0.84, p)) * reveal,
     );
   }
 }
