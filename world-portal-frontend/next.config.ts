@@ -5,7 +5,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Emits .next/standalone — a self-contained server bundle the
   // Docker image runs directly, without node_modules in the runtime layer.
-  output: "standalone",
+  // Skipped on Vercel (which sets VERCEL=1): its own Next.js builder packages
+  // the server, and the standalone trace breaks that build
+  // ("next-server.js.nft.json" not found).
+  output: process.env.VERCEL ? undefined : "standalone",
 
   images: {
     formats: ["image/avif", "image/webp"],
