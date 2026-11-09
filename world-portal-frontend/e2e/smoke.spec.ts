@@ -74,13 +74,82 @@ test.describe("landing page", () => {
     // The reveal starts from autoAlpha:0 — this is the regression guard that it
     // always finishes, whatever the ticker does.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(/we sort out the passport/i)).toBeVisible();
+    // Phones give the lead line's room to the search.
+    if ((page.viewportSize()?.width ?? 0) >= 640) {
+      await expect(page.getByText(/we sort out the passport/i)).toBeVisible();
+    }
+    // The hero's action is a flight search now (the CTO, 2026-11-09).
+    const search = page.getByRole("search", { name: /book a flight/i });
+    await expect(search).toBeVisible();
+    await expect(search.getByRole("button", { name: /search flights/i })).toBeVisible();
+  });
+
+  test("the hero search hands the trip to the planner", async ({ page }) => {
+    await page.goto("/");
+    const search = page.getByRole("search", { name: /book a flight/i });
+
+    // Nothing picked yet: it says what is missing and opens that picker.
+    await search.getByRole("button", { name: /search flights/i }).click();
+    await expect(search.getByText(/pick where you are flying to/i)).toBeVisible();
+    const open = page.locator('[role="dialog"][data-state="open"]');
+    await open.getByPlaceholder(/city, airport or country/i).fill("dubai");
+    await open.getByRole("option", { name: /dubai/i }).first().click();
+
+    // The calendar follows; out on the 10th of next month, back on the 17th.
+    const calendar = page.locator('[role="dialog"][data-state="open"]');
+    await calendar.getByRole("button", { name: /next month/i }).click();
+    const days = calendar
+      .locator(".rdp-month")
+      .first()
+      .locator(".rdp-day:not(.rdp-outside) button");
+    await days.nth(9).click();
+    await days.nth(16).click();
+
+    await search.getByRole("button", { name: /search flights/i }).click();
+    await expect(page).toHaveURL(
+      /\/start\?from=LOS&to=DXB&trip=return&depart=\d{4}-\d{2}-10&return=\d{4}-\d{2}-17/,
+    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      /lagos to dubai/i,
+    );
+    await expect(page.locator("[data-flight-banner]")).toContainText(
+      "Lagos (LOS) to Dubai (DXB)",
+    );
+    // The route is answered, so it opens on the passport question.
     await expect(
-      page.getByRole("link", { name: /start my trip/i }).first(),
+      page.getByRole("heading", { name: /do you have a passport/i }),
     ).toBeVisible();
   });
 
-  test("the hero forecast card renders beside the copy", async ({ page }) => {
+  test("a one-way search needs no return date", async ({ page }) => {
+    await page.goto("/");
+    const search = page.getByRole("search", { name: /book a flight/i });
+    await search.getByRole("radio", { name: /one way/i }).click();
+    await search.getByRole("button", { name: /^to/i }).click();
+    const open = page.locator('[role="dialog"][data-state="open"]');
+    await open.getByPlaceholder(/city, airport or country/i).fill("lhr");
+    await open
+      .getByRole("option", { name: /london/i })
+      .first()
+      .click();
+    const calendar = page.locator('[role="dialog"][data-state="open"]');
+    await calendar.getByRole("button", { name: /next month/i }).click();
+    await calendar
+      .locator(".rdp-month")
+      .first()
+      .locator(".rdp-day:not(.rdp-outside) button")
+      .nth(4)
+      .click();
+    await search.getByRole("button", { name: /search flights/i }).click();
+    await expect(page).toHaveURL(/to=LHR&trip=one-way&depart=/);
+    await expect(page).not.toHaveURL(/return=/);
+  });
+
+  test("the hero forecast card renders with the copy", async ({ page }) => {
+    // From lg the flight search takes the card's place; a phone with reduced
+    // motion shows it in the static composition.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     // Found by structure rather than by copy: the card holds placeholder data
     // that will be reworded, but it is revealed from autoAlpha:0 like the copy

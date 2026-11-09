@@ -103,4 +103,27 @@ describe("country search", () => {
     expect(find("Nigeria").map((c) => c.code)).toContain("NG");
     expect(find("ng").map((c) => c.code)).toContain("NG");
   });
+  it("names the searched flight back in the flights step", () => {
+    const steps = buildPlan({
+      ...base,
+      destination: "AE",
+      passport: "yes",
+      visa: "no",
+      extras: ["flights"],
+      flight: {
+        trip: "one-way",
+        from: "LOS",
+        to: "DXB",
+        depart: "2026-12-12",
+        back: null,
+        travellers: { adults: 1, children: 0, infants: 0 },
+        cabin: "economy",
+      },
+    });
+    const flights = steps.find((s) => s.id === "flights-hotels");
+    expect(flights?.title).toBe("Book your Lagos to Dubai flight");
+    expect(flights?.body).toMatch(/^One way · Sat 12 Dec · 1 adult · Economy\./);
+    // Still behind the visa: the seat comes last.
+    expect(primaryStep(steps)?.id).toBe("visa");
+  });
 });

@@ -20,6 +20,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { hero } from "@/content/landing";
 import { Chip } from "@/ds/components/chip";
 import { Icon } from "@/ds/components/icon";
+import { FlightSearch } from "@/features/flights/components/flight-search";
 import { useIdleMount } from "@/hooks/use-idle-mount";
 import { usePrefersReducedMotion } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,10 @@ const WIDE = "(min-width: 1024px)";
  * launches into the cloud trailing a white contrail, and the cloud parts over
  * the Maldives lagoon (the same light, the same cumulus) as it glides down
  * beside the villas. Scrolling back up unfolds it into the form again.
+ *
+ * The copy's action is a flight search, laid out like a booking site (the
+ * CTO, 2026-11-09), not a "Start my trip" button. From lg it also takes the
+ * forecast card's place; phones and tablets keep the card for the arrival.
  *
  * One daylight world in both themes, so the copy is navy ink on the sky in
  * light and white in dark, each over its own gentle scrim; the chip's dot is
@@ -96,7 +101,22 @@ export function Hero() {
   });
 
   React.useEffect(() => {
-    if (reduced) return;
+    if (reduced) {
+      // The first client render reads "no reduced motion" (the server's guess),
+      // so the scene may already have written one frame; on a phone that left
+      // the forecast card hidden (2026-11-09). The static composition is the
+      // plain CSS, so clear what the scene wrote.
+      panelRef.current
+        ?.querySelectorAll<HTMLElement>(
+          "[data-layer], [data-hero-copy], [data-hero-card]",
+        )
+        .forEach((el) => {
+          el.style.transform = "";
+          el.style.opacity = "";
+          el.style.visibility = "";
+        });
+      return;
+    }
     const section = sectionRef.current;
     const panel = panelRef.current;
     if (!section || !panel) return;
@@ -286,7 +306,7 @@ export function Hero() {
               data-hero-stack
               className={cn(
                 styles.stack,
-                "flex w-full max-w-[38rem] flex-col items-start text-left",
+                "flex w-full max-w-[38rem] flex-col items-start text-left lg:max-w-[40rem]",
               )}
             >
               {/* Glass that follows the theme; its dot is the hero's one
@@ -307,7 +327,7 @@ export function Hero() {
                 accent={hero.headingAccent}
                 className={cn(
                   "mt-6 [&_h1]:text-brand-950 dark:[&_h1]:text-white",
-                  "[&_h1]:text-[2.25rem] [&_h1]:leading-[1.04] sm:[&_h1]:text-[3.5rem]",
+                  "[&_h1]:text-[2rem] [&_h1]:leading-[1.04] sm:[&_h1]:text-[3.5rem]",
                   "lg:[&_h1]:text-[4rem] xl:[&_h1]:text-[4.25rem]",
                   "[@media(min-width:1024px)_and_(max-height:820px)]:mt-5 [@media(min-width:1024px)_and_(max-height:820px)]:[&_h1]:text-[3.5rem]",
                   // The serif half always takes its own line.
@@ -315,9 +335,10 @@ export function Hero() {
                 )}
               />
 
+              {/* Phones give the line's room to the search. */}
               <p
                 className={cn(
-                  "mt-6 max-w-[31rem] text-base leading-relaxed text-pretty sm:text-lg",
+                  "mt-6 max-w-[31rem] text-base leading-relaxed text-pretty max-sm:hidden sm:text-lg",
                   "text-brand-950/80 dark:text-white/85",
                   "[@media(min-width:1024px)_and_(max-height:820px)]:mt-4",
                 )}
@@ -325,27 +346,31 @@ export function Hero() {
                 {hero.lead}
               </p>
 
-              <div
+              {/* The first thing to do here is say where you are going, the way a
+                  flight booking site opens (the CTO, 2026-11-09). */}
+              <FlightSearch
                 className={cn(
-                  "mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center",
-                  "[@media(min-width:1024px)_and_(max-height:820px)]:mt-7",
+                  "mt-6 sm:mt-8",
+                  "[@media(min-width:1024px)_and_(max-height:820px)]:mt-6",
+                )}
+              />
+
+              <p
+                className={cn(
+                  "mt-3 px-1 text-[0.875rem] text-brand-950/75 dark:text-white/80",
                 )}
               >
-                {/* The page's single most important action. */}
+                {hero.planLink.lead}{" "}
                 <Link
-                  href={hero.cta.href}
-                  className={cn("cx-btn cx-btn--aurora cx-btn--lg cx-btn--arrow")}
+                  href={hero.planLink.href}
+                  className={cn(
+                    "inline-flex items-center gap-1 font-semibold text-brand-950 underline-offset-4 hover:underline dark:text-white",
+                  )}
                 >
-                  {hero.cta.label}
-                  <Icon name="arrow-right" tone="current" size={18} />
+                  {hero.planLink.label}
+                  <Icon name="arrow-right" tone="current" size={14} />
                 </Link>
-                <Link
-                  href={hero.secondaryCta.href}
-                  className={cn("cx-btn cx-btn--glass cx-btn--clear cx-btn--lg")}
-                >
-                  {hero.secondaryCta.label}
-                </Link>
-              </div>
+              </p>
             </div>
           </div>
 
@@ -359,7 +384,7 @@ export function Hero() {
             className={cn(
               "pointer-events-none relative",
               "lg:absolute lg:top-[14%] lg:right-[2%] lg:bottom-[13%] lg:left-[55%]",
-              "max-lg:mt-6 max-lg:min-h-[13rem] max-lg:flex-1",
+              "max-lg:mt-6 max-lg:min-h-[9rem] max-lg:flex-1",
             )}
           >
             <div
@@ -382,7 +407,7 @@ export function Hero() {
           <div
             data-hero-card
             className={cn(
-              "mt-8 sm:max-w-[36rem] lg:mt-6",
+              "mt-8 sm:max-w-[36rem] lg:hidden",
               // Phones and tablets: the card belongs to the arrival, over the
               // lagoon at the foot of the panel.
               "max-lg:motion-safe:invisible max-lg:motion-safe:absolute max-lg:motion-safe:inset-x-4 max-lg:motion-safe:bottom-4 max-lg:motion-safe:mt-0 max-lg:motion-safe:opacity-0",

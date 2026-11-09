@@ -8,6 +8,8 @@ import { ArrowLeft, ArrowRight, Check, Clock, Plane } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { findAirport } from "@/features/flights/airports";
+import { type FlightSearch, tripDetails } from "@/features/flights/search";
 import { CountrySelect } from "@/features/trip/components/country-select";
 import {
   buildPlan,
@@ -49,25 +51,64 @@ const extraOptions: Extra[] = ["flights", "hotels", "experiences"];
 
 type Stage = "route" | "passport" | "visa" | "extras" | "plan";
 
+const EMPTY: TripAnswers = {
+  origin: "",
+  destination: "",
+  passport: null,
+  visa: null,
+  extras: [],
+};
+
+/**
+ * Answers from the home page's flight search: the route is already known,
+ * and they came to book a seat, so flights are ticked for them.
+ */
+function fromFlight(flight: FlightSearch | null | undefined): TripAnswers | null {
+  const from = findAirport(flight?.from);
+  const to = findAirport(flight?.to);
+  if (!flight || !from || !to) return null;
+  return {
+    ...EMPTY,
+    origin: from.country,
+    destination: to.country,
+    extras: ["flights"],
+    flight,
+  };
+}
+
 /**
  * The front door for anyone who does not know what they need.
  *
  * Where you are going decides which questions matter, and the answers decide
  * which service you are sent to — so it asks in that order and reveals one
  * question at a time rather than showing a wall of fields.
+ *
+ * Arriving from the hero's flight search (`flight`), the route is answered
+ * already, so it opens on the passport question with the trip shown on top.
  */
-export function TripPlanner() {
-  const [answers, setAnswers] = React.useState<TripAnswers>({
-    origin: "",
-    destination: "",
-    passport: null,
-    visa: null,
-    extras: [],
-  });
-  const [stage, setStage] = React.useState<Stage>("route");
+export function TripPlanner({ flight = null }: { flight?: FlightSearch | null }) {
+  const [answers, setAnswers] = React.useState<TripAnswers>(
+    () => fromFlight(flight) ?? EMPTY,
+  );
+  const [stage, setStage] = React.useState<Stage>(() =>
+    fromFlight(flight) ? "passport" : "route",
+  );
 
   const set = <K extends keyof TripAnswers>(key: K, value: TripAnswers[K]) =>
-    setAnswers((a) => ({ ...a, [key]: value }));
+    setAnswers((a) => {
+      const next = { ...a, [key]: value };
+      // A different country on either end is a different trip from the search.
+      if (key === "origin" || key === "destination") {
+        const searched = fromFlight(next.flight);
+        if (
+          searched &&
+          (searched.origin !== next.origin || searched.destination !== next.destination)
+        ) {
+          next.flight = undefined;
+        }
+      }
+      return next;
+    });
 
   /**
    * Toggling has to derive from the previous state, not from the `answers`
@@ -91,13 +132,7 @@ export function TripPlanner() {
         answers={answers}
         onBack={() => setStage("extras")}
         onRestart={() => {
-          setAnswers({
-            origin: "",
-            destination: "",
-            passport: null,
-            visa: null,
-            extras: [],
-          });
+          setAnswers(EMPTY);
           setStage("route");
         }}
       />
@@ -106,6 +141,7 @@ export function TripPlanner() {
 
   return (
     <Card variant="glass" radius="2xl" padding="none" className="gap-0 p-6 sm:p-8">
+      {answers.flight ? <FlightBanner flight={answers.flight} /> : null}
       <Progress stage={stage} />
 
       {stage === "route" ? (
@@ -225,6 +261,36 @@ export function TripPlanner() {
         </Step>
       ) : null}
     </Card>
+  );
+}
+
+/** The searched flight, on top of the questions, with a way back to change it. */
+function FlightBanner({ flight }: { flight: FlightSearch }) {
+  const from = findAirport(flight.from);
+  const to = findAirport(flight.to);
+  return (
+    <div
+      data-flight-banner
+      className="mb-6 flex items-center gap-3.5 rounded-xl border border-primary/25 bg-primary/10 px-4 py-3.5"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+        <Plane className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold tracking-tight text-ink-900">
+          {from?.city} ({from?.code}) to {to?.city} ({to?.code})
+        </p>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+          {tripDetails(flight)}
+        </p>
+      </div>
+      <Link
+        href="/"
+        className="shrink-0 text-[13px] font-semibold text-primary underline-offset-4 hover:underline"
+      >
+        Change
+      </Link>
+    </div>
   );
 }
 
@@ -363,8 +429,9 @@ function TripPlan({
 }) {
   const steps = buildPlan(answers);
   const first = primaryStep(steps);
-  const from = countryName(answers.origin);
-  const to = countryName(answers.destination);
+  // The cities they searched, when they came from the flight search.
+  const from = findAirport(answers.flight?.from)?.city ?? countryName(answers.origin);
+  const to = findAirport(answers.flight?.to)?.city ?? countryName(answers.destination);
 
   return (
     <div className="grid gap-6">

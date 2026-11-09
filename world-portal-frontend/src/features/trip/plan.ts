@@ -1,3 +1,5 @@
+import { findAirport } from "@/features/flights/airports";
+import { type FlightSearch, tripDetails } from "@/features/flights/search";
 import { countryName } from "@/lib/countries";
 
 export type PassportAnswer = "yes" | "expiring" | "no";
@@ -10,6 +12,8 @@ export type TripAnswers = {
   passport: PassportAnswer | null;
   visa: VisaAnswer | null;
   extras: Extra[];
+  /** The hero's flight search, when the visitor came from it. */
+  flight?: FlightSearch;
 };
 
 export type PlanStep = {
@@ -37,7 +41,7 @@ export const extraLabels: Record<Extra, string> = {
  * booking them before you have permission to enter is how people lose money.
  */
 export function buildPlan(answers: TripAnswers): PlanStep[] {
-  const { passport, visa, extras, destination } = answers;
+  const { passport, visa, extras, destination, flight } = answers;
   const where = countryName(destination) || "your destination";
   const steps: PlanStep[] = [];
 
@@ -102,14 +106,23 @@ export function buildPlan(answers: TripAnswers): PlanStep[] {
   // 3. Everything else, only if they asked for it.
   if (extras.includes("flights") || extras.includes("hotels")) {
     const both = extras.includes("flights") && extras.includes("hotels");
+    // The flight they searched for on the home page, named back to them.
+    const searched = extras.includes("flights") && flight ? flight : null;
+    const route = searched
+      ? `${findAirport(searched.from)?.city} to ${findAirport(searched.to)?.city}`
+      : "";
     steps.push({
       id: "flights-hotels",
       title: both
         ? "Flights and somewhere to stay"
         : extras.includes("flights")
-          ? "Book your flights"
+          ? route
+            ? `Book your ${route} flight`
+            : "Book your flights"
           : "Find somewhere to stay",
-      body: "We will quote real prices the same day and hold them while you decide. Opening shortly — we will contact you the moment it is live.",
+      body: searched
+        ? `${tripDetails(searched)}. We will quote real prices for these dates the same day and hold them while you decide. Opening shortly — we will contact you the moment it is live.`
+        : "We will quote real prices the same day and hold them while you decide. Opening shortly — we will contact you the moment it is live.",
       href: "/services/flights",
       cta: "See how it will work",
       state: "soon",

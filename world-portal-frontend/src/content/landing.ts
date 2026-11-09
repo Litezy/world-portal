@@ -17,9 +17,17 @@ export const hero = {
   headingLead: "The world is closer",
   headingAccent: "than you think.",
   lead: "Tell us where you want to go. We sort out the passport, the visa, the flights and the hotel — so you just pack.",
-  cta: { label: "Start my trip", href: "/start" },
   navCta: { label: "Get started", href: "/start" },
-  secondaryCta: { label: "See what we do", href: "#visas" },
+  /**
+   * Under the flight search, for anyone who is not booking a seat yet. The
+   * search itself is the hero's first action now (the CTO, 2026-11-09:
+   * "let it look like you're already ready to book your flight").
+   */
+  planLink: {
+    lead: "Only need a passport or visa?",
+    label: "Start here",
+    href: "/start",
+  },
   /**
    * "Cleared for take-off": the scene behind the copy. A visa form gets
    * stamped, folds into a paper plane as the visitor scrolls, and flies
