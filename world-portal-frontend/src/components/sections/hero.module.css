@@ -215,6 +215,10 @@
 .stack > :nth-child(5) {
   animation-delay: 0.44s;
 }
+/* Phones' "Book a flight", last in the stack but fourth on screen. */
+.stack > :nth-child(6) {
+  animation-delay: 0.36s;
+}
 
 .card {
   animation: hero-rise 1s cubic-bezier(0.16, 1, 0.3, 1) 0.48s both;

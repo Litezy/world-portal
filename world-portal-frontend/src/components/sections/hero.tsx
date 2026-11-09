@@ -5,16 +5,18 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 
+import { Plane } from "lucide-react";
 import { preload } from "react-dom";
 
 import type { HeroPaperApi } from "@/components/motion/hero-paper";
 import {
   applyScene,
   clamp01,
-  PHONE_HOLD,
+  PHONE_TAIL,
   type SceneElements,
   type SceneMode,
   sceneProgress,
+  sheetLift,
 } from "@/components/motion/hero-scene";
 import { HeroForecastCard } from "@/components/sections/hero-forecast-card";
 import { Container } from "@/components/ui/container";
@@ -46,6 +48,44 @@ function plateVars(vars: Record<string, string>) {
 const WIDE = "(min-width: 1024px)";
 const PHONE = "(max-width: 639.98px)";
 
+/** The reader's own scrolling, which a glide gives way to. */
+const TAKE_OVER = ["wheel", "touchstart", "keydown"] as const;
+
+/**
+ * Scrolls the window to y over ms, slow out and slow in, so the scene plays
+ * on the way, and stops the moment the reader scrolls for themselves.
+ */
+function glideTo(y: number, ms: number, done?: () => void) {
+  const root = document.documentElement;
+  const from = window.scrollY;
+  const distance = y - from;
+  if (Math.abs(distance) < 2) {
+    done?.();
+    return;
+  }
+  // The page scrolls smoothly by default, which would fight every step.
+  const behaviour = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
+  const t0 = performance.now();
+  let raf = 0;
+  const end = (arrived: boolean) => {
+    cancelAnimationFrame(raf);
+    root.style.scrollBehavior = behaviour;
+    for (const type of TAKE_OVER) window.removeEventListener(type, stop);
+    if (arrived) done?.();
+  };
+  const stop = () => end(false);
+  for (const type of TAKE_OVER) window.addEventListener(type, stop, { passive: true });
+  const step = (now: number) => {
+    const t = Math.min(1, (now - t0) / ms);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    window.scrollTo(0, from + distance * eased);
+    if (t < 1) raf = requestAnimationFrame(step);
+    else end(true);
+  };
+  raf = requestAnimationFrame(step);
+}
+
 /**
  * "Cleared for take-off".
  *
@@ -58,7 +98,14 @@ const PHONE = "(max-width: 639.98px)";
  *
  * The copy's action is a flight search, laid out like a booking site (the
  * CTO, 2026-11-09), not a "Start my trip" button. From lg it also takes the
- * forecast card's place; phones and tablets keep the card for the arrival.
+ * forecast card's place; tablets keep the card for the arrival.
+ *
+ * Phones tell it in order (2026-11-09, Owen: "they should see the title,
+ * then as they're scrolling down they go through the whole paper plane
+ * animation, then get to see the information come up so they can book
+ * flights"): the title and the stamped form; the folds and the flight; then,
+ * once the plane has landed, the flight search rises over the lagoon as a
+ * booking sheet. "Book a flight" under the title flies the whole way there.
  *
  * One daylight world in both themes, so the copy is navy ink on the sky in
  * light and white in dark, each over its own gentle scrim; the chip's dot is
@@ -89,6 +136,7 @@ export function Hero() {
   const sectionRef = React.useRef<HTMLElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const slotRef = React.useRef<HTMLDivElement>(null);
+  const sheetRef = React.useRef<HTMLDivElement>(null);
   const apiRef = React.useRef<HeroPaperApi | null>(null);
   const failed = paper === "failed";
 
@@ -111,7 +159,7 @@ export function Hero() {
       // plain CSS, so clear what the scene wrote.
       panelRef.current
         ?.querySelectorAll<HTMLElement>(
-          "[data-layer], [data-hero-copy], [data-hero-card]",
+          "[data-layer], [data-hero-copy], [data-hero-card], [data-hero-sheet]",
         )
         .forEach((el) => {
           el.style.transform = "";
@@ -138,6 +186,7 @@ export function Hero() {
       card: panel.querySelector<HTMLElement>("[data-hero-card]"),
       fallback: failed ? pick("fallback") : null,
       paper: pick("paper"),
+      sheet: sheetRef.current,
     };
     const wide = window.matchMedia(WIDE);
     const phone = window.matchMedia(PHONE);
@@ -145,9 +194,13 @@ export function Hero() {
     // The scroll the pin consumes: the track's height less the panel's and
     // the track's own padding. Measured on resize, not per frame.
     let range = 1;
+    let lift = 0;
     const measure = () => {
       const pad = parseFloat(getComputedStyle(section).paddingTop) || 0;
       range = Math.max(1, section.offsetHeight - panel.offsetHeight - 2 * pad);
+      const sheet = sheetRef.current;
+      lift =
+        phone.matches && sheet ? sheetLift(panel.offsetHeight, sheet.offsetHeight) : 0;
     };
     const progress = () => clamp01(-section.getBoundingClientRect().top / range);
 
@@ -155,24 +208,28 @@ export function Hero() {
     let running = false;
     let inView = false;
     let lastP = -1;
+    let shown = 0;
     let lastMode: SceneMode | null = null;
-    let lastHold = -1;
+    let lastTail = -1;
 
-    const search = panel.querySelector<HTMLElement>("[data-flight-search]");
+    const sheetSearch =
+      sheetRef.current?.querySelector<HTMLElement>("[data-flight-search]");
 
     const draw = (now: number) => {
       const mode: SceneMode = wide.matches ? "wide" : "compact";
-      // Phones hold the scene while the flight search has the screen.
-      const hold = mode === "compact" && phone.matches ? PHONE_HOLD : 0;
-      // And while one of its pickers is open, the search stays whatever the
-      // page does underneath (a phone keyboard can scroll it).
-      const raw = hold && search?.hasAttribute("data-picking") ? 0 : progress();
-      const p = sceneProgress(raw, hold);
-      if (raw !== lastP || mode !== lastMode || hold !== lastHold) {
-        applyScene(els, p, mode, { raw, hold });
+      // Phones end on the booking sheet, after the plane has landed.
+      const tail = mode === "compact" && phone.matches ? PHONE_TAIL : 0;
+      // While one of the sheet's pickers is open, the sheet stays up whatever
+      // the page does underneath (a phone keyboard can scroll it).
+      const raw =
+        tail && sheetSearch?.hasAttribute("data-picking") ? shown : progress();
+      const p = sceneProgress(raw, tail);
+      if (raw !== lastP || mode !== lastMode || tail !== lastTail) {
+        applyScene(els, p, mode, { raw, tail, lift });
         lastP = raw;
+        shown = raw;
         lastMode = mode;
-        lastHold = hold;
+        lastTail = tail;
       }
       apiRef.current?.render(p, now);
     };
@@ -226,6 +283,38 @@ export function Hero() {
     };
   }, [reduced, failed]);
 
+  // "Book a flight" on a phone: the page glides to the end of the hero, so
+  // the form folds, flies and lands on the way, and the sheet comes up.
+  const flyToSearch = React.useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      const section = sectionRef.current;
+      const panel = panelRef.current;
+      const sheet = sheetRef.current;
+      if (!section || !panel || !sheet) return;
+      e.preventDefault();
+      // Focus the sheet's title once the scene has shown the sheet: the glide
+      // can end a frame before the scene draws, and a hidden element refuses
+      // focus (2026-11-09: 2 of 6 landings left it on the page).
+      const land = (tries = 12) => {
+        const title = sheet.querySelector<HTMLElement>("[data-sheet-title]");
+        if (!title) return;
+        title.focus({ preventScroll: true });
+        if (document.activeElement !== title && tries > 0) {
+          requestAnimationFrame(() => land(tries - 1));
+        }
+      };
+      if (reduced) {
+        sheet.scrollIntoView({ block: "end" });
+        land();
+        return;
+      }
+      const pad = parseFloat(getComputedStyle(section).paddingTop) || 0;
+      const range = section.offsetHeight - panel.offsetHeight - 2 * pad;
+      glideTo(window.scrollY + section.getBoundingClientRect().top + range, 1600, land);
+    },
+    [reduced],
+  );
+
   const onReady = React.useCallback(() => setPaper("ready"), []);
   const onFail = React.useCallback(() => setPaper("failed"), []);
 
@@ -234,7 +323,7 @@ export function Hero() {
       ref={sectionRef}
       data-hero
       className={cn(
-        "relative p-2 motion-safe:h-[230vh] sm:p-3 sm:motion-safe:h-[180vh] lg:motion-safe:h-[260vh]",
+        "relative p-2 motion-safe:h-[260vh] sm:p-3 sm:motion-safe:h-[180vh] lg:motion-safe:h-[260vh]",
       )}
     >
       <div
@@ -349,10 +438,9 @@ export function Hero() {
                 )}
               />
 
-              {/* Phones give the line's room to the search. */}
               <p
                 className={cn(
-                  "mt-6 max-w-[31rem] text-base leading-relaxed text-pretty max-sm:hidden sm:text-lg",
+                  "mt-4 max-w-[31rem] text-[0.9375rem] leading-relaxed text-pretty sm:mt-6 sm:text-lg",
                   "text-brand-950/80 dark:text-white/85",
                   "[@media(min-width:1024px)_and_(max-height:820px)]:mt-4",
                 )}
@@ -364,14 +452,14 @@ export function Hero() {
                   flight booking site opens (the CTO, 2026-11-09). */}
               <FlightSearch
                 className={cn(
-                  "mt-6 sm:mt-8",
+                  "mt-8 max-sm:hidden",
                   "[@media(min-width:1024px)_and_(max-height:820px)]:mt-6",
                 )}
               />
 
               <p
                 className={cn(
-                  "mt-3 px-1 text-[0.875rem] text-brand-950/75 dark:text-white/80",
+                  "mt-3 px-1 text-[0.875rem] text-brand-950/75 max-sm:hidden dark:text-white/80",
                 )}
               >
                 {hero.planLink.lead}{" "}
@@ -385,6 +473,18 @@ export function Hero() {
                   <Icon name="arrow-right" tone="current" size={14} />
                 </Link>
               </p>
+
+              {/* Phones: the search waits for the landing; this flies there. */}
+              <a
+                href="/start"
+                onClick={flyToSearch}
+                className={cn(
+                  "cx-btn cx-btn--aurora cx-btn--lg mt-6 h-12 gap-2.5 px-6 text-base sm:hidden",
+                )}
+              >
+                <Plane className="size-[1.125rem]" strokeWidth={2.2} aria-hidden />
+                Book a flight
+              </a>
             </div>
           </div>
 
@@ -399,9 +499,7 @@ export function Hero() {
               "pointer-events-none relative",
               "lg:absolute lg:top-[14%] lg:right-[2%] lg:bottom-[13%] lg:left-[55%]",
               "max-lg:mt-6 max-lg:min-h-[13rem] max-lg:flex-1",
-              // Phones: no room under the flight search, so the paper rests
-              // mid-panel, hidden until the search has scrolled away.
-              "max-sm:motion-safe:absolute max-sm:motion-safe:inset-x-[9%] max-sm:motion-safe:top-[24%] max-sm:motion-safe:bottom-[20%] max-sm:motion-safe:mt-0 max-sm:motion-safe:min-h-0",
+              "max-sm:mt-4 max-sm:min-h-[10rem]",
             )}
           >
             <div
@@ -424,9 +522,9 @@ export function Hero() {
           <div
             data-hero-card
             className={cn(
-              "mt-8 sm:max-w-[36rem] lg:hidden",
-              // Phones and tablets: the card belongs to the arrival, over the
-              // lagoon at the foot of the panel.
+              "mt-8 max-sm:hidden sm:max-w-[36rem] lg:hidden",
+              // Tablets: the card belongs to the arrival, over the lagoon at
+              // the foot of the panel. Phones have the booking sheet there.
               "max-lg:motion-safe:invisible max-lg:motion-safe:absolute max-lg:motion-safe:inset-x-4 max-lg:motion-safe:bottom-4 max-lg:motion-safe:mt-0 max-lg:motion-safe:opacity-0",
               "sm:max-lg:motion-safe:inset-x-8",
             )}
@@ -435,8 +533,8 @@ export function Hero() {
           </div>
         </Container>
 
-        {/* L3 — the paper. Its wrapper is what the scene hides on phones
-            while the flight search has the screen. */}
+        {/* L3 — the paper. Its wrapper lifts with the lagoon on phones as
+            the booking sheet rises. */}
         <div
           data-layer="paper"
           aria-hidden="true"
@@ -468,6 +566,42 @@ export function Hero() {
             data-layer="near-b"
             className={cn(styles.plate, styles.near)}
             style={plateVars({ plate: scene.clouds.nearBank })}
+          />
+        </div>
+
+        {/* Phones: the booking sheet, risen over the lagoon once the plane
+            has landed. Reduced motion: in the flow, under the still. */}
+        <div
+          ref={sheetRef}
+          data-hero-sheet
+          className={cn(
+            "relative z-[7] sm:hidden",
+            "motion-safe:invisible motion-safe:absolute motion-safe:inset-x-0 motion-safe:bottom-0 motion-safe:opacity-0",
+          )}
+        >
+          <FlightSearch
+            variant="sheet"
+            heading={
+              <h2
+                data-sheet-title
+                tabIndex={-1}
+                className="text-[1.25rem] leading-tight font-semibold tracking-tight text-foreground outline-none"
+              >
+                {hero.sheet.title}
+              </h2>
+            }
+            footer={
+              <p className="px-1 pt-3 text-center text-[0.8125rem] text-muted-foreground">
+                {hero.planLink.lead}{" "}
+                <Link
+                  href={hero.planLink.href}
+                  className="inline-flex items-center gap-1 font-semibold text-foreground underline-offset-4 hover:underline"
+                >
+                  {hero.planLink.label}
+                  <Icon name="arrow-right" tone="current" size={13} />
+                </Link>
+              </p>
+            }
           />
         </div>
       </div>

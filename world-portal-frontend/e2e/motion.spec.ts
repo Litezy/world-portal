@@ -15,9 +15,10 @@ test.describe("motion", () => {
   });
 
   test("the hero forecast card survives the intro animation", async ({ page }) => {
-    // From lg the flight search takes the card's place (2026-11-09); phones
-    // with reduced motion still show it with the copy.
-    await page.setViewportSize({ width: 390, height: 844 });
+    // From lg the flight search takes the card's place, and on phones the
+    // booking sheet does (2026-11-09); tablets with reduced motion still show
+    // it with the copy.
+    await page.setViewportSize({ width: 820, height: 1180 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     // The card is revealed from autoAlpha:0 — this guards that the tween always

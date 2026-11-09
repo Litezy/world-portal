@@ -28,6 +28,10 @@ export const hero = {
     label: "Start here",
     href: "/start",
   },
+  /** Phones: the booking sheet that rises once the paper plane has landed. */
+  sheet: {
+    title: "Book a flight",
+  },
   /**
    * "Cleared for take-off": the scene behind the copy. A visa form gets
    * stamped, folds into a paper plane as the visitor scrolls, and flies

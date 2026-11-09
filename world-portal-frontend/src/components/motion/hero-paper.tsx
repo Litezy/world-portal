@@ -45,6 +45,8 @@ const CAMERA_Z = 5;
  * rather than on a roof, clear of the copy, and on water dark enough for
  * white paper to read), and the horizontal object-position the hero gives it
  * (centred from lg, 72% below, where the crop shows less of the arc).
+ * Keep glide.compact.y in step with COMPACT_GLIDE_Y in hero-scene.ts, which
+ * lifts the landed plane clear of the phone booking sheet.
  */
 const LAGOON = {
   w: 2752,

@@ -1,4 +1,4 @@
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 /**
  * Taps a control in the hero's flight search the way a finger does. Inside
@@ -16,6 +16,27 @@ async function tap(target: Locator) {
   const box = await target.boundingBox();
   if (!box) throw new Error("no box to tap");
   await target.page().mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+/** Phones: the flight search is the sheet the hero ends on. */
+const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 640;
+
+/**
+ * The hero's flight search, ready to use. On a phone it waits for the paper
+ * plane to land (2026-11-09), so this taps "Book a flight", which flies there.
+ */
+async function openSearch(page: Page) {
+  // Hydrated first: the hero's scene writes the copy's style once React runs.
+  // A tap before that is a plain form post or link (2026-11-09: one search
+  // tap under a full-suite load showed no "pick where" nudge).
+  await expect(page.locator("[data-hero-copy]")).toHaveAttribute("style", /opacity/);
+  if (isPhone(page)) {
+    await tap(page.getByRole("link", { name: /^book a flight$/i }));
+    await expect(page.locator("[data-sheet-title]")).toBeFocused();
+  }
+  const search = page.getByRole("search", { name: /book a flight/i });
+  await expect(search).toBeVisible();
+  return search;
 }
 
 const SECTIONS = [
@@ -96,15 +117,47 @@ test.describe("landing page", () => {
     if ((page.viewportSize()?.width ?? 0) >= 640) {
       await expect(page.getByText(/we sort out the passport/i)).toBeVisible();
     }
-    // The hero's action is a flight search now (the CTO, 2026-11-09).
-    const search = page.getByRole("search", { name: /book a flight/i });
-    await expect(search).toBeVisible();
+    // The hero's action is a flight search now (the CTO, 2026-11-09). A
+    // phone tells the paper plane first and ends on the search.
+    if (isPhone(page)) {
+      await expect(page.getByRole("link", { name: /^book a flight$/i })).toBeVisible();
+      await expect(page.getByRole("search", { name: /book a flight/i })).toHaveCount(0);
+    }
+    const search = await openSearch(page);
     await expect(search.getByRole("button", { name: /search flights/i })).toBeVisible();
+  });
+
+  test("on a phone the booking sheet rises once the plane has landed", async ({
+    page,
+  }) => {
+    test.skip(!isPhone(page), "phones only");
+    await page.goto("/");
+    const sheet = page.locator("[data-hero-sheet]");
+    await expect(sheet).toBeHidden();
+
+    // Scrolled to the end of the pinned hero by hand, not by the button.
+    const end = await page.locator("[data-hero]").evaluate((section) => {
+      const panel = section.firstElementChild as HTMLElement;
+      const pad = parseFloat(getComputedStyle(section).paddingTop) || 0;
+      const range =
+        (section as HTMLElement).offsetHeight - panel.offsetHeight - 2 * pad;
+      return section.getBoundingClientRect().top + window.scrollY + range;
+    });
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), end);
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("search", { name: /book a flight/i })).toBeInViewport({
+      ratio: 1,
+    });
+
+    // And back to the top: the title again, the sheet gone.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(sheet).toBeHidden();
+    await expect(page.getByRole("heading", { level: 1 })).toBeInViewport();
   });
 
   test("the hero search hands the trip to the planner", async ({ page }) => {
     await page.goto("/");
-    const search = page.getByRole("search", { name: /book a flight/i });
+    const search = await openSearch(page);
 
     // Nothing picked yet: it says what is missing and opens that picker.
     await tap(search.getByRole("button", { name: /search flights/i }));
@@ -141,7 +194,7 @@ test.describe("landing page", () => {
 
   test("a one-way search needs no return date", async ({ page }) => {
     await page.goto("/");
-    const search = page.getByRole("search", { name: /book a flight/i });
+    const search = await openSearch(page);
     await tap(search.getByRole("radio", { name: /one way/i }));
     await tap(search.getByRole("button", { name: /^to/i }));
     const open = page.locator('[role="dialog"][data-state="open"]');
@@ -164,9 +217,9 @@ test.describe("landing page", () => {
   });
 
   test("the hero forecast card renders with the copy", async ({ page }) => {
-    // From lg the flight search takes the card's place; a phone with reduced
-    // motion shows it in the static composition.
-    await page.setViewportSize({ width: 390, height: 844 });
+    // From lg the flight search takes the card's place, and on phones the
+    // booking sheet does; a tablet with reduced motion shows it with the copy.
+    await page.setViewportSize({ width: 820, height: 1180 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     // Found by structure rather than by copy: the card holds placeholder data

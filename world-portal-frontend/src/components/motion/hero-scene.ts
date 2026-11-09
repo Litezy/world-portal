@@ -75,22 +75,43 @@ export type SceneElements = {
   card?: HTMLElement | null;
   scrim?: HTMLElement | null;
   fallback?: HTMLElement | null;
-  /** The paper canvas's wrapper: hidden behind the booking form on phones. */
+  /** The paper canvas's wrapper: lifted with the lagoon for the phone sheet. */
   paper?: HTMLElement | null;
+  /** Phones: the booking sheet that rises over the lagoon at the end. */
+  sheet?: HTMLElement | null;
 };
 
 /**
- * Phones: the share of the scroll the booking form keeps before the scene's
- * clock starts (2026-11-09). The flight search fills a phone's first screen,
- * so there is no room left for the paper there: it waits out of sight behind
- * the form, is revealed flat and stamped as the form clears, and only then
- * starts folding. Tablets and up have room for both and do not hold.
+ * Phones: the share of the scroll after the plane has landed, in which the
+ * booking sheet rises over the lagoon (2026-11-09, Owen: title first, then
+ * the whole paper plane, then the booking form comes up). The scene's clock
+ * runs over the rest. Tablets and up keep the search in the copy and have no
+ * tail.
  */
-export const PHONE_HOLD = 0.28;
+export const PHONE_TAIL = 0.2;
 
-/** The scene's clock for a raw scroll progress, after any hold. */
-export function sceneProgress(raw: number, hold: number) {
-  return hold ? clamp01((raw - hold) / (1 - hold)) : raw;
+/**
+ * Where the compact glide ends, as a share of the panel's height: the lagoon
+ * fills a portrait panel's height, so this is the glide point's row of the
+ * photo (keep in step with LAGOON.glide.compact in hero-paper.tsx).
+ */
+export const COMPACT_GLIDE_Y = 760 / 1536;
+
+/** The scene's clock for a raw scroll progress, before any tail. */
+export function sceneProgress(raw: number, tail: number) {
+  return tail ? clamp01(raw / (1 - tail)) : raw;
+}
+
+/**
+ * How far (in % of the panel's height) the lagoon and the landed plane lift
+ * as the sheet rises, so the plane sits in the middle of what the sheet
+ * leaves open below the fixed header. Never down, and never more than 40%.
+ */
+export function sheetLift(panelHeight: number, sheetHeight: number, header = 60) {
+  if (!panelHeight || !sheetHeight) return 0;
+  const open = (header + panelHeight - sheetHeight) / 2;
+  const lift = ((COMPACT_GLIDE_Y * panelHeight - open) / panelHeight) * 100;
+  return Math.min(40, Math.max(0, lift));
 }
 
 function set(el: HTMLElement | null | undefined, transform: string, opacity: number) {
@@ -122,12 +143,25 @@ export function applyScene(
   els: SceneElements,
   p: number,
   mode: SceneMode,
-  { raw = p, hold = 0 }: { raw?: number; hold?: number } = {},
+  {
+    raw = p,
+    tail = 0,
+    lift = 0,
+  }: {
+    /** The scroll progress before the scene's clock (the tail's own clock). */
+    raw?: number;
+    /** The share of raw after the scene ends: the phone sheet's. */
+    tail?: number;
+    /** How far the lagoon and the plane lift for the sheet, in %. */
+    lift?: number;
+  } = {},
 ) {
   const wide = mode === "wide";
-  // How much of the paper shows: all of it, except on a phone during the hold.
-  const reveal = hold ? smooth(hold * 0.6, hold, raw) : 1;
-  set(els.paper, "none", reveal);
+  // Phones, after the landing: the sheet rises, and the lagoon and the plane
+  // on it lift together (one camera tilt), so the plane stays in view above.
+  const sheetIn = tail ? smooth(1 - tail, 1 - tail * 0.12, raw) : 0;
+  const up = `translate3d(0, ${(-lift * sheetIn).toFixed(2)}%, 0)`;
+  set(els.paper, sheetIn ? up : "none", 1);
 
   // L0: the sky, slowest. A slight sink and swell, never past ~1.07×.
   const drift = smooth(0, 0.86, p);
@@ -140,13 +174,17 @@ export function applyScene(
   // L5: the lagoon, under the cloud deck, settling from a slight zoom.
   const land = smooth(0.79, 0.9, p);
   const settle = smooth(0.8, 1, p);
-  set(els.lagoon, `scale(${(1.13 - 0.13 * settle).toFixed(4)})`, land);
+  set(
+    els.lagoon,
+    `${sheetIn ? `${up} ` : ""}scale(${(1.13 - 0.13 * settle).toFixed(4)})`,
+    land,
+  );
 
   // L1: the far cloud band. Slow at first, then it rises to fill the frame
   // (the camera sinking into the deck), then parts outward along its gap.
   const rise = smooth(0.42, 0.84, p);
-  const lift = wide ? 64 : 58;
-  const ty = lift * (1 - rise) - 4 * smooth(0, 0.42, p) * (1 - rise);
+  const low = wide ? 64 : 58;
+  const ty = low * (1 - rise) - 4 * smooth(0, 0.42, p) * (1 - rise);
   const swell = 1 + 0.06 * smooth(0, 0.42, p) + 0.3 * rise;
   const part = smooth(0.845, 0.975, p);
   const gone = 1 - smooth(0.9, 0.985, p);
@@ -200,9 +238,9 @@ export function applyScene(
     );
   } else {
     // Phones and tablets: the paper launches up through where the copy is,
-    // so the copy clears first, and the arrival belongs to the card. On a
-    // phone the copy (and its flight search) clears during the hold instead.
-    const away = hold ? smooth(hold * 0.4, hold * 0.9, raw) : smooth(0.44, 0.56, p);
+    // so the copy clears first. The arrival belongs to the forecast card on
+    // tablets, and to the booking sheet on phones.
+    const away = smooth(0.44, 0.56, p);
     setContent(
       els.copy,
       `translate3d(0, ${(-24 * away).toFixed(2)}px, 0) scale(${(1 - 0.03 * away).toFixed(4)})`,
@@ -212,6 +250,12 @@ export function applyScene(
     set(els.scrim, "none", 1 - away);
     const back = smooth(0.88, 0.985, p);
     setContent(els.card, `translate3d(0, ${(22 * (1 - back)).toFixed(2)}px, 0)`, back);
+    // The sheet slides up from below the panel's edge, like a booking app's.
+    setContent(
+      els.sheet,
+      `translate3d(0, ${(104 * (1 - sheetIn)).toFixed(2)}%, 0)`,
+      tail ? smooth(1 - tail, 1 - tail * 0.7, raw) : 0,
+    );
   }
 
   // Without WebGL, the still plane flies a simple 2D version of the path.
@@ -220,7 +264,7 @@ export function applyScene(
     set(
       els.fallback,
       `translate3d(${(-30 * go).toFixed(2)}%, ${(-55 * go).toFixed(2)}%, 0) scale(${(1 - 0.78 * go).toFixed(4)})`,
-      (1 - smooth(0.74, 0.84, p)) * reveal,
+      1 - smooth(0.74, 0.84, p),
     );
   }
 }

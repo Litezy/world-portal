@@ -93,7 +93,23 @@ const NUDGE: Record<NonNullable<ReturnType<typeof missingField>>, string> = {
  * questions first. Missing a field never fails silently: the form says what
  * is missing and opens that picker.
  */
-export function FlightSearch({ className }: { className?: string }) {
+export function FlightSearch({
+  className,
+  variant = "card",
+  heading,
+  footer,
+}: {
+  className?: string;
+  /**
+   * "card": the glass card in the hero's copy (tablets and up). "sheet": the
+   * phone's bottom sheet that rises over the lagoon once the plane has landed.
+   */
+  variant?: "card" | "sheet";
+  /** Shown above the trip tabs (the sheet's title). */
+  heading?: React.ReactNode;
+  /** Shown under the search button (the sheet's passport-or-visa line). */
+  footer?: React.ReactNode;
+}) {
   const router = useRouter();
   const [search, setSearch] = React.useState<Query>({
     trip: "return",
@@ -146,15 +162,29 @@ export function FlightSearch({ className }: { className?: string }) {
       // The hero keeps the search on screen while a picker is open.
       data-picking={panel ? "" : undefined}
       className={cn(
-        "glass glass-frost w-full rounded-[1.375rem] p-2.5 text-foreground sm:p-3",
+        "w-full text-foreground",
+        variant === "card"
+          ? "glass glass-frost rounded-[1.375rem] p-2.5 sm:p-3"
+          : // A grouped list: the white block on a soft grey sheet.
+            "rounded-t-[1.75rem] bg-muted px-3 pt-4 pb-3 shadow-[0_-18px_40px_-20px_rgb(4_20_48/0.45)]",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-3 px-1 pt-0.5 pb-2.5">
-        <TripTabs value={search.trip} onChange={setTrip} />
-        <p className="hidden text-[0.75rem] font-medium text-muted-foreground sm:block">
-          Visa checked before you fly
-        </p>
+        {heading ? (
+          // The sheet: its title, then the tabs on the same row.
+          <>
+            {heading}
+            <TripTabs value={search.trip} onChange={setTrip} />
+          </>
+        ) : (
+          <>
+            <TripTabs value={search.trip} onChange={setTrip} />
+            <p className="hidden text-[0.75rem] font-medium text-muted-foreground sm:block">
+              Visa checked before you fly
+            </p>
+          </>
+        )}
       </div>
 
       <div className="grid gap-2">
@@ -274,6 +304,7 @@ export function FlightSearch({ className }: { className?: string }) {
       >
         {nudge ?? ""}
       </p>
+      {footer}
     </form>
   );
 }
