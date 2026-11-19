@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { isSwaggerEnabled } from './common/swagger-enabled';
+import { resolveServiceKey } from './auth/service-key';
 
 function formatValidationErrors(
   errors: ValidationError[],
@@ -34,6 +35,9 @@ function formatValidationErrors(
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+  // Fail at boot, not later as unexplained 401s, when production is missing
+  // the key the admin console and agency portal servers must present.
+  resolveServiceKey(process.env);
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({ origin: true, credentials: true });

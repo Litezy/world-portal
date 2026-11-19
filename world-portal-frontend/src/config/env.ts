@@ -99,11 +99,11 @@ const serverShape = z.object({
    */
   AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
   /**
-   * Shared with the World Portal API (its SERVICE_AUTH_KEY). Sent only on the
-   * console's token request, after the password check, so the service issues
-   * console tokens to this server and nobody else. Unset is fine locally,
-   * where the service runs with ENABLE_MOCK_AUTH=true; without it in
-   * production, console sign-in is refused by the service.
+   * Shared with the World Portal API (its SERVICE_AUTH_KEY), sent as
+   * `x-service-key` by this server only — see `src/server/api/service-key.ts`.
+   * The service issues console tokens to holders of it, and answers the agency
+   * portal's and the console helpers' routes only for them. Without it in
+   * production, console sign-in and the agency portal are refused.
    */
   SERVICE_AUTH_KEY: z.string().min(32).optional(),
   /**

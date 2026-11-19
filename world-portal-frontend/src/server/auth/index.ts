@@ -82,8 +82,8 @@ export async function authenticate(email: string, password: string) {
     const issued = await backend<{ accessToken: string }>("/auth/test-token", {
       method: "POST",
       body: JSON.stringify({ email }),
-      // The service only issues console tokens to holders of this key.
-      headers: env.SERVICE_AUTH_KEY ? { "x-service-key": env.SERVICE_AUTH_KEY } : {},
+      // The service only issues console tokens to holders of SERVICE_AUTH_KEY.
+      service: true,
     });
 
     const profile = await backend<BackendProfile>("/profiles/me", {

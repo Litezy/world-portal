@@ -1,4 +1,5 @@
 import { applicantEnv } from "@/config/env";
+import { serviceKeyHeaders } from "@/server/api/service-key";
 
 export class BackendError extends Error {
   readonly status: number;
@@ -25,12 +26,19 @@ function baseUrl() {
  * The console never talks to it from the browser: the access token lives in an
  * httpOnly cookie, so every call is proxied through a route handler. Responses
  * are unwrapped here — the service wraps each 2xx as `{ success, data }`.
+ *
+ * `service: true` adds this server's `x-service-key`, for routes the API only
+ * answers to the website's own server (see `service-key.ts`).
  */
 export async function backend<T>(
   path: string,
-  init: RequestInit & { token?: string | null; query?: Record<string, unknown> } = {},
+  init: RequestInit & {
+    token?: string | null;
+    query?: Record<string, unknown>;
+    service?: boolean;
+  } = {},
 ): Promise<T> {
-  const { token, query, headers, ...rest } = init;
+  const { token, query, headers, service, ...rest } = init;
 
   const url = new URL(`${baseUrl()}${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -46,6 +54,7 @@ export async function backend<T>(
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(service ? serviceKeyHeaders() : {}),
         ...headers,
       },
       cache: "no-store",
