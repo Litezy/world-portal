@@ -18,13 +18,14 @@ import { SignOutButton } from "@/features/settings/components/sign-out-button";
 import { TeamList } from "@/features/settings/components/team-list";
 import { buildMetadata } from "@/lib/seo";
 import { getSession } from "@/server/auth";
+import { toClientUser } from "@/server/auth/client-user";
 
 export const metadata = buildMetadata({ title: "Settings", noIndex: true });
 
 export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/admin/login");
-  const { exp: _exp, ...user } = session;
+  const user = toClientUser(session);
 
   return (
     <div className="flex flex-col gap-8">
@@ -68,7 +69,7 @@ export default async function SettingsPage() {
           {/* Tab 2: Bank Accounts Management */}
           <TabsContent value="bank-accounts" className="m-0">
             <Card variant="solid" radius="lg" padding="none" className="p-6">
-              <BankAccountsSettings />
+              <BankAccountsSettings canManage={user.role === "MANAGER"} />
             </Card>
           </TabsContent>
 

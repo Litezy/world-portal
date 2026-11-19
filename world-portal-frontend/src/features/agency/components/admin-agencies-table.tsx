@@ -51,8 +51,12 @@ import type {
   AgencyDocument,
   AgencyVerificationStatus,
 } from "@/features/agency/types";
-import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
+import {
+  DocumentViewerModal,
+  LinkUnavailable,
+} from "@/features/applications/components/document-viewer-modal";
 import { useListParams } from "@/hooks/use-list-params";
+import { safeHttpsUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 import { rejectionNoteSchema } from "@/validations/admin";
 
@@ -372,7 +376,8 @@ function VerificationButtons({
   );
 }
 
-function AgencyDetails({
+/** Exported for its tests; the table is what renders it. */
+export function AgencyDetails({
   agency,
   busyKind,
   onApprove,
@@ -386,6 +391,8 @@ function AgencyDetails({
   onDecide: (kind: Decision["kind"]) => void;
 }) {
   const docs = paperwork(agency);
+  // The agency typed this itself: linked only when it is https.
+  const website = safeHttpsUrl(agency.website);
   return (
     <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
       <DialogHeader className="border-b border-border pb-4">
@@ -415,17 +422,22 @@ function AgencyDetails({
               <Phone className="size-4 shrink-0 text-primary" aria-hidden />
               {agency.phone || copy.notProvided}
             </p>
-            {agency.website ? (
+            {website ? (
               <a
-                href={agency.website}
+                href={website}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 text-primary hover:underline"
               >
                 <Globe className="size-4 shrink-0" aria-hidden />
-                <span className="truncate">{agency.website}</span>
+                <span className="truncate">{website}</span>
                 <ExternalLink className="size-3" aria-hidden />
               </a>
+            ) : agency.website ? (
+              <p className="flex items-center gap-2 text-muted-foreground">
+                <Globe className="size-4 shrink-0 text-primary" aria-hidden />
+                <LinkUnavailable />
+              </p>
             ) : null}
           </div>
           <div className="space-y-2">

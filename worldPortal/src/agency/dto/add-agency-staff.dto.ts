@@ -8,8 +8,10 @@ import {
   IsBoolean,
   Min,
   IsEnum,
+  ValidateIf,
 } from 'class-validator';
 import { AgencyStaffStatus } from '@prisma/client';
+import { IsHttpsUrl } from '../../common/validation/is-https-url';
 
 export class AddAgencyStaffDto {
   @ApiProperty({ description: 'Full name of staff member' })
@@ -17,19 +19,24 @@ export class AddAgencyStaffDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'Role or designation (e.g. Senior Guard, Lead Chef, Driver)' })
+  @ApiProperty({
+    description: 'Role or designation (e.g. Senior Guard, Lead Chef, Driver)',
+  })
   @IsString()
   @IsNotEmpty()
   role: string;
 
-  @ApiProperty({ description: 'Service category (e.g. security, driving, catering)' })
+  @ApiProperty({
+    description: 'Service category (e.g. security, driving, catering)',
+  })
   @IsString()
   @IsNotEmpty()
   category: string;
 
   @ApiPropertyOptional({ description: 'Photo URL' })
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => Boolean(value))
+  @IsHttpsUrl()
   photoUrl?: string;
 
   @ApiProperty({ description: 'Phone number' })
@@ -52,7 +59,10 @@ export class AddAgencyStaffDto {
   @IsBoolean()
   backgroundChecked?: boolean;
 
-  @ApiPropertyOptional({ enum: AgencyStaffStatus, description: 'Current status' })
+  @ApiPropertyOptional({
+    enum: AgencyStaffStatus,
+    description: 'Current status',
+  })
   @IsOptional()
   @IsEnum(AgencyStaffStatus)
   status?: AgencyStaffStatus;
@@ -76,7 +86,8 @@ export class UpdateAgencyStaffDto {
 
   @ApiPropertyOptional({ description: 'Photo URL' })
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => Boolean(value))
+  @IsHttpsUrl()
   photoUrl?: string;
 
   @ApiPropertyOptional({ description: 'Phone number' })
@@ -101,7 +112,10 @@ export class UpdateAgencyStaffDto {
   @IsBoolean()
   backgroundChecked?: boolean;
 
-  @ApiPropertyOptional({ enum: AgencyStaffStatus, description: 'Current status' })
+  @ApiPropertyOptional({
+    enum: AgencyStaffStatus,
+    description: 'Current status',
+  })
   @IsOptional()
   @IsEnum(AgencyStaffStatus)
   status?: AgencyStaffStatus;

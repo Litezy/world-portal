@@ -80,6 +80,12 @@ export class ExternalAuthGuard implements CanActivate {
     // refused outright and never falls through to the mock path below.
     if (token.split('.').length === 3) {
       const payloadObj = this.jwtService.verify<Record<string, unknown>>(token);
+      // Desk tokens carry no audience. Anything else JWT_SECRET signs does
+      // (the applicant lookup token, see auth/lookup-token.ts) and is never a
+      // desk credential, however valid its signature.
+      if (payloadObj.aud !== undefined) {
+        throw new Error('Token was issued for another purpose');
+      }
       const email =
         typeof payloadObj.email === 'string'
           ? payloadObj.email

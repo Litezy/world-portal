@@ -18,14 +18,14 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { adminBrand, commandPalette } from "@/content/admin";
-import type { AdminUser } from "@/types";
+import type { ClientAdminUser } from "@/types";
 
 /**
  * Phones and tablets: a slim bar with the menu, the name and search. On
  * desktop the sidebar carries all of it, so the bar is hidden there — but it
  * stays mounted, because it owns the search palette and its ⌘K shortcut.
  */
-export function AdminTopbar({ user }: { user: AdminUser }) {
+export function AdminTopbar({ user }: { user: ClientAdminUser }) {
   const [navOpen, setNavOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
 

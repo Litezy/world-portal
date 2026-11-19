@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import {
   Briefcase,
   Car,
@@ -26,6 +27,9 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { EmptyState } from "@/components/ui/empty-state";
+import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
+import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
+import { hireBookingRequest } from "@/features/basket/checkout";
 import {
   type BasketItemType,
   basketTotal,
@@ -35,9 +39,6 @@ import {
 } from "@/features/basket/store";
 import { useMounted } from "@/hooks/use-mounted";
 import { formatCurrency } from "@/lib/utils";
-
-import { WorldStreetSignInDialog } from "@/features/applicant/components/worldstreet-sign-in-dialog";
-import { useApplicantSession } from "@/features/applicant/hooks/use-applicant-session";
 
 const TYPE_ICON: Record<BasketItemType, typeof Plane> = {
   pro: Briefcase,
@@ -78,23 +79,11 @@ export function BasketDrawer({
 
     const proItems = lines.filter((i) => i.type === "pro");
     for (const proItem of proItems) {
-      const proId = proItem.id.replace(/^pro:/, "");
       try {
         await fetch("/api/hire/bookings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            professionalId: proId,
-            travellerName: displayName,
-            // The API files the booking under the WorldStreet session and its
-            // verified email; this is only the form's required field.
-            travellerEmail: email ?? "",
-            destinationCity: proItem.city || "Destination",
-            startsAt: new Date().toISOString(),
-            endsAt: new Date(Date.now() + 86400000 * 3).toISOString(),
-            totalAmount: proItem.price || 0,
-            currency: "USD",
-          }),
+          body: JSON.stringify(hireBookingRequest(proItem, { displayName, email })),
         });
       } catch (err) {
         console.error("Failed to post pro booking:", err);

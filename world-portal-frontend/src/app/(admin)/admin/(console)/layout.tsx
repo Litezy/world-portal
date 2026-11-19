@@ -5,11 +5,14 @@ import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { getAdminPalette } from "@/server/admin-palette";
 import { getSession } from "@/server/auth";
+import { toClientUser } from "@/server/auth/client-user";
 
 export default async function ConsoleLayout({ children }: LayoutProps<"/admin">) {
   const session = await getSession();
   if (!session) redirect("/admin/login");
-  const { exp: _exp, ...user } = session;
+  // The sidebar and top bar are client components: their props are written
+  // into the page, and the session also holds the API access token.
+  const user = toClientUser(session);
   const palette = await getAdminPalette();
 
   return (

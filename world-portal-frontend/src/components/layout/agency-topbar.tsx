@@ -8,8 +8,8 @@ import { ArrowUpRight, LogOut, Menu, Search, Settings, X } from "lucide-react";
 
 import { UserAvatar } from "@/components/admin/user-avatar";
 import { Logo } from "@/components/common/logo";
-import { ThemeToggle } from "@/components/common/theme-toggle";
 import { NotificationCenter } from "@/components/common/notification-center";
+import { ThemeToggle } from "@/components/common/theme-toggle";
 import { AgencyNav } from "@/components/layout/agency-nav";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,9 +29,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { agencyAssignments } from "@/content/agency";
 import { useAgencyLogout } from "@/features/agency/api/use-agency-auth";
-import type { AgencyUser } from "@/features/agency/types";
+import type { ClientAgencyUser } from "@/features/agency/types";
 
-export function AgencyTopbar({ user }: { user: AgencyUser }) {
+export function AgencyTopbar({ user }: { user: ClientAgencyUser }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 

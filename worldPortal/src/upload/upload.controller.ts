@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  UseGuards,
   UseInterceptors,
   UploadedFile,
   ParseFilePipeBuilder,
@@ -14,8 +15,13 @@ import {
   ApiResponse,
   ApiConsumes,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { UploadService } from './upload.service';
+import { UploadAccessGuard } from './upload-access.guard';
+import { MAX_UPLOAD_BYTES } from './document-type';
 import { FileUploadDto } from './dto/file-upload.dto';
 import { UploadResponseDto } from './dto/upload-response.dto';
 
@@ -27,11 +33,22 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @ApiBearerAuth()
+  // The guard runs before the file is read, so a refused caller costs nothing.
+  @UseGuards(UploadAccessGuard)
+  // Roles for the desk-token path; applicants and the website server are
+  // admitted by their own credentials (see UploadAccessGuard).
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  // Multer stops reading at the limit (413) instead of buffering any size.
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+    }),
+  )
   @ApiOperation({
-    summary: 'Public document upload (PDF, JPEG, PNG, WEBP max 10MB)',
+    summary: 'Document upload (PDF, JPEG, PNG, WEBP max 10MB)',
     description:
-      'Public endpoint allowing applicants to upload passport scans, photos, or proof of funds directly to configured cloud storage (AWS S3 or Cloudinary) and receive direct file URLs.',
+      'For a signed-in applicant (WorldStreet session token), desk staff, or the E-Embassy website server (x-service-key). The type is read from the file content; the stored name is generated.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: FileUploadDto })
@@ -43,26 +60,19 @@ export class UploadController {
   @ApiResponse({
     status: 400,
     description:
-      'Validation failed (file missing, file too large >10MB, or unsupported format).',
+      'Validation failed (file missing, or not a PDF, JPEG, PNG or WEBP by content).',
   })
+  @ApiResponse({ status: 401, description: 'Not signed in.' })
+  @ApiResponse({ status: 413, description: 'File larger than 10MB.' })
   async uploadDocument(
     @UploadedFile(
       new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: /(pdf|jpeg|jpg|png|webp)$/i,
-        })
-        .addMaxSizeValidator({
-          maxSize: 10 * 1024 * 1024,
-        })
-        .build({
-          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-        }),
+        .addMaxSizeValidator({ maxSize: MAX_UPLOAD_BYTES })
+        .build({ errorHttpStatusCode: HttpStatus.BAD_REQUEST }),
     )
     file: Express.Multer.File,
   ): Promise<UploadResponseDto> {
-    this.logger.log(
-      `Public POST /upload called with filename=${file?.originalname}`,
-    );
+    this.logger.log(`POST /upload: ${file?.size ?? 0} bytes`);
     return this.uploadService.uploadDocument(file);
   }
 }

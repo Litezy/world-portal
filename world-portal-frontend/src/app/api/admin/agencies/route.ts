@@ -47,8 +47,13 @@ const patchSchema = z.union([
 
 const agencyIdSchema = z.string().trim().min(1).max(120);
 
+/**
+ * Every call goes as the signed-in desk member (`session.token`), so the API
+ * checks that member's role as well as this console. Verifying an agency and
+ * ruling on a document take nothing else: the service key does not unlock them.
+ */
 export async function GET(request: Request) {
-  const { response } = await requireRole(DESK_ROLES);
+  const { session, response } = await requireRole(DESK_ROLES);
   if (response) return response;
 
   const query = listQuerySchema.safeParse(
@@ -60,13 +65,10 @@ export async function GET(request: Request) {
   const { search, status, verification, page, perPage } = query.data;
 
   try {
-    const paginated = await listAgencies({
-      q: search,
-      status,
-      verification,
-      page,
-      perPage,
-    });
+    const paginated = await listAgencies(
+      { q: search, status, verification, page, perPage },
+      { token: session.token },
+    );
     return NextResponse.json(paginated);
   } catch {
     // An outage must read as one — an empty list would claim there are no agencies.
@@ -78,8 +80,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { response } = await requireRole(DESK_ROLES);
+  const { session, response } = await requireRole(DESK_ROLES);
   if (response) return response;
+  const desk = { token: session.token };
 
   const id = agencyIdSchema.safeParse(new URL(request.url).searchParams.get("id"));
   if (!id.success) {
@@ -96,6 +99,7 @@ export async function PATCH(request: Request) {
         body.data.docId,
         body.data.docStatus,
         body.data.note,
+        desk,
       );
       return updated
         ? NextResponse.json({ data: updated, message: "Document status updated" })
@@ -106,7 +110,7 @@ export async function PATCH(request: Request) {
     }
 
     const verification = (body.data.verification ?? body.data.status) as string;
-    const updated = await updateAgencyVerification(id.data, verification);
+    const updated = await updateAgencyVerification(id.data, verification, desk);
     return updated
       ? NextResponse.json({ data: updated, message: "Verification updated" })
       : NextResponse.json({ message: "Agency not found" }, { status: 404 });

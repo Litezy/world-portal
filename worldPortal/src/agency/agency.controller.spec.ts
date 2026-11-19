@@ -1,7 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AgencyController } from './agency.controller';
 import { AgencyService } from './agency.service';
-import { AgencyVerificationStatus, AgencyListingStatus, AgencyDocumentKind, AgencyDocumentStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  AgencyVerificationStatus,
+  AgencyListingStatus,
+  AgencyDocumentKind,
+  AgencyDocumentStatus,
+} from '@prisma/client';
 
 describe('AgencyController', () => {
   let controller: AgencyController;
@@ -23,19 +31,51 @@ describe('AgencyController', () => {
 
   const mockAgencyService = {
     createAgency: jest.fn().mockResolvedValue(mockAgency),
-    findAllAgencies: jest.fn().mockResolvedValue({ data: [mockAgency], meta: { total: 1, page: 1, limit: 20, pages: 1 } }),
+    findAllAgencies: jest.fn().mockResolvedValue({
+      data: [mockAgency],
+      meta: { total: 1, page: 1, limit: 20, pages: 1 },
+    }),
     getAgencyById: jest.fn().mockResolvedValue(mockAgency),
-    updateVerification: jest.fn().mockResolvedValue({ ...mockAgency, verification: AgencyVerificationStatus.VERIFIED }),
-    getOverview: jest.fn().mockResolvedValue({ openAssignments: 2, staffOnDuty: 3, staffTotal: 10 }),
+    updateVerification: jest.fn().mockResolvedValue({
+      ...mockAgency,
+      verification: AgencyVerificationStatus.VERIFIED,
+    }),
+    getOverview: jest.fn().mockResolvedValue({
+      openAssignments: 2,
+      staffOnDuty: 3,
+      staffTotal: 10,
+    }),
     updateAgencyListing: jest.fn().mockResolvedValue(mockAgency),
-    listStaff: jest.fn().mockResolvedValue([{ id: 'staff-1', name: 'John Doe' }]),
-    addStaff: jest.fn().mockResolvedValue({ id: 'staff-2', name: 'Jane Smith' }),
-    updateStaff: jest.fn().mockResolvedValue({ id: 'staff-1', name: 'John Updated' }),
-    listDocuments: jest.fn().mockResolvedValue([{ id: 'doc-1', kind: AgencyDocumentKind.BUSINESS_REGISTRATION, status: AgencyDocumentStatus.APPROVED }]),
-    uploadDocument: jest.fn().mockResolvedValue({ id: 'doc-2', kind: AgencyDocumentKind.TAX_CERTIFICATE, status: AgencyDocumentStatus.IN_REVIEW }),
-    listAssignments: jest.fn().mockResolvedValue([{ id: 'assign-1', status: 'REQUESTED' }]),
-    assignStaffToAssignment: jest.fn().mockResolvedValue({ id: 'assign-1', status: 'ASSIGNED' }),
-    listPayouts: jest.fn().mockResolvedValue([{ id: 'payout-1', amount: 1500.0 }]),
+    listStaff: jest
+      .fn()
+      .mockResolvedValue([{ id: 'staff-1', name: 'John Doe' }]),
+    addStaff: jest
+      .fn()
+      .mockResolvedValue({ id: 'staff-2', name: 'Jane Smith' }),
+    updateStaff: jest
+      .fn()
+      .mockResolvedValue({ id: 'staff-1', name: 'John Updated' }),
+    listDocuments: jest.fn().mockResolvedValue([
+      {
+        id: 'doc-1',
+        kind: AgencyDocumentKind.BUSINESS_REGISTRATION,
+        status: AgencyDocumentStatus.APPROVED,
+      },
+    ]),
+    uploadDocument: jest.fn().mockResolvedValue({
+      id: 'doc-2',
+      kind: AgencyDocumentKind.TAX_CERTIFICATE,
+      status: AgencyDocumentStatus.IN_REVIEW,
+    }),
+    listAssignments: jest
+      .fn()
+      .mockResolvedValue([{ id: 'assign-1', status: 'REQUESTED' }]),
+    assignStaffToAssignment: jest
+      .fn()
+      .mockResolvedValue({ id: 'assign-1', status: 'ASSIGNED' }),
+    listPayouts: jest
+      .fn()
+      .mockResolvedValue([{ id: 'payout-1', amount: 1500.0 }]),
   };
 
   beforeEach(async () => {
@@ -43,6 +83,11 @@ describe('AgencyController', () => {
       controllers: [AgencyController],
       providers: [
         { provide: AgencyService, useValue: mockAgencyService },
+        // The route guards' own dependencies. Access is covered by
+        // agency.access.spec.ts; this spec calls the handlers directly.
+        { provide: PrismaService, useValue: {} },
+        { provide: JwtService, useValue: {} },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 
@@ -65,7 +110,13 @@ describe('AgencyController', () => {
 
   describe('findAllAgencies', () => {
     it('should call agencyService.findAllAgencies with search & filters', async () => {
-      const result = await controller.findAllAgencies('LIVE', 'VERIFIED', 'Apex', 1, 20);
+      const result = await controller.findAllAgencies(
+        'LIVE',
+        'VERIFIED',
+        'Apex',
+        1,
+        20,
+      );
       expect(result.data).toHaveLength(1);
       expect(mockAgencyService.findAllAgencies).toHaveBeenCalledWith({
         status: 'LIVE',
@@ -81,15 +132,23 @@ describe('AgencyController', () => {
     it('should call agencyService.getAgencyById with agency id', async () => {
       const result = await controller.getAgency('agency-123');
       expect(result).toEqual(mockAgency);
-      expect(mockAgencyService.getAgencyById).toHaveBeenCalledWith('agency-123');
+      expect(mockAgencyService.getAgencyById).toHaveBeenCalledWith(
+        'agency-123',
+      );
     });
   });
 
   describe('updateVerification', () => {
     it('should call agencyService.updateVerification with agency id and status', async () => {
-      const result = await controller.updateVerification('agency-123', 'VERIFIED');
+      const result = await controller.updateVerification(
+        'agency-123',
+        'VERIFIED',
+      );
       expect(result.verification).toBe(AgencyVerificationStatus.VERIFIED);
-      expect(mockAgencyService.updateVerification).toHaveBeenCalledWith('agency-123', 'VERIFIED');
+      expect(mockAgencyService.updateVerification).toHaveBeenCalledWith(
+        'agency-123',
+        'VERIFIED',
+      );
     });
   });
 
@@ -112,7 +171,10 @@ describe('AgencyController', () => {
       const dto: any = { name: 'Jane Smith', role: 'Security Guard' };
       const result = await controller.addStaff('agency-123', dto);
       expect(result.name).toBe('Jane Smith');
-      expect(mockAgencyService.addStaff).toHaveBeenCalledWith('agency-123', dto);
+      expect(mockAgencyService.addStaff).toHaveBeenCalledWith(
+        'agency-123',
+        dto,
+      );
     });
   });
 
@@ -120,7 +182,9 @@ describe('AgencyController', () => {
     it('should list compliance documents', async () => {
       const result = await controller.listDocuments('agency-123');
       expect(result).toHaveLength(1);
-      expect(mockAgencyService.listDocuments).toHaveBeenCalledWith('agency-123');
+      expect(mockAgencyService.listDocuments).toHaveBeenCalledWith(
+        'agency-123',
+      );
     });
   });
 });

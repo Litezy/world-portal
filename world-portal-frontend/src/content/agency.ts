@@ -130,6 +130,8 @@ export const agencyListing = {
     staffCount: "People on the books",
     languages: "Languages your staff speak",
     email: "Booking email",
+    emailLocked:
+      "This is also the email you sign in with, so it can't be changed here. To change it, contact E-Embassy support.",
     phone: "Booking phone",
     website: "Website",
   },

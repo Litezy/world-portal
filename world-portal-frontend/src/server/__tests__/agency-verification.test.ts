@@ -10,6 +10,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
+/** A desk decision: the console asks as the signed-in desk member. */
+const desk = { token: "desk-token" };
+
 /** The store reads NODE_ENV once, when it loads. */
 async function loadStore(nodeEnv: "production" | "development") {
   vi.resetModules();
@@ -31,7 +34,7 @@ describe("updateAgencyVerification", () => {
       }),
     );
 
-    const saved = await store.updateAgencyVerification("ag/1", "verified");
+    const saved = await store.updateAgencyVerification("ag/1", "verified", desk);
 
     expect(saved).toMatchObject({ id: "ag/1", verification: "verified" });
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agency\/ag%2F1\/verify$/);
@@ -41,16 +44,18 @@ describe("updateAgencyVerification", () => {
     const store = await loadStore("production");
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
 
-    await expect(store.updateAgencyVerification("ag_1", "verified")).rejects.toThrow();
+    await expect(
+      store.updateAgencyVerification("ag_1", "verified", desk),
+    ).rejects.toThrow();
   });
 
   it("in production, treats a refused save as an error", async () => {
     const store = await loadStore("production");
     fetchMock.mockResolvedValue(new Response("{}", { status: 502 }));
 
-    await expect(store.updateAgencyVerification("ag_1", "verified")).rejects.toThrow(
-      /not saved/,
-    );
+    await expect(
+      store.updateAgencyVerification("ag_1", "verified", desk),
+    ).rejects.toThrow(/not saved/);
   });
 
   it("in production, reports an agency the service doesn't know as not found", async () => {
@@ -58,7 +63,7 @@ describe("updateAgencyVerification", () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 404 }));
 
     await expect(
-      store.updateAgencyVerification("ag_1", "verified"),
+      store.updateAgencyVerification("ag_1", "verified", desk),
     ).resolves.toBeNull();
   });
 
@@ -67,7 +72,7 @@ describe("updateAgencyVerification", () => {
     fetchMock.mockRejectedValue(new TypeError("fetch failed"));
 
     await expect(
-      store.updateAgencyVerification("no-such-agency", "verified"),
+      store.updateAgencyVerification("no-such-agency", "verified", desk),
     ).resolves.toBeNull();
   });
 });

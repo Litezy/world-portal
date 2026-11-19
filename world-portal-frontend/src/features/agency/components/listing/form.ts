@@ -36,7 +36,6 @@ export const stepFieldNames = {
     "yearFounded",
     "staffCount",
     "languages",
-    "email",
     "phone",
     "website",
   ],
@@ -92,7 +91,8 @@ export function toFormValues(agency: Agency): ListingFormValues {
  * Blank strings and unset numbers are dropped rather than sent: this is an
  * autosave that runs while the agency is halfway through typing, and an empty
  * optional URL or a half-typed year must not fail the whole save. Arrays are
- * always sent, because emptying one is a real edit.
+ * always sent, because emptying one is a real edit. `email` is shown but never
+ * sent: it is the sign-in email, which the listing may not change.
  */
 export function toPatch(values: ListingFormValues): ListingPatchInput {
   const selectedCategories = new Set(values.categories);
@@ -115,7 +115,6 @@ export function toPatch(values: ListingFormValues): ListingPatchInput {
     country: values.country,
     summary: values.summary,
     about: values.about,
-    email: values.email,
     phone: values.phone,
     website: values.website,
   };

@@ -89,6 +89,7 @@ export const bankAccounts = {
   deleteBody:
     "Applicants will stop seeing it in payment emails and on the tracking page straight away. This can't be undone — to hide it for a while, deactivate it instead.",
   deleteConfirm: "Delete account",
+  managerOnly: "Only a manager can add, change or delete bank accounts.",
 } as const;
 
 export const agencies = {
@@ -295,6 +296,10 @@ export const roleGate = {
  */
 export const documentViewer = {
   description: "Uploaded by the applicant — not yet reviewed",
+  /** Shown instead of any applicant- or agency-supplied link that isn't https. */
+  linkUnavailable: "Link unavailable",
+  linkUnavailableHint:
+    "This address isn't a secure https:// link, so the console won't open it.",
 } as const;
 
 /** Detail pages whose record did not load — see `DetailLoadError`. */

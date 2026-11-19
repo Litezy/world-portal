@@ -5,9 +5,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { randomUUID } from 'crypto';
 import {
   IStorageProvider,
+  StorageObject,
   StorageUploadResult,
 } from './storage-provider.interface';
 
@@ -26,6 +26,11 @@ export class S3StorageProvider implements IStorageProvider {
       'world-portal-documents',
     );
     this.customDomain = this.configService.get<string>('AWS_S3_CUSTOM_DOMAIN');
+    if (this.customDomain?.trim().toLowerCase().startsWith('http://')) {
+      this.logger.warn(
+        'AWS_S3_CUSTOM_DOMAIN starts with http://; document links are handed out over https instead.',
+      );
+    }
 
     const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
     const secretAccessKey = this.configService.get<string>(
@@ -55,9 +60,8 @@ export class S3StorageProvider implements IStorageProvider {
     }
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<StorageUploadResult> {
-    const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `documents/${randomUUID()}-${sanitizedFilename}`;
+  async uploadFile(object: StorageObject): Promise<StorageUploadResult> {
+    const { key } = object;
 
     let url: string;
 
@@ -66,8 +70,8 @@ export class S3StorageProvider implements IStorageProvider {
         const command = new PutObjectCommand({
           Bucket: this.bucketName,
           Key: key,
-          Body: file.buffer,
-          ContentType: file.mimetype,
+          Body: object.body,
+          ContentType: object.contentType,
         });
 
         await this.s3Client.send(command);
@@ -90,10 +94,18 @@ export class S3StorageProvider implements IStorageProvider {
     return { url, key };
   }
 
+  /**
+   * Always an https URL: applicants send it back on their application, which
+   * accepts only https links. A custom domain written with `http://` or with
+   * no scheme is served over https.
+   */
   private constructS3Url(key: string): string {
     if (this.customDomain && this.customDomain.trim().length > 0) {
-      const cleanDomain = this.customDomain.replace(/\/$/, '');
-      return `${cleanDomain}/${key}`;
+      const host = this.customDomain
+        .trim()
+        .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+        .replace(/\/+$/, '');
+      return `https://${host}/${key}`;
     }
     return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`;
   }

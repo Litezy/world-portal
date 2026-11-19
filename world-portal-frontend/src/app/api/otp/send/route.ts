@@ -1,13 +1,27 @@
 import { NextResponse } from "next/server";
+
 import { backend } from "@/server/api/backend";
-import { backendErrorResponse } from "@/server/http";
+import { visitorIpHeaders } from "@/server/api/service-key";
+import { backendErrorResponse, parseBody } from "@/server/http";
+import { otpSendSchema } from "@/validations/otp";
 
 export async function POST(request: Request) {
+  // Checked and rebuilt rather than relayed raw: this call carries the
+  // service key, so the API trusts it more than it would the browser.
+  const { data, response } = await parseBody(request, otpSendSchema);
+  if (response) return response;
+
   try {
-    const body = await request.json();
-    const result = await backend<any>("/otp/send", {
+    // Relayed for this visitor: the key plus their IP lets the API rate-limit
+    // each visitor instead of this server's one address.
+    const result = await backend<unknown>("/otp/send", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        email: data.email,
+        ...(data.purpose ? { purpose: data.purpose } : {}),
+      }),
+      service: true,
+      headers: visitorIpHeaders(request),
     });
     return NextResponse.json(result);
   } catch (error) {

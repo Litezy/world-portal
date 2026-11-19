@@ -11,7 +11,11 @@ import {
   RefundStatus,
   Prisma,
 } from '@prisma/client';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 /** A mock's first-call argument, typed: `mock.calls` is `any` in jest's own types. */
 type CallArgs = { where?: unknown; data: Record<string, unknown> };
@@ -25,6 +29,7 @@ describe('PaymentService', () => {
   const mockVisaDoc = {
     id: 'visa-001',
     applicationNo: 'VISA-2026-8812',
+    clerkUserId: 'user_test',
     profileId: 'profile-001',
     email: 'test@gmail.com',
     totalAmount: new Prisma.Decimal(1000.0),
@@ -71,6 +76,8 @@ describe('PaymentService', () => {
   const mockPaymentTransactionCreate = jest.fn();
   const mockPaymentTransactionFindUnique = jest.fn();
   const mockPaymentTransactionUpdate = jest.fn();
+  const mockPaymentTransactionUpdateMany = jest.fn();
+  const mockPaymentTransactionFindUniqueOrThrow = jest.fn();
   const mockPaymentConfigFindFirst = jest.fn();
   const mockPaymentRefundCreate = jest.fn();
   const mockPaymentRefundCount = jest.fn();
@@ -98,6 +105,8 @@ describe('PaymentService', () => {
       create: mockPaymentTransactionCreate,
       findUnique: mockPaymentTransactionFindUnique,
       update: mockPaymentTransactionUpdate,
+      updateMany: mockPaymentTransactionUpdateMany,
+      findUniqueOrThrow: mockPaymentTransactionFindUniqueOrThrow,
       findMany: mockPaymentTransactionFindMany,
     } as never,
     paymentRefund: {
@@ -149,6 +158,9 @@ describe('PaymentService', () => {
   });
 
   describe('initiatePaymentTransaction', () => {
+    /** The signed-in applicant who owns `mockVisaDoc`. */
+    const owner = { clerkUserId: 'user_test', email: 'test@gmail.com' };
+
     it('should successfully initiate a payment transaction record', async () => {
       mockFindVisaApplicationById.mockResolvedValue(mockVisaDoc);
       mockPaymentTransactionCreate.mockResolvedValue(mockTransaction);
@@ -158,12 +170,30 @@ describe('PaymentService', () => {
           visaDocumentationId: 'visa-001',
           paymentOption: PaymentOption.HALF_INSTALLMENT,
         },
-        'test@gmail.com',
+        owner,
       );
 
       expect(result.transactionRef).toBeDefined();
       expect(result.paymentOption).toBe(PaymentOption.HALF_INSTALLMENT);
       expect(result.amount).toBe(500.0);
+      expect(firstArg(mockPaymentTransactionCreate).data).toMatchObject({
+        initiatedBy: 'test@gmail.com',
+      });
+    });
+
+    it("refuses someone else's application as not found", async () => {
+      mockFindVisaApplicationById.mockResolvedValue(mockVisaDoc);
+
+      await expect(
+        service.initiatePaymentTransaction(
+          {
+            visaDocumentationId: 'visa-001',
+            paymentOption: PaymentOption.FULL,
+          },
+          { clerkUserId: 'user_other', email: 'other@example.com' },
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPaymentTransactionCreate).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException if custom amount for FULL payment is less than remaining balance', async () => {
@@ -176,7 +206,7 @@ describe('PaymentService', () => {
             paymentOption: PaymentOption.FULL,
             amount: 500, // Balance is 1000
           },
-          'test@gmail.com',
+          owner,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -191,7 +221,7 @@ describe('PaymentService', () => {
             paymentOption: PaymentOption.FULL,
             amount: 1500, // Balance is 1000
           },
-          'test@gmail.com',
+          owner,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -200,34 +230,240 @@ describe('PaymentService', () => {
       await expect(
         service.initiatePaymentTransaction(
           { paymentOption: PaymentOption.FULL },
-          'test@gmail.com',
+          owner,
         ),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('confirmPaymentTransaction (Direct Service Injection)', () => {
-    it('should confirm transaction and directly invoke visaDocService.handlePaymentConfirmed', async () => {
-      mockPaymentTransactionFindUnique.mockResolvedValue(mockTransaction);
-      mockHandlePaymentConfirmed.mockResolvedValue({
-        ...mockVisaDoc,
+  /**
+   * POST /payments/confirm credits an application with a payment nobody
+   * checked with a provider, so it must credit each payment exactly once and
+   * never past the price: one serializable transaction, a status flip that
+   * only one confirm can win, and the same balance checks as a bank transfer.
+   */
+  describe('confirmPaymentTransaction', () => {
+    const pricedVisa = {
+      ...mockVisaDoc,
+      totalAmount: new Prisma.Decimal(1000),
+      amountPaid: new Prisma.Decimal(0),
+      allowInstallment: true,
+    };
+
+    /**
+     * A stored transaction the mocks read and conditionally update, as the
+     * database would: `updateMany` only matches while the status it names
+     * still holds.
+     */
+    function storeTransaction(status: PaymentTransactionStatus) {
+      let stored = { ...mockTransaction, status };
+      mockPaymentTransactionFindUnique.mockImplementation(() =>
+        Promise.resolve({ ...stored }),
+      );
+      mockPaymentTransactionFindUniqueOrThrow.mockImplementation(() =>
+        Promise.resolve({ ...stored }),
+      );
+      mockPaymentTransactionUpdateMany.mockImplementation(
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string; status: PaymentTransactionStatus };
+          data: Partial<typeof stored>;
+        }) => {
+          if (where.id !== stored.id || where.status !== stored.status) {
+            return Promise.resolve({ count: 0 });
+          }
+          stored = { ...stored, ...data };
+          return Promise.resolve({ count: 1 });
+        },
+      );
+      return {
+        current: () => stored,
+        set: (next: PaymentTransactionStatus) => {
+          stored = { ...stored, status: next };
+        },
+      };
+    }
+
+    beforeEach(() => {
+      mockVisaDocumentationFindUniqueOrThrow.mockResolvedValue(pricedVisa);
+      mockApplyVisaPayment.mockResolvedValue({
+        ...pricedVisa,
+        amountPaid: new Prisma.Decimal(500),
         status: 'UNDER_REVIEW',
       });
-      mockPaymentTransactionUpdate.mockResolvedValue({
-        ...mockTransaction,
-        status: PaymentTransactionStatus.CONFIRMED,
+    });
+
+    it('credits the file inside the same serializable transaction that confirms it, and emails after', async () => {
+      const store = storeTransaction(PaymentTransactionStatus.INITIATED);
+      const order: string[] = [];
+      (
+        mockPrismaService.$transaction as unknown as jest.Mock
+      ).mockImplementationOnce(
+        async (work: (tx: unknown) => Promise<unknown>, options: unknown) => {
+          order.push('begin');
+          expect(options).toEqual({
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          });
+          const result = await work(mockPrismaService);
+          order.push('commit');
+          return result;
+        },
+      );
+      mockApplyVisaPayment.mockImplementationOnce(() => {
+        order.push('credit');
+        return Promise.resolve({ ...pricedVisa });
       });
+      mockNotifyVisaPayment.mockImplementationOnce(() => order.push('email'));
 
       const result = await service.confirmPaymentTransaction({
         transactionRef: 'TXN-PAY-123456',
       });
 
-      expect(mockHandlePaymentConfirmed).toHaveBeenCalledWith(
-        'visa-001',
+      expect(order).toEqual(['begin', 'credit', 'commit', 'email']);
+      expect(mockApplyVisaPayment).toHaveBeenCalledWith(
+        mockPrismaService,
+        pricedVisa,
         mockTransaction.amount,
         PaymentOption.HALF_INSTALLMENT,
       );
+      expect(mockHandlePaymentConfirmed).not.toHaveBeenCalled();
       expect(result.status).toBe(PaymentTransactionStatus.CONFIRMED);
+      expect(store.current().status).toBe(PaymentTransactionStatus.CONFIRMED);
+    });
+
+    it('flips the status only where it is still INITIATED', async () => {
+      storeTransaction(PaymentTransactionStatus.INITIATED);
+
+      await service.confirmPaymentTransaction({
+        transactionRef: 'TXN-PAY-123456',
+      });
+
+      expect(mockPaymentTransactionUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id: mockTransaction.id,
+          status: PaymentTransactionStatus.INITIATED,
+        },
+        data: expect.objectContaining({
+          status: PaymentTransactionStatus.CONFIRMED,
+        }) as unknown,
+      });
+      expect(mockPaymentTransactionUpdate).not.toHaveBeenCalled();
+    });
+
+    it('answers a second confirm with 409 and credits the file once', async () => {
+      storeTransaction(PaymentTransactionStatus.INITIATED);
+
+      await service.confirmPaymentTransaction({
+        transactionRef: 'TXN-PAY-123456',
+      });
+      await expect(
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockApplyVisaPayment).toHaveBeenCalledTimes(1);
+      expect(mockNotifyVisaPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets only one of two racing confirms credit the file', async () => {
+      storeTransaction(PaymentTransactionStatus.INITIATED);
+      // Both read the transaction as INITIATED before either flips it.
+      const read = mockPaymentTransactionFindUnique.getMockImplementation()!;
+      const waiting: Array<() => void> = [];
+      mockPaymentTransactionFindUnique.mockImplementation((args: unknown) => {
+        const snapshot = read(args) as Promise<unknown>;
+        return new Promise((resolve) => {
+          waiting.push(() => resolve(snapshot));
+          if (waiting.length === 2) waiting.forEach((release) => release());
+        });
+      });
+
+      const outcomes = await Promise.allSettled([
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+      ]);
+
+      expect(outcomes.map((o) => o.status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      const refused = outcomes.find((o) => o.status === 'rejected');
+      expect((refused as PromiseRejectedResult).reason).toBeInstanceOf(
+        ConflictException,
+      );
+      expect(mockApplyVisaPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [PaymentTransactionStatus.CONFIRMED, /already confirmed/i],
+      [PaymentTransactionStatus.REFUNDED, /refunded/i],
+      [PaymentTransactionStatus.FAILED, /failed/i],
+    ])(
+      'refuses a %s transaction with 409 and a clear reason',
+      async (status, reason) => {
+        storeTransaction(status);
+
+        const refused = await service
+          .confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' })
+          .catch((e: unknown) => e);
+
+        expect(refused).toBeInstanceOf(ConflictException);
+        expect((refused as Error).message).toMatch(reason);
+        expect(mockPaymentTransactionUpdateMany).not.toHaveBeenCalled();
+        expect(mockApplyVisaPayment).not.toHaveBeenCalled();
+      },
+    );
+
+    it('cannot re-confirm a payment after it was refunded', async () => {
+      const store = storeTransaction(PaymentTransactionStatus.INITIATED);
+      await service.confirmPaymentTransaction({
+        transactionRef: 'TXN-PAY-123456',
+      });
+      // A manager refunds it...
+      store.set(PaymentTransactionStatus.REFUNDED);
+
+      // ...and a later confirm must not credit the file again.
+      await expect(
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockApplyVisaPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a payment larger than the balance due, as a bank transfer does', async () => {
+      storeTransaction(PaymentTransactionStatus.INITIATED);
+      // A colleague recorded 800 of the 1000 since this 500 was initiated.
+      mockVisaDocumentationFindUniqueOrThrow.mockResolvedValue({
+        ...pricedVisa,
+        amountPaid: new Prisma.Decimal(800),
+      });
+
+      await expect(
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockApplyVisaPayment).not.toHaveBeenCalled();
+      expect(mockNotifyVisaPayment).not.toHaveBeenCalled();
+    });
+
+    it('refuses a payment on a file that is already fully paid', async () => {
+      storeTransaction(PaymentTransactionStatus.INITIATED);
+      mockVisaDocumentationFindUniqueOrThrow.mockResolvedValue({
+        ...pricedVisa,
+        amountPaid: new Prisma.Decimal(1000),
+      });
+
+      await expect(
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-123456' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockApplyVisaPayment).not.toHaveBeenCalled();
+    });
+
+    it('answers an unknown reference with 404', async () => {
+      mockPaymentTransactionFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.confirmPaymentTransaction({ transactionRef: 'TXN-PAY-000000' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

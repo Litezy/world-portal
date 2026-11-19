@@ -12,16 +12,20 @@ import { PassportApplicationService } from '../../passport-application/passport-
 import { PrismaService } from '../../prisma/prisma.service';
 import { ApplicantService } from '../../applicant/applicant.service';
 import { ClerkTokenVerifier } from '../clerk/clerk-token.verifier';
+import { LOOKUP_TOKEN_AUDIENCE, signLookupToken } from '../lookup-token';
 
 /**
  * The application detail routes are the public "track my application" lookup,
  * so they stay reachable without a login — but a visitor must name the email
- * on the file. Application numbers are only 4 random digits; without the
- * email requirement anyone could walk all of them and read every applicant's
- * passport details. Signed-in desk staff look files up without an email.
+ * on the file AND prove they control it: the lookup token `POST /otp/verify`
+ * mints for that email, in `x-lookup-token`. Application numbers are only 4
+ * random digits; an email alone is often public, so without the proof anyone
+ * who knows an applicant's email could walk every number and read their
+ * passport details. Signed-in desk staff look files up without either.
  */
 const SECRET = 'test-secret-for-detail-lookup';
 const jwt = new JwtService({ secret: SECRET });
+const lookupToken = (email: string) => signLookupToken(jwt, email);
 
 function forgedToken(payload: object) {
   const part = (v: object) =>
@@ -114,14 +118,83 @@ describe('Application detail lookups (visa and passport)', () => {
       expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
     });
 
-    it('looks the file up for a visitor who names its email', async () => {
+    it('looks the file up for a visitor who verified the email they name', async () => {
       await request(app.getHttpServer())
         .get('/visa-documentation/VISA-2026-1001?email=ada%40example.com')
+        .set('x-lookup-token', lookupToken('ada@example.com'))
         .expect(200);
       expect(visaService.findVisaApplicationById).toHaveBeenCalledWith(
         'VISA-2026-1001',
         'ada@example.com',
       );
+    });
+
+    it('matches the verified email without regard to case', async () => {
+      await request(app.getHttpServer())
+        .get('/visa-documentation/VISA-2026-1001?email=Ada%40Example.com')
+        .set('x-lookup-token', lookupToken('ada@example.com'))
+        .expect(200);
+    });
+
+    it('refuses an email alone: the visitor must have verified it', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/visa-documentation/VISA-2026-1001?email=ada%40example.com')
+        .expect(401);
+      expect(JSON.stringify(res.body)).toContain(
+        'Verify your email to view this application',
+      );
+      expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
+    });
+
+    it("refuses a lookup token for someone else's email", async () => {
+      await request(app.getHttpServer())
+        .get('/visa-documentation/VISA-2026-1001?email=ada%40example.com')
+        .set('x-lookup-token', lookupToken('mallory@example.com'))
+        .expect(403);
+      expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
+    });
+
+    it('refuses an expired lookup token', async () => {
+      const expired = jwt.sign(
+        { sub: 'ada@example.com', exp: Math.floor(Date.now() / 1000) - 60 },
+        { audience: LOOKUP_TOKEN_AUDIENCE },
+      );
+      await request(app.getHttpServer())
+        .get('/visa-documentation/VISA-2026-1001?email=ada%40example.com')
+        .set('x-lookup-token', expired)
+        .expect(401);
+      expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
+    });
+
+    it('refuses a desk token or a forgery in place of a lookup token', async () => {
+      const desk = jwt.sign({
+        email: 'staff@example.com',
+        sub: 'ada@example.com',
+      });
+      for (const token of [
+        desk,
+        forgedToken({ sub: 'ada@example.com', aud: LOOKUP_TOKEN_AUDIENCE }),
+      ]) {
+        await request(app.getHttpServer())
+          .get('/visa-documentation/VISA-2026-1001?email=ada%40example.com')
+          .set('x-lookup-token', token)
+          .expect(401);
+      }
+      expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
+    });
+
+    it('never accepts a lookup token as a desk token', async () => {
+      const token = lookupToken('staff@example.com');
+      await request(app.getHttpServer())
+        .get('/visa-documentation/VISA-2026-1001')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(401);
+      // A desk-only route, too.
+      await request(app.getHttpServer())
+        .get('/visa-documentation')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(401);
+      expect(visaService.findVisaApplicationById).not.toHaveBeenCalled();
     });
 
     it('lets signed-in desk staff look a file up without an email', async () => {
@@ -173,14 +246,30 @@ describe('Application detail lookups (visa and passport)', () => {
       expect(passportService.findApplicationById).not.toHaveBeenCalled();
     });
 
-    it('looks the file up for a visitor who names its email', async () => {
+    it('looks the file up for a visitor who verified the email they name', async () => {
       await request(app.getHttpServer())
         .get('/passport-application/PASSPORT-2026-1001?email=ada%40example.com')
+        .set('x-lookup-token', lookupToken('ada@example.com'))
         .expect(200);
       expect(passportService.findApplicationById).toHaveBeenCalledWith(
         'PASSPORT-2026-1001',
         'ada@example.com',
       );
+    });
+
+    it('refuses an email alone: the visitor must have verified it', async () => {
+      await request(app.getHttpServer())
+        .get('/passport-application/PASSPORT-2026-1001?email=ada%40example.com')
+        .expect(401);
+      expect(passportService.findApplicationById).not.toHaveBeenCalled();
+    });
+
+    it("refuses a lookup token for someone else's email", async () => {
+      await request(app.getHttpServer())
+        .get('/passport-application/PASSPORT-2026-1001?email=ada%40example.com')
+        .set('x-lookup-token', lookupToken('mallory@example.com'))
+        .expect(403);
+      expect(passportService.findApplicationById).not.toHaveBeenCalled();
     });
 
     it('lets signed-in desk staff look a file up without an email', async () => {

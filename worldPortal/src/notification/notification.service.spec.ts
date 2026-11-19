@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationService } from './notification.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,7 +25,18 @@ describe('NotificationService', () => {
       findMany: jest.fn().mockResolvedValue([mockNotification]),
       count: jest.fn().mockResolvedValue(1),
       findUnique: jest.fn().mockResolvedValue(mockNotification),
-      update: jest.fn().mockResolvedValue({ ...mockNotification, isRead: true }),
+      findFirst: jest.fn(
+        ({ where }: { where: { id: string; recipientId: string } }) =>
+          Promise.resolve(
+            where.id === mockNotification.id &&
+              where.recipientId === mockNotification.recipientId
+              ? mockNotification
+              : null,
+          ),
+      ),
+      update: jest
+        .fn()
+        .mockResolvedValue({ ...mockNotification, isRead: true }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
@@ -65,8 +77,16 @@ describe('NotificationService', () => {
   });
 
   it('marks notification as read', async () => {
-    const result = await service.markAsRead('notif-1');
+    const result = await service.markAsRead('notif-1', 'Test@Example.com');
     expect(result.isRead).toBe(true);
+  });
+
+  it("refuses to mark another recipient's notification as read", async () => {
+    mockPrismaService.notification.update.mockClear();
+    await expect(
+      service.markAsRead('notif-1', 'someone-else@example.com'),
+    ).rejects.toThrow(NotFoundException);
+    expect(mockPrismaService.notification.update).not.toHaveBeenCalled();
   });
 
   it('marks all notifications as read for recipient', async () => {

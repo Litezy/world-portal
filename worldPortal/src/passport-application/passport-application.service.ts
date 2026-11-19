@@ -36,11 +36,10 @@ export class PassportApplicationService {
     private readonly otpService: OtpService,
   ) {}
 
-
   /**
    * `owner` is the signed-in WorldStreet applicant; see
    * `VisaDocumentationService.createVisaApplication` for why their verified
-   * email replaces the one on the form.
+   * email replaces the one on the form, and why `dto.profileId` is ignored.
    */
   async createApplication(
     dto: CreatePassportApplicationDto,
@@ -61,7 +60,6 @@ export class PassportApplicationService {
       ? dto.ninNumber.replace(/^(.{2}).*(.{2})$/, '$1****$2')
       : 'N/A';
 
-
     this.logger.log(
       `Creating passport application for applicant email=${dto.email}, category=${dto.passportCategory}, nin=${maskedNin}`,
     );
@@ -78,96 +76,72 @@ export class PassportApplicationService {
       });
     }
 
-    if (dto.profileId) {
-      const profile = await this.prisma.profile.findUnique({
-        where: { id: dto.profileId },
-      });
-      if (!profile) {
-        this.logger.warn(
-          `Attempted to create passport application with non-existent profileId=${dto.profileId}`,
-        );
-        throw new BadRequestException(
-          `Profile with ID '${dto.profileId}' does not exist.`,
-        );
-      }
-    }
-
     const createdBy = dto.email;
 
+    const record = await this.prisma.passportApplication.create({
+      data: {
+        applicationNo,
+        // Never the form's: see the comment on this method.
+        profileId: null,
+        clerkUserId: owner?.clerkUserId ?? null,
+        passportCategory: dto.passportCategory,
+        surname: dto.surname,
+        firstName: dto.firstName,
+        middleName: dto.middleName || null,
+        sex: dto.sex,
+        ninNumber: dto.ninNumber,
+        dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : new Date(),
+        placeOfBirth: dto.placeOfBirth || '',
+        existingPassportNumber: dto.existingPassportNumber || null,
+        homeTown: dto.homeTown || '',
+        stateOfOrigin: dto.stateOfOrigin || '',
+        permanentAddress: dto.permanentAddress || '',
+        occupation: dto.occupation || '',
+        contactPhone: dto.contactPhone || '',
+        email: dto.email,
+        maritalStatus: dto.maritalStatus || '',
+        colourOfEyes: dto.colourOfEyes || '',
+        colourOfHair: dto.colourOfHair || '',
+        height: dto.height || '',
+        maidenName: dto.maidenName || null,
+        nextOfKinName: dto.nextOfKinName || '',
+        nextOfKinPhone: dto.nextOfKinPhone || '',
+        nextOfKinRelationship: dto.nextOfKinRelationship || '',
+        nextOfKinAddress: dto.nextOfKinAddress || '',
+        validity: dto.validity || PassportValidity.FIVE_YEARS,
+        bookletType: dto.bookletType || BookletType.THIRTY_TWO_PAGES,
+        birthCertificateUrl: dto.birthCertificateUrl || '',
+        ninDocumentUrl: dto.ninDocumentUrl || '',
+        passportPhotoUrl: dto.passportPhotoUrl || '',
+        status: PassportApplicationStatus.SUBMITTED,
+        createdBy,
+      },
+    });
+
+    this.logger.log(
+      `Passport application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
+    );
+
     try {
-      const record = await this.prisma.passportApplication.create({
-        data: {
-          applicationNo,
-          profileId: dto.profileId || null,
-          clerkUserId: owner?.clerkUserId ?? null,
-          passportCategory: dto.passportCategory,
-          surname: dto.surname,
-          firstName: dto.firstName,
-          middleName: dto.middleName || null,
-          sex: dto.sex,
-          ninNumber: dto.ninNumber,
-          dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : new Date(),
-          placeOfBirth: dto.placeOfBirth || '',
-          existingPassportNumber: dto.existingPassportNumber || null,
-          homeTown: dto.homeTown || '',
-          stateOfOrigin: dto.stateOfOrigin || '',
-          permanentAddress: dto.permanentAddress || '',
-          occupation: dto.occupation || '',
-          contactPhone: dto.contactPhone || '',
-          email: dto.email,
-          maritalStatus: dto.maritalStatus || '',
-          colourOfEyes: dto.colourOfEyes || '',
-          colourOfHair: dto.colourOfHair || '',
-          height: dto.height || '',
-          maidenName: dto.maidenName || null,
-          nextOfKinName: dto.nextOfKinName || '',
-          nextOfKinPhone: dto.nextOfKinPhone || '',
-          nextOfKinRelationship: dto.nextOfKinRelationship || '',
-          nextOfKinAddress: dto.nextOfKinAddress || '',
-          validity: dto.validity || PassportValidity.FIVE_YEARS,
-          bookletType: dto.bookletType || BookletType.THIRTY_TWO_PAGES,
-          birthCertificateUrl: dto.birthCertificateUrl || '',
-          ninDocumentUrl: dto.ninDocumentUrl || '',
-          passportPhotoUrl: dto.passportPhotoUrl || '',
-          status: PassportApplicationStatus.SUBMITTED,
-          createdBy,
-        },
+      await this.sendGridService.sendApplicationConfirmationEmail({
+        to: record.email,
+        recipientName: `${record.firstName} ${record.surname}`.trim(),
+        applicationNo: record.applicationNo,
+        targetCountry: 'Nigeria (Passport Renewal)',
+        visaCategory: record.passportCategory,
       });
-
-      this.logger.log(
-        `Passport application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
+    } catch (err: any) {
+      this.logger.error(
+        `SendGrid passport confirmation email error for applicationNo=${record.applicationNo}: ${err?.message}`,
       );
-
-      try {
-        await this.sendGridService.sendApplicationConfirmationEmail({
-          to: record.email,
-          recipientName: `${record.firstName} ${record.surname}`.trim(),
-          applicationNo: record.applicationNo,
-          targetCountry: 'Nigeria (Passport Renewal)',
-          visaCategory: record.passportCategory,
-        });
-      } catch (err: any) {
-        this.logger.error(
-          `SendGrid passport confirmation email error for applicationNo=${record.applicationNo}: ${err?.message}`,
-        );
-      }
-
-      return record;
-
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
-        throw new BadRequestException(
-          `Associated profile with ID '${dto.profileId}' does not exist.`,
-        );
-      }
-      throw error;
     }
+
+    return record;
   }
 
-  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+  private async resolveReviewerDisplayName(
+    emailOrName: string,
+  ): Promise<string> {
     if (!emailOrName) return 'Admin Consultant';
     if (!emailOrName.includes('@')) return emailOrName;
 
@@ -224,7 +198,9 @@ export class PassportApplicationService {
           reviewerName,
         })
         .catch((err) => {
-          this.logger.error(`SendGrid passport approval email error: ${err?.message}`);
+          this.logger.error(
+            `SendGrid passport approval email error: ${err?.message}`,
+          );
         });
     } else if (updated.status === PassportApplicationStatus.REJECTED) {
       this.sendGridService
@@ -238,7 +214,9 @@ export class PassportApplicationService {
           rejectionReason: updated.rejectionReason || undefined,
         })
         .catch((err) => {
-          this.logger.error(`SendGrid passport rejection email error: ${err?.message}`);
+          this.logger.error(
+            `SendGrid passport rejection email error: ${err?.message}`,
+          );
         });
     }
 
@@ -463,7 +441,6 @@ export class PassportApplicationService {
       );
     }
   }
-
 
   async findAllApplications(query: QueryPassportApplicationDto) {
     const where: Prisma.PassportApplicationWhereInput = {};

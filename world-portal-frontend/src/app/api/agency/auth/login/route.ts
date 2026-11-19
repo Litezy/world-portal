@@ -3,29 +3,43 @@ import { NextResponse } from "next/server";
 
 import { isProduction } from "@/config/env";
 import { authenticateAgency } from "@/server/agency/auth";
-import { AGENCY_SESSION_COOKIE } from "@/server/agency/session";
+import {
+  AGENCY_SESSION_COOKIE,
+  AGENCY_SESSION_TTL_SECONDS,
+  AGENCY_SHORT_SESSION_TTL_SECONDS,
+} from "@/server/agency/session";
+import { visitorIpHeaders } from "@/server/api/service-key";
 import { parseBody } from "@/server/http";
 import { agencyLoginSchema } from "@/validations/agency";
 
 /**
  * POST /api/agency/auth/login
  *
- * Passwordless OTP Login. Authenticates agency email & OTP, sets HTTP-only session cookie,
- * and returns the user object with the signed JWT token.
+ * Passwordless OTP Login. Authenticates agency email & OTP, sets the httpOnly
+ * session cookie and returns the user. Never the token: in the body, page
+ * scripts could read what the cookie keeps from them.
  */
 export async function POST(request: Request) {
   const { data, response } = await parseBody(request, agencyLoginSchema);
   if (response) return response;
 
-  const result = await authenticateAgency(data.email, data.otp);
+  // One lifetime for both the cookie and the signed session inside it.
+  const maxAge = data.remember
+    ? AGENCY_SESSION_TTL_SECONDS
+    : AGENCY_SHORT_SESSION_TTL_SECONDS;
+
+  const result = await authenticateAgency(
+    data.email,
+    data.otp,
+    visitorIpHeaders(request),
+    { ttlSeconds: maxAge },
+  );
   if (!result.user || !result.token) {
     return NextResponse.json(
       { message: result.message ?? "Invalid or expired verification code." },
       { status: 401 },
     );
   }
-
-  const maxAge = data.remember ? 60 * 60 * 24 * 7 : 60 * 60 * 8;
 
   const store = await cookies();
   store.set(AGENCY_SESSION_COOKIE, result.token, {
@@ -36,10 +50,5 @@ export async function POST(request: Request) {
     maxAge,
   });
 
-  return NextResponse.json({
-    data: {
-      ...result.user,
-      token: result.token,
-    },
-  });
+  return NextResponse.json({ data: result.user });
 }

@@ -1,9 +1,10 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "@tanstack/react-query";
 
 import type { UploadedDocument } from "@/features/visa/types";
-import { api } from "@/lib/api-client";
+import { api, internalApi } from "@/lib/api-client";
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const ACCEPTED_UPLOAD_TYPES = [
@@ -32,14 +33,36 @@ export function validateFile(file: File): string | null {
  * Documents upload one at a time, before the application is submitted; the
  * returned `url` is what goes into the matching `*Url` field. There is no
  * endpoint that takes raw files alongside the application payload.
+ *
+ * The API refuses anonymous uploads:
+ * - `applicant` (the visa and passport forms) sends the WorldStreet session
+ *   token, exactly as the visa submission does;
+ * - `agency` (the listing checklist) has no token the API accepts, so it posts
+ *   to the agency portal's own route, which checks the agency session and
+ *   uploads with the server's key.
  */
-export function useUploadDocument() {
+export function useUploadDocument({
+  via = "applicant",
+}: { via?: "applicant" | "agency" } = {}) {
+  const { getToken } = useAuth();
   return useMutation({
-    mutationKey: ["visa", "upload"],
-    mutationFn: (file: File) => {
+    mutationKey: [via === "agency" ? "agency" : "visa", "upload"],
+    mutationFn: async (file: File) => {
       const body = new FormData();
       body.append("file", file);
-      return api.post<UploadedDocument>("/upload", body);
+
+      if (via === "agency") {
+        return internalApi.post<UploadedDocument>("/agency/listing/upload", body, {
+          // The same-origin client defaults to JSON, which would serialise the
+          // form; this lets the browser send multipart with its own boundary.
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      const token = await getToken();
+      return api.post<UploadedDocument>("/upload", body, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
     },
   });
 }

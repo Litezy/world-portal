@@ -8,6 +8,8 @@ import { UserRole } from '@prisma/client';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClerkTokenVerifier } from '../auth/clerk/clerk-token.verifier';
+import { ApplicantService } from '../applicant/applicant.service';
 
 /**
  * POST /payments/confirm marks a transaction CONFIRMED and moves the visa to
@@ -61,6 +63,9 @@ describe('POST /payments/confirm access', () => {
           provide: ConfigService,
           useValue: { get: (_key: string, fallback?: string) => fallback },
         },
+        // For the applicant payment routes on the same controller.
+        { provide: ClerkTokenVerifier, useValue: { verify: jest.fn() } },
+        { provide: ApplicantService, useValue: {} },
       ],
     }).compile();
 

@@ -17,7 +17,7 @@ import {
   ListingStatusBadge,
   VerificationBadge,
 } from "@/features/agency/components/agency-badges";
-import type { AgencyUser } from "@/features/agency/types";
+import type { ClientAgencyUser } from "@/features/agency/types";
 import { formatCurrency } from "@/lib/utils";
 
 /**
@@ -25,7 +25,7 @@ import { formatCurrency } from "@/lib/utils";
  * listing flow, so this states the position and hands over to `/agency/listing`
  * rather than growing a second set of forms against the same records.
  */
-export function AgencySettingsView({ user }: { user?: AgencyUser }) {
+export function AgencySettingsView({ user }: { user?: ClientAgencyUser }) {
   const overviewQuery = useAgencyOverview();
   const payoutsQuery = useAgencyPayouts({ perPage: 50 });
   const logout = useAgencyLogout();
@@ -104,7 +104,11 @@ export function AgencySettingsView({ user }: { user?: AgencyUser }) {
         {user ? (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <UserAvatar user={{ name: user.name }} size="sm" className="ring-border" />
+              <UserAvatar
+                user={{ name: user.name }}
+                size="sm"
+                className="ring-border"
+              />
               <div className="min-w-0">
                 <p className="truncate text-[13.5px] font-medium">{user.name}</p>
                 <p className="truncate text-[12.5px] text-muted-foreground">

@@ -1,7 +1,38 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
+
+/**
+ * What an applicant needs to make a transfer, and nothing more: the public
+ * list answers anyone, so who set an account up, and when, stay on the desk.
+ * `id` is only a stable key for the list.
+ */
+export const PUBLIC_BANK_ACCOUNT_FIELDS = {
+  id: true,
+  bankName: true,
+  accountName: true,
+  accountNumber: true,
+  swiftCode: true,
+  iban: true,
+  routingNumber: true,
+  currency: true,
+  instructions: true,
+} satisfies Prisma.BankAccountSelect;
+
+/** The fields `PATCH /bank-accounts/:id` may change. */
+const EDITABLE_BANK_ACCOUNT_FIELDS = [
+  'bankName',
+  'accountName',
+  'accountNumber',
+  'swiftCode',
+  'iban',
+  'routingNumber',
+  'currency',
+  'instructions',
+  'isActive',
+] as const satisfies ReadonlyArray<keyof UpdateBankAccountDto>;
 
 @Injectable()
 export class BankAccountService {
@@ -17,6 +48,15 @@ export class BankAccountService {
     return this.prisma.bankAccount.findMany({
       where: { isActive: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Active accounts as applicants see them (`GET /bank-accounts/public/active`). */
+  async findPublicActive() {
+    return this.prisma.bankAccount.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'desc' },
+      select: PUBLIC_BANK_ACCOUNT_FIELDS,
     });
   }
 
@@ -47,11 +87,22 @@ export class BankAccountService {
     });
   }
 
+  /**
+   * Writes only the account's own editable fields, named one by one: never
+   * the dto as is, so nothing else that reaches it (`createdBy`, `id`, the
+   * timestamps) can be written, whoever calls.
+   */
   async update(id: string, dto: UpdateBankAccountDto) {
     await this.findOne(id);
+    const data: Prisma.BankAccountUpdateInput = {};
+    for (const field of EDITABLE_BANK_ACCOUNT_FIELDS) {
+      if (dto[field] !== undefined) {
+        (data as Record<string, unknown>)[field] = dto[field];
+      }
+    }
     return this.prisma.bankAccount.update({
       where: { id },
-      data: dto,
+      data,
     });
   }
 

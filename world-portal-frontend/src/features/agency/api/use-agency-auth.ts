@@ -7,7 +7,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AgencyUser } from "@/features/agency/types";
 import { internalApi } from "@/lib/api-client";
 import type { ApiResponse } from "@/types";
-import type { AgencyLoginInput, AgencySendOtpInput, AgencySignupInput } from "@/validations/agency";
+import type {
+  AgencyLoginInput,
+  AgencySendOtpInput,
+  AgencySignupInput,
+} from "@/validations/agency";
 
 export const agencyAuthKeys = {
   me: ["agency", "auth", "me"] as const,
@@ -25,7 +29,7 @@ export function useAgencyLogin() {
   return useMutation({
     mutationKey: ["agency", "auth", "login"],
     mutationFn: (input: AgencyLoginInput) =>
-      internalApi.post<ApiResponse<AgencyUser & { token?: string }>>("/agency/auth/login", input),
+      internalApi.post<ApiResponse<AgencyUser>>("/agency/auth/login", input),
   });
 }
 
@@ -33,7 +37,7 @@ export function useAgencySignup() {
   return useMutation({
     mutationKey: ["agency", "auth", "signup"],
     mutationFn: (input: AgencySignupInput) =>
-      internalApi.post<ApiResponse<AgencyUser & { token?: string }>>("/agency/auth/signup", input),
+      internalApi.post<ApiResponse<AgencyUser>>("/agency/auth/signup", input),
   });
 }
 

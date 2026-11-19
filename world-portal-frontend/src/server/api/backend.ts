@@ -39,6 +39,8 @@ export async function backend<T>(
   } = {},
 ): Promise<T> {
   const { token, query, headers, service, ...rest } = init;
+  // A multipart body sets its own Content-Type (with the boundary) in fetch.
+  const isForm = typeof FormData !== "undefined" && rest.body instanceof FormData;
 
   const url = new URL(`${baseUrl()}${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -52,7 +54,7 @@ export async function backend<T>(
     response = await fetch(url, {
       ...rest,
       headers: {
-        "Content-Type": "application/json",
+        ...(isForm ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(service ? serviceKeyHeaders() : {}),
         ...headers,

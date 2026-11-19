@@ -14,7 +14,12 @@ import type { AgencyUser } from "@/features/agency/types";
  * put that guarantee one careless parameter away from being lost, and the
  * admin file is covered by `src/server/__tests__/session.test.ts`, which this
  * change was not allowed to disturb. If you ever do merge them, the cookie
- * name and an audience claim must stay distinct and both test suites must pass.
+ * name and the audience claim must stay distinct and both test suites must pass.
+ *
+ * Both files sign with the same SESSION_SECRET, so each payload carries an
+ * `aud` claim (`"agency"` here, `"admin"` there) and each verifier accepts only
+ * its own. Without it an agency could paste its cookie into the admin one and
+ * pass the HMAC (`src/server/__tests__/session-audience.test.ts`).
  *
  * One real difference from the admin payload: the admin cookie also carries
  * the World Portal access token, because its console is a BFF for a real API.
@@ -23,9 +28,18 @@ import type { AgencyUser } from "@/features/agency/types";
  */
 
 export const AGENCY_SESSION_COOKIE = "wp_agency_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+/** A remembered sign-in, and every signup. */
+export const AGENCY_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+/** Sign-in without "remember me". The cookie and the signed expiry both use it. */
+export const AGENCY_SHORT_SESSION_TTL_SECONDS = 60 * 60 * 8;
+
+/** The agency cookie's audience; the admin verifier refuses it. */
+const AUDIENCE = "agency";
 
 export type AgencySessionPayload = AgencyUser & { exp: number };
+
+/** What is actually signed: the session plus its audience. */
+type SignedAgencySession = AgencySessionPayload & { aud: typeof AUDIENCE };
 
 function sign(value: string, secret: string) {
   return createHmac("sha256", secret).update(value).digest("base64url");
@@ -34,10 +48,12 @@ function sign(value: string, secret: string) {
 export function createAgencySessionToken(
   user: AgencyUser,
   secret: string,
-  ttlSeconds = SESSION_TTL_SECONDS,
+  ttlSeconds = AGENCY_SESSION_TTL_SECONDS,
 ) {
-  const payload: AgencySessionPayload = {
+  const payload: SignedAgencySession = {
     ...user,
+    // After the spread, so nothing the caller passes can change the audience.
+    aud: AUDIENCE,
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
   };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -63,14 +79,17 @@ export function verifyAgencySessionToken(
   try {
     const payload = JSON.parse(
       Buffer.from(body, "base64url").toString("utf8"),
-    ) as Partial<AgencySessionPayload>;
+    ) as Partial<SignedAgencySession>;
 
     // Both consoles sign with the same SESSION_SECRET, so a valid signature is
     // not on its own proof that this cookie was minted for an agency: an admin
-    // payload pasted into the agency cookie would pass the HMAC. It carries no
-    // `agencyId`, and every read in the store is scoped by one — so an agency
-    // session without an agency is refused here rather than reaching the store
-    // as `undefined` and matching nothing (or, one refactor later, everything).
+    // payload pasted into the agency cookie would pass the HMAC. The audience
+    // says who it was minted for (a cookie from before the claim existed has
+    // none, and is refused). Every read in the store is also scoped by
+    // `agencyId`, so an agency session without an agency is refused here rather
+    // than reaching the store as `undefined` and matching nothing (or, one
+    // refactor later, everything).
+    if (payload.aud !== AUDIENCE) return null;
     if (typeof payload.agencyId !== "string" || payload.agencyId === "") return null;
     if (typeof payload.exp !== "number") return null;
 

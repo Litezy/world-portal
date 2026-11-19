@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { AgencySidebar } from "@/components/layout/agency-sidebar";
 import { AgencyTopbar } from "@/components/layout/agency-topbar";
 import { serverEnv } from "@/config/env";
-import type { AgencyUser } from "@/features/agency/types";
+import { toClientAgencyUser } from "@/server/agency/client-user";
 import {
   AGENCY_SESSION_COOKIE,
   verifyAgencySessionToken,
@@ -22,14 +22,7 @@ export default async function AgencyConsoleLayout({
   );
   if (!session) redirect("/agency/login");
 
-  const user: AgencyUser = {
-    id: session.id,
-    name: session.name,
-    email: session.email,
-    role: session.role,
-    agencyId: session.agencyId,
-    agencyName: session.agencyName,
-  };
+  const user = toClientAgencyUser(session);
 
   return (
     <div className="flex min-h-dvh bg-background text-foreground">

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { ExternalAuthGuard } from './external-auth.guard';
 import { RequestWithUser } from '../decorators/current-user.decorator';
+import { signLookupToken } from '../lookup-token';
 
 const SECRET = 'test-secret-for-external-auth-guard';
 
@@ -80,6 +81,21 @@ describe('ExternalAuthGuard', () => {
       email: 'staff@example.com',
       token,
     });
+  });
+
+  it('rejects an applicant lookup token, though JWT_SECRET signed it', () => {
+    const guard = makeGuard({ ENABLE_MOCK_AUTH: 'false' });
+    const lookup = signLookupToken(
+      new JwtService({ secret: SECRET }),
+      'staff@example.com',
+    );
+    const { context, request } = contextFor(
+      '/api/profiles',
+      `Bearer ${lookup}`,
+    );
+
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    expect(request.user).toBeUndefined();
   });
 
   it('rejects a signed token that has expired', () => {

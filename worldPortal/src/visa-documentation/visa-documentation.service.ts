@@ -44,6 +44,10 @@ export class VisaDocumentationService {
    * replaces whatever the form sent, so the record, its notifications and
    * "my applications" all agree. Without an owner the old email-code check
    * still applies.
+   *
+   * `dto.profileId` is ignored and the file is never linked to a desk
+   * profile: the only route here is the applicant's own, and a profile id in
+   * their form could name any desk member (as on hire bookings).
    */
   async createVisaApplication(
     dto: CreateVisaDocumentationDto,
@@ -79,99 +83,74 @@ export class VisaDocumentationService {
       });
     }
 
-    if (dto.profileId) {
-      const profile = await this.prisma.profile.findUnique({
-        where: { id: dto.profileId },
-      });
-      if (!profile) {
-        this.logger.warn(
-          `Attempted to create visa application with non-existent profileId=${dto.profileId}`,
-        );
-        throw new BadRequestException(
-          `Profile with ID '${dto.profileId}' does not exist.`,
-        );
-      }
-    }
-
     const createdBy = dto.email;
 
+    const record = await this.prisma.visaDocumentation.create({
+      data: {
+        applicationNo,
+        // Never the form's: see the comment on this method.
+        profileId: null,
+        clerkUserId: owner?.clerkUserId ?? null,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        email: dto.email,
+        phone: dto.phone || '',
+        dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : new Date(),
+        gender: dto.gender || Gender.MALE,
+        nationality: dto.nationality || '',
+        residenceAddress: dto.residenceAddress || '',
+        passportNumber: dto.passportNumber || '',
+        passportIssueDate: dto.passportIssueDate
+          ? new Date(dto.passportIssueDate)
+          : new Date(),
+        passportExpiryDate: dto.passportExpiryDate
+          ? new Date(dto.passportExpiryDate)
+          : new Date(),
+        passportIssuingAuthority: dto.passportIssuingAuthority || null,
+        targetCountry: dto.targetCountry,
+        visaCategory: dto.visaCategory || VisaCategory.TOURIST,
+        intendedArrivalDate: dto.intendedArrivalDate
+          ? new Date(dto.intendedArrivalDate)
+          : new Date(),
+        intendedDepartureDate: dto.intendedDepartureDate
+          ? new Date(dto.intendedDepartureDate)
+          : new Date(),
+        purposeOfVisit: dto.purposeOfVisit || '',
+        passportDataPageUrl: dto.passportDataPageUrl || '',
+        passportPhotoWhiteBgUrl: dto.passportPhotoWhiteBgUrl || '',
+        proofOfFunds6MonthsUrl: dto.proofOfFunds6MonthsUrl || '',
+        businessRegistrationCertUrl: dto.businessRegistrationCertUrl || null,
+        taxCertificateUrl: dto.taxCertificateUrl || null,
+        marriageCertificateUrl: dto.marriageCertificateUrl || null,
+        childrenBirthCertUrls: dto.childrenBirthCertUrls || [],
+        landedPropertyDocUrls: dto.landedPropertyDocUrls || [],
+        previousVisasScanUrls: dto.previousVisasScanUrls || [],
+        supportingDocUrls: dto.supportingDocUrls || [],
+        status: VisaDocumentStatus.SUBMITTED,
+        paymentStatus: PaymentStatus.PENDING_EVALUATION,
+        createdBy,
+      },
+    });
+
+    this.logger.log(
+      `Visa application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
+    );
+
     try {
-      const record = await this.prisma.visaDocumentation.create({
-        data: {
-          applicationNo,
-          profileId: dto.profileId || null,
-          clerkUserId: owner?.clerkUserId ?? null,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          email: dto.email,
-          phone: dto.phone || '',
-          dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : new Date(),
-          gender: dto.gender || Gender.MALE,
-          nationality: dto.nationality || '',
-          residenceAddress: dto.residenceAddress || '',
-          passportNumber: dto.passportNumber || '',
-          passportIssueDate: dto.passportIssueDate
-            ? new Date(dto.passportIssueDate)
-            : new Date(),
-          passportExpiryDate: dto.passportExpiryDate
-            ? new Date(dto.passportExpiryDate)
-            : new Date(),
-          passportIssuingAuthority: dto.passportIssuingAuthority || null,
-          targetCountry: dto.targetCountry,
-          visaCategory: dto.visaCategory || VisaCategory.TOURIST,
-          intendedArrivalDate: dto.intendedArrivalDate
-            ? new Date(dto.intendedArrivalDate)
-            : new Date(),
-          intendedDepartureDate: dto.intendedDepartureDate
-            ? new Date(dto.intendedDepartureDate)
-            : new Date(),
-          purposeOfVisit: dto.purposeOfVisit || '',
-          passportDataPageUrl: dto.passportDataPageUrl || '',
-          passportPhotoWhiteBgUrl: dto.passportPhotoWhiteBgUrl || '',
-          proofOfFunds6MonthsUrl: dto.proofOfFunds6MonthsUrl || '',
-          businessRegistrationCertUrl: dto.businessRegistrationCertUrl || null,
-          taxCertificateUrl: dto.taxCertificateUrl || null,
-          marriageCertificateUrl: dto.marriageCertificateUrl || null,
-          childrenBirthCertUrls: dto.childrenBirthCertUrls || [],
-          landedPropertyDocUrls: dto.landedPropertyDocUrls || [],
-          previousVisasScanUrls: dto.previousVisasScanUrls || [],
-          supportingDocUrls: dto.supportingDocUrls || [],
-          status: VisaDocumentStatus.SUBMITTED,
-          paymentStatus: PaymentStatus.PENDING_EVALUATION,
-          createdBy,
-        },
+      await this.sendGridService.sendApplicationConfirmationEmail({
+        to: record.email,
+        recipientName: `${record.firstName} ${record.lastName}`.trim(),
+        applicationNo: record.applicationNo,
+        targetCountry: record.targetCountry,
+        visaCategory: record.visaCategory,
       });
-
-      this.logger.log(
-        `Visa application created successfully: applicationNo=${record.applicationNo}, id=${record.id}`,
+    } catch (err: any) {
+      this.logger.error(
+        `SendGrid confirmation email dispatch error for applicationNo=${record.applicationNo}: ${err?.message}`,
       );
-
-      try {
-        await this.sendGridService.sendApplicationConfirmationEmail({
-          to: record.email,
-          recipientName: `${record.firstName} ${record.lastName}`.trim(),
-          applicationNo: record.applicationNo,
-          targetCountry: record.targetCountry,
-          visaCategory: record.visaCategory,
-        });
-      } catch (err: any) {
-        this.logger.error(
-          `SendGrid confirmation email dispatch error for applicationNo=${record.applicationNo}: ${err?.message}`,
-        );
-      }
-
-      return record;
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
-        throw new BadRequestException(
-          `Associated profile with ID '${dto.profileId}' does not exist.`,
-        );
-      }
-      throw error;
     }
+
+    return record;
   }
 
   private async resolveReviewerDisplayName(

@@ -31,11 +31,12 @@ export class BankAccountController {
   @Get('public/active')
   @ApiOperation({
     summary: 'List active bank accounts for applicant wire transfers',
-    description: 'Public endpoint to retrieve active bank accounts for payments.',
+    description:
+      'Public endpoint to retrieve active bank accounts for payments: only the transfer details (bank, account name and number, SWIFT, IBAN, routing / sort code, currency, instructions).',
   })
   @ApiResponse({ status: 200, description: 'List of active bank accounts' })
   findPublicActive() {
-    return this.bankAccountService.findActive();
+    return this.bankAccountService.findPublicActive();
   }
 
   @Get()
@@ -51,15 +52,22 @@ export class BankAccountController {
     return this.bankAccountService.findAll();
   }
 
+  // Applicants are told to pay into these accounts, so only a manager may
+  // add, change or remove one: whoever edits an account number decides where
+  // every applicant's money goes.
   @Post()
   @UseGuards(ExternalAuthGuard, RolesGuard)
-  @Roles(UserRole.MANAGER, UserRole.PARTNER)
+  @Roles(UserRole.MANAGER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create a new bank account',
-    description: 'Creates a new bank account profile for collecting payments.',
+    description:
+      'Creates a new bank account profile for collecting payments. Managers only.',
   })
-  @ApiResponse({ status: 201, description: 'Bank account created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Bank account created successfully',
+  })
   create(
     @Body() dto: CreateBankAccountDto,
     @CurrentUser('email') email: string,
@@ -69,13 +77,17 @@ export class BankAccountController {
 
   @Patch(':id')
   @UseGuards(ExternalAuthGuard, RolesGuard)
-  @Roles(UserRole.MANAGER, UserRole.PARTNER)
+  @Roles(UserRole.MANAGER)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Update bank account',
-    description: 'Updates bank account details or toggles active status.',
+    description:
+      'Updates bank account details or toggles active status. Managers only.',
   })
-  @ApiResponse({ status: 200, description: 'Bank account updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank account updated successfully',
+  })
   update(@Param('id') id: string, @Body() dto: UpdateBankAccountDto) {
     return this.bankAccountService.update(id, dto);
   }
@@ -88,7 +100,10 @@ export class BankAccountController {
     summary: 'Delete bank account',
     description: 'Removes a bank account from the system.',
   })
-  @ApiResponse({ status: 200, description: 'Bank account deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank account deleted successfully',
+  })
   remove(@Param('id') id: string) {
     return this.bankAccountService.remove(id);
   }

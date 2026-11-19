@@ -19,7 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { normalizeReference, useVisaApplication } from "@/features/visa/api/visa-documentation";
+import {
+  normalizeReference,
+  useVisaApplication,
+} from "@/features/visa/api/visa-documentation";
+import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-payment-info";
 import {
   paymentStatusCopy,
   STATUS_FLOW,
@@ -27,11 +31,12 @@ import {
   statusIndex,
 } from "@/features/visa/status";
 import { toAmount, type VisaDocumentation } from "@/features/visa/types";
-import { BankAccountPaymentInfo } from "@/features/visa/components/bank-account-payment-info";
 import { ApiError } from "@/lib/api-client";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-
-import { BackendPassportApplication, PassportStatus } from "@/server/data/backend-types";
+import {
+  type BackendPassportApplication,
+  type PassportStatus,
+} from "@/server/data/backend-types";
 
 type TrackStep = "DETAILS" | "OTP" | "VERIFIED";
 
@@ -52,8 +57,15 @@ export function TrackPanel() {
 
   const [verifiedRef, setVerifiedRef] = React.useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
+  // The API's proof that this visitor verified `verifiedEmail` (30 minutes).
+  // Held in state for this visit only: never localStorage or a cookie.
+  const [lookupToken, setLookupToken] = React.useState<string | null>(null);
 
-  const { data, isFetching, error } = useVisaApplication(verifiedRef, verifiedEmail);
+  const { data, isFetching, error } = useVisaApplication(
+    verifiedRef,
+    verifiedEmail,
+    lookupToken,
+  );
 
   // Send OTP handler
   const handleSendOtp = async (e?: React.FormEvent) => {
@@ -84,8 +96,10 @@ export function TrackPanel() {
 
       setStep("OTP");
       setOtpSuccessMsg("Verification code sent to your email address.");
-    } catch (err: any) {
-      setOtpError(err.message || "Failed to send verification code.");
+    } catch (err: unknown) {
+      setOtpError(
+        (err instanceof Error && err.message) || "Failed to send verification code.",
+      );
     } finally {
       setIsSendingOtp(false);
     }
@@ -111,15 +125,28 @@ export function TrackPanel() {
       });
       const body = await res.json();
       if (!res.ok) {
-        throw new Error(body.error || "Invalid or expired verification code");
+        // The API says why (a wrong code, too many tries, an expired code).
+        throw new Error(
+          body.message || body.error || "Invalid or expired verification code",
+        );
+      }
+      const token = typeof body.lookupToken === "string" ? body.lookupToken : null;
+      if (!token) {
+        throw new Error(
+          "We could not verify your email for this lookup. Request a new code and try again.",
+        );
       }
 
       // Verification successful! Set verified tracking state with normalized reference
+      setLookupToken(token);
       setVerifiedRef(normalizeReference(referenceInput));
       setVerifiedEmail(emailInput.trim());
       setStep("VERIFIED");
-    } catch (err: any) {
-      setOtpError(err.message || "Invalid or expired verification code.");
+    } catch (err: unknown) {
+      setOtpError(
+        (err instanceof Error && err.message) ||
+          "Invalid or expired verification code.",
+      );
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -129,6 +156,7 @@ export function TrackPanel() {
     setStep("DETAILS");
     setVerifiedRef(null);
     setVerifiedEmail(null);
+    setLookupToken(null);
     setOtpCode("");
     setOtpError(null);
     setOtpSuccessMsg(null);
@@ -145,7 +173,8 @@ export function TrackPanel() {
                   Verify & Track Application
                 </h2>
                 <p className="mt-1 text-[13px] text-muted-foreground">
-                  Provide your application reference number and applicant email address to receive a verification code.
+                  Provide your application reference number and applicant email address
+                  to receive a verification code.
                 </p>
               </div>
 
@@ -189,7 +218,7 @@ export function TrackPanel() {
               </div>
 
               {otpError ? (
-                <p className="text-[13px] text-destructive font-medium">{otpError}</p>
+                <p className="text-[13px] font-medium text-destructive">{otpError}</p>
               ) : null}
 
               <div className="flex justify-end">
@@ -256,7 +285,7 @@ export function TrackPanel() {
                     }
                     placeholder="123456"
                     maxLength={6}
-                    className="font-mono text-center tracking-widest text-[18px]"
+                    className="text-center font-mono text-[18px] tracking-widest"
                     leftIcon={<KeyRound />}
                   />
                   <Button
@@ -273,17 +302,17 @@ export function TrackPanel() {
               </div>
 
               {otpError ? (
-                <p className="text-[13px] text-destructive font-medium">{otpError}</p>
+                <p className="text-[13px] font-medium text-destructive">{otpError}</p>
               ) : null}
 
               {otpSuccessMsg ? (
-                <p className="text-[13px] text-success font-medium">
-                  {otpSuccessMsg}
-                </p>
+                <p className="text-[13px] font-medium text-success">{otpSuccessMsg}</p>
               ) : null}
 
-              <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[12.5px]">
-                <span className="text-muted-foreground">Didn't receive the code?</span>
+              <div className="flex items-center justify-between border-t border-border/50 pt-2 text-[12.5px]">
+                <span className="text-muted-foreground">
+                  Didn&apos;t receive the code?
+                </span>
                 <button
                   type="button"
                   onClick={() => handleSendOtp()}
@@ -301,22 +330,20 @@ export function TrackPanel() {
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="size-5 text-success" />
             <span className="text-[13.5px] font-medium text-ink-900">
-              Verified identity for <span className="font-semibold">{verifiedEmail}</span>
+              Verified identity for{" "}
+              <span className="font-semibold">{verifiedEmail}</span>
             </span>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={handleReset}>
             Track another application
           </Button>
         </div>
       )}
 
       {step === "VERIFIED" && isFetching && !data ? <TrackSkeleton /> : null}
-      {step === "VERIFIED" && error && !isFetching ? <TrackError error={error} /> : null}
+      {step === "VERIFIED" && error && !isFetching ? (
+        <TrackError error={error} />
+      ) : null}
       {step === "VERIFIED" && data && !isFetching ? (
         data.type === "PASSPORT" ? (
           <PassportApplicationSummary application={data.data} />
@@ -535,7 +562,8 @@ const passportStatusCopy: Record<
   },
   REJECTED: {
     label: "Rejected",
-    description: "This passport application was not approved. The reason is shown below.",
+    description:
+      "This passport application was not approved. The reason is shown below.",
   },
 };
 
@@ -556,8 +584,7 @@ function PassportApplicationSummary({
           ? "Damaged Passport Replacement"
           : application.passportCategory;
 
-  const validityLabel =
-    application.validity === "FIVE_YEARS" ? "5 Years" : "10 Years";
+  const validityLabel = application.validity === "FIVE_YEARS" ? "5 Years" : "10 Years";
   const bookletLabel =
     application.bookletType === "THIRTY_TWO_PAGES" ? "32 Pages" : "64 Pages";
 
@@ -572,11 +599,13 @@ function PassportApplicationSummary({
             {application.applicationNo}
           </p>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            {application.firstName} {application.surname} · Nigeria e-Passport ({categoryLabel})
+            {application.firstName} {application.surname} · Nigeria e-Passport (
+            {categoryLabel})
           </p>
         </div>
         <Badge variant={rejected ? "destructive" : "solid"} size="lg">
-          {passportStatusCopy[application.status as PassportStatus]?.label || application.status}
+          {passportStatusCopy[application.status as PassportStatus]?.label ||
+            application.status}
         </Badge>
       </header>
 
@@ -646,9 +675,7 @@ function PassportApplicationSummary({
           <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
             Passport Category
           </dt>
-          <dd className="mt-1 text-[14px] font-medium text-ink-900">
-            {categoryLabel}
-          </dd>
+          <dd className="mt-1 text-[14px] font-medium text-ink-900">{categoryLabel}</dd>
         </div>
         <div>
           <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">

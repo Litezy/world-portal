@@ -122,6 +122,44 @@ describe("POST /api/vivid/sira-session", () => {
   });
 });
 
+describe("POST /api/vivid/sira-session failures", () => {
+  it.each([
+    [
+      "an unreachable broker",
+      () =>
+        fetchMock.mockRejectedValue(
+          new TypeError("fetch failed: connect ECONNREFUSED 10.0.0.12:443"),
+        ),
+    ],
+    [
+      "a broker error",
+      () =>
+        fetchMock.mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: "invalid key sira-test-key for model gemini-live",
+            }),
+            { status: 401 },
+          ),
+        ),
+    ],
+  ])("logs %s on the server and tells the browser nothing more", async (_, fail) => {
+    signedIn();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    fail();
+
+    const response = await mint(post({}));
+
+    expect(response.status).toBe(502);
+    const text = await response.text();
+    expect(text).not.toMatch(
+      /ECONNREFUSED|10.0.0.12|TypeError|SiraError|sira-test-key|gemini/i,
+    );
+    expect(JSON.parse(text)).toMatchObject({ error: "session_mint_failed" });
+    expect(logged).toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/vivid/function", () => {
   it("refuses a signed-out caller", async () => {
     auth.mockResolvedValue({ userId: null });

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+
 import { z } from "zod";
 
 import { backend } from "@/server/api/backend";
-import { requireSession } from "@/server/auth";
+import { requireRole } from "@/server/auth";
 import { backendErrorResponse, parseBody } from "@/server/http";
 
 const updateBankAccountSchema = z.object({
@@ -19,16 +20,27 @@ const updateBankAccountSchema = z.object({
 
 type Context = { params: Promise<{ id: string }> };
 
+/** The id stays one path segment: a `/` or `?` in it can't reach another route. */
+const accountPath = (id: string) => `/bank-accounts/${encodeURIComponent(id)}`;
+
+/**
+ * Managers only: a changed account number silently redirects applicants'
+ * payments, so changing or deleting an account needs the manager role here
+ * as well as on the service.
+ */
 export async function PATCH(request: Request, context: Context) {
-  const { session, response } = await requireSession();
+  const { session, response } = await requireRole(["MANAGER"]);
   if (response) return response;
 
   const { id } = await context.params;
-  const { data, response: bodyResponse } = await parseBody(request, updateBankAccountSchema);
+  const { data, response: bodyResponse } = await parseBody(
+    request,
+    updateBankAccountSchema,
+  );
   if (bodyResponse) return bodyResponse;
 
   try {
-    const bankAccount = await backend<any>(`/bank-accounts/${id}`, {
+    const bankAccount = await backend<unknown>(accountPath(id), {
       method: "PATCH",
       token: session.token,
       body: JSON.stringify(data),
@@ -41,13 +53,13 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 export async function DELETE(_request: Request, context: Context) {
-  const { session, response } = await requireSession();
+  const { session, response } = await requireRole(["MANAGER"]);
   if (response) return response;
 
   const { id } = await context.params;
 
   try {
-    const deleted = await backend<any>(`/bank-accounts/${id}`, {
+    const deleted = await backend<unknown>(accountPath(id), {
       method: "DELETE",
       token: session.token,
     });

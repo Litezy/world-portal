@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 import { serverEnv } from "@/config/env";
 import { backend, BackendError } from "@/server/api/backend";
@@ -59,6 +60,29 @@ export function profileToAdminUser(profile: BackendProfile): AdminUser {
 }
 
 /**
+ * Whether `provided` is the console password, in constant time.
+ *
+ * `!==` stops at the first differing character, so how long a wrong guess
+ * takes says how much of it was right. Both sides are hashed first: SHA-256
+ * digests are always 32 bytes, so `timingSafeEqual` (which throws on a length
+ * mismatch) can compare them without the length itself leaking.
+ */
+function consolePasswordMatches(provided: string, expected: string): boolean {
+  const digest = (value: string) => createHash("sha256").update(value, "utf8").digest();
+  return timingSafeEqual(digest(provided), digest(expected));
+}
+
+export type AuthenticateResult =
+  | { user: AdminUser; token: string; message: null; unavailable?: undefined }
+  | {
+      user: null;
+      token: null;
+      message: string;
+      /** The service could not answer, so the credentials were never judged. */
+      unavailable?: true;
+    };
+
+/**
  * Exchanges console credentials for a World Portal access token.
  *
  * Authorisation is the service's, not ours: the token is only useful if the
@@ -66,11 +90,18 @@ export function profileToAdminUser(profile: BackendProfile): AdminUser {
  * console password is a stop-gap that keeps a mock-auth deployment from being
  * open to anyone who knows a seeded email — drop it when the real identity
  * provider issues tokens directly.
+ *
+ * `visitor` (from `visitorIpHeaders()`) goes on the token request, so the
+ * API's rate limit counts the visitor rather than this server's one address.
  */
-export async function authenticate(email: string, password: string) {
+export async function authenticate(
+  email: string,
+  password: string,
+  visitor: Record<string, string> = {},
+): Promise<AuthenticateResult> {
   const env = serverEnv();
 
-  if (password !== env.ADMIN_PASSWORD) {
+  if (!consolePasswordMatches(password, env.ADMIN_PASSWORD)) {
     return {
       user: null,
       token: null,
@@ -84,6 +115,7 @@ export async function authenticate(email: string, password: string) {
       body: JSON.stringify({ email }),
       // The service only issues console tokens to holders of SERVICE_AUTH_KEY.
       service: true,
+      headers: visitor,
     });
 
     const profile = await backend<BackendProfile>("/profiles/me", {
@@ -106,6 +138,10 @@ export async function authenticate(email: string, password: string) {
         error.status === 404
           ? "No E-Embassy account matches that email."
           : error.message;
+      // An outage or the API's own rate limit is not a verdict on the visitor.
+      if (error.status >= 500 || error.status === 429) {
+        return { user: null, token: null, message, unavailable: true };
+      }
       return { user: null, token: null, message };
     }
     throw error;

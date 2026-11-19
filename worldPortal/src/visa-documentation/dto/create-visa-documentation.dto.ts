@@ -5,12 +5,12 @@ import {
   IsEnum,
   IsOptional,
   IsDateString,
-  IsUrl,
   IsArray,
   ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { VisaCategory, Gender } from '@prisma/client';
+import { IsHttpsUrl } from '../../common/validation/is-https-url';
 
 export class CreateVisaDocumentationDto {
   @ApiProperty({ example: 'John', description: 'Applicant first name' })
@@ -177,7 +177,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   passportDataPageUrl?: string;
 
   @ApiPropertyOptional({
@@ -188,7 +188,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   passportPhotoWhiteBgUrl?: string;
 
   @ApiPropertyOptional({
@@ -199,7 +199,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   proofOfFunds6MonthsUrl?: string;
 
   @ApiPropertyOptional({
@@ -210,7 +210,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   businessRegistrationCertUrl?: string;
 
   @ApiPropertyOptional({
@@ -220,7 +220,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   taxCertificateUrl?: string;
 
   @ApiPropertyOptional({
@@ -231,7 +231,7 @@ export class CreateVisaDocumentationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   marriageCertificateUrl?: string;
 
   @ApiPropertyOptional({
@@ -245,6 +245,7 @@ export class CreateVisaDocumentationDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @IsHttpsUrl({ each: true })
   childrenBirthCertUrls?: string[];
 
   @ApiPropertyOptional({
@@ -258,6 +259,7 @@ export class CreateVisaDocumentationDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @IsHttpsUrl({ each: true })
   landedPropertyDocUrls?: string[];
 
   @ApiPropertyOptional({
@@ -271,6 +273,7 @@ export class CreateVisaDocumentationDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @IsHttpsUrl({ each: true })
   previousVisasScanUrls?: string[];
 
   @ApiPropertyOptional({
@@ -284,12 +287,18 @@ export class CreateVisaDocumentationDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @IsHttpsUrl({ each: true })
   supportingDocUrls?: string[];
 
+  /**
+   * Ignored: an application is filed under the signed-in applicant and never
+   * linked to a desk profile from the form. Still accepted so a browser on an
+   * older build isn't refused.
+   */
   @ApiPropertyOptional({
-    example: '',
+    deprecated: true,
     description:
-      'Optional profile ID if submitted by authenticated user/partner',
+      'Ignored: the application is filed under the signed-in applicant.',
     required: false,
   })
   @IsOptional()

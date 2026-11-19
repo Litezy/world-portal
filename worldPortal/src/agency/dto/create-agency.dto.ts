@@ -7,7 +7,9 @@ import {
   IsNumber,
   IsArray,
   Min,
+  ValidateIf,
 } from 'class-validator';
+import { IsHttpsUrl } from '../../common/validation/is-https-url';
 
 export class CreateAgencyDto {
   @ApiProperty({ description: 'Display name of the agency' })
@@ -60,7 +62,8 @@ export class CreateAgencyDto {
 
   @ApiPropertyOptional({ description: 'Logo image URL' })
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => Boolean(value))
+  @IsHttpsUrl()
   logoUrl?: string;
 
   @ApiProperty({ description: 'Primary contact email' })
@@ -74,7 +77,8 @@ export class CreateAgencyDto {
 
   @ApiPropertyOptional({ description: 'Company website URL' })
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => Boolean(value))
+  @IsHttpsUrl()
   website?: string;
 
   @ApiProperty({ description: 'Year company was founded' })
