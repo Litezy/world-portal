@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { homeFor } from "@/config/admin-navigation";
 import { login } from "@/content/admin";
 import { useLogin } from "@/features/auth/api/use-login";
 import { ApiError } from "@/lib/api-client";
@@ -35,8 +36,11 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     try {
-      await mutateAsync(values);
-      router.replace(next && next.startsWith("/admin") ? next : "/admin");
+      const { data: user } = await mutateAsync(values);
+      // Without a `next`, land on the first page this role can open: Overview
+      // is desk-only, so a partner sent to /admin met "your role can't open
+      // this" on every sign-in.
+      router.replace(next && next.startsWith("/admin") ? next : homeFor(user.role));
       router.refresh();
     } catch {
       form.setFocus("password");
@@ -70,6 +74,7 @@ export function LoginForm() {
                   type="email"
                   autoComplete="email"
                   placeholder="you@worldportal.travel"
+                  className="rounded-md"
                   {...field}
                 />
               </FormControl>
@@ -85,7 +90,12 @@ export function LoginForm() {
             <FormItem>
               <FormLabel required>Password</FormLabel>
               <FormControl>
-                <Input type="password" autoComplete="current-password" {...field} />
+                <Input
+                  type="password"
+                  autoComplete="current-password"
+                  className="rounded-md"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -112,13 +122,11 @@ export function LoginForm() {
           size="block"
           isLoading={isPending}
           loadingText="Signing in"
-          className="mt-2"
+          className="mt-2 rounded-md"
         >
           {login.submitLabel}
           <ArrowRight />
         </Button>
-
-        <p className="text-center text-[12px] text-muted-foreground">{login.hint}</p>
       </form>
     </Form>
   );

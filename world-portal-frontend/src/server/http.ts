@@ -5,9 +5,39 @@ import { z } from "zod";
 import { BackendError } from "@/server/api/backend";
 import { listParamsSchema } from "@/validations/admin";
 
-export function listParamsFrom(request: Request) {
+const INVALID_FILTERS = "Those filters aren't valid. Clear the search and try again.";
+
+/** Thrown by `listParamsFrom`; `backendErrorResponse` turns it into a 422. */
+export class InvalidListParamsError extends Error {
+  readonly status = 422;
+  constructor() {
+    super(INVALID_FILTERS);
+    this.name = "InvalidListParamsError";
+  }
+}
+
+/**
+ * Parses `q`, `status`, `page`, `perPage`, returning the 422 to send back when
+ * they are unusable — an oversized or malformed value is the caller's mistake,
+ * not a server error. Same shape as `parseBody`.
+ */
+export function readListParams(request: Request) {
   const url = new URL(request.url);
-  return listParamsSchema.parse(Object.fromEntries(url.searchParams));
+  const parsed = listParamsSchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return {
+      params: null,
+      response: NextResponse.json({ message: INVALID_FILTERS }, { status: 422 }),
+    };
+  }
+  return { params: parsed.data, response: null };
+}
+
+/** Throwing variant for callers that parse inside their own try/catch. */
+export function listParamsFrom(request: Request) {
+  const { params } = readListParams(request);
+  if (!params) throw new InvalidListParamsError();
+  return params;
 }
 
 export async function parseBody<T extends z.ZodType>(request: Request, schema: T) {
@@ -36,6 +66,9 @@ export async function parseBody<T extends z.ZodType>(request: Request, schema: T
 
 /** Surface the API's own status and field errors rather than a blanket 500. */
 export function backendErrorResponse(error: unknown) {
+  if (error instanceof InvalidListParamsError) {
+    return NextResponse.json({ message: error.message }, { status: error.status });
+  }
   if (error instanceof BackendError) {
     return NextResponse.json(
       { message: error.message, ...(error.errors ? { errors: error.errors } : {}) },

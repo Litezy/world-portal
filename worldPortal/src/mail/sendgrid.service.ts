@@ -26,7 +26,9 @@ export function formatReviewerName(nameOrEmail?: string): string {
     .join(' ');
 }
 
-export function formatAmountWithCommas(amount: number | string | null | undefined): string {
+export function formatAmountWithCommas(
+  amount: number | string | null | undefined,
+): string {
   if (amount === null || amount === undefined) return '0.00';
   const num = typeof amount === 'number' ? amount : parseFloat(String(amount));
   if (isNaN(num)) return '0.00';
@@ -67,6 +69,18 @@ export interface SendPaymentConfirmedEmailOptions {
   currency?: string;
 }
 
+export interface SendRefundProcessedEmailOptions {
+  to: string;
+  recipientName: string;
+  applicationNo: string;
+  refundRef: string;
+  originalAmount: number;
+  surchargeAmount: number;
+  netRefundAmount: number;
+  reason: string;
+  currency?: string;
+}
+
 export interface SendStatusUpdateEmailOptions {
   to: string;
   recipientName: string;
@@ -99,7 +113,6 @@ export interface SendApplicantInvitationEmailOptions {
   inviterName?: string;
 }
 
-
 @Injectable()
 export class SendGridService {
   private readonly logger = new Logger(SendGridService.name);
@@ -111,7 +124,8 @@ export class SendGridService {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey =
-      this.configService.get<string>('SENDGRID_API_KEY') || process.env.SENDGRID_API_KEY;
+      this.configService.get<string>('SENDGRID_API_KEY') ||
+      process.env.SENDGRID_API_KEY;
     this.fromEmail =
       this.configService.get<string>('SENDGRID_FROM_EMAIL') ||
       process.env.SENDGRID_FROM_EMAIL ||
@@ -135,7 +149,9 @@ export class SendGridService {
     if (apiKey) {
       sgMail.setApiKey(apiKey);
       this.isConfigured = true;
-      this.logger.log(`SendGrid configured with sender: ${this.fromName} <${this.fromEmail}>`);
+      this.logger.log(
+        `SendGrid configured with sender: ${this.fromName} <${this.fromEmail}>`,
+      );
     } else {
       this.logger.warn(
         `SENDGRID_API_KEY is missing in environment variables. Email dispatches will log mock payloads until API key is set.`,
@@ -146,8 +162,11 @@ export class SendGridService {
   /**
    * 1. Application Submitted Email
    */
-  async sendApplicationConfirmationEmail(options: SendApplicationEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, visaCategory } = options;
+  async sendApplicationConfirmationEmail(
+    options: SendApplicationEmailOptions,
+  ): Promise<boolean> {
+    const { to, recipientName, applicationNo, targetCountry, visaCategory } =
+      options;
 
     const data = {
       recipient_name: recipientName,
@@ -159,7 +178,10 @@ export class SendGridService {
       year: new Date().getFullYear(),
     };
 
-    const html = await this.renderEjsTemplate('application-confirmation.ejs', data);
+    const html = await this.renderEjsTemplate(
+      'application-confirmation.ejs',
+      data,
+    );
 
     return this.dispatchMail({
       to,
@@ -172,7 +194,9 @@ export class SendGridService {
   /**
    * 2. Cost Evaluation Completed Email
    */
-  async sendCostEvaluatedEmail(options: SendCostEvaluatedEmailOptions): Promise<boolean> {
+  async sendCostEvaluatedEmail(
+    options: SendCostEvaluatedEmailOptions,
+  ): Promise<boolean> {
     const {
       to,
       recipientName,
@@ -186,7 +210,8 @@ export class SendGridService {
       bankAccounts,
     } = options;
 
-    const formattedEvaluatorName = evaluatorName || formatReviewerName(evaluatorEmail);
+    const formattedEvaluatorName =
+      evaluatorName || formatReviewerName(evaluatorEmail);
 
     const data = {
       recipient_name: recipientName,
@@ -205,7 +230,10 @@ export class SendGridService {
       year: new Date().getFullYear(),
     };
 
-    const html = await this.renderEjsTemplate('application-evaluated.ejs', data);
+    const html = await this.renderEjsTemplate(
+      'application-evaluated.ejs',
+      data,
+    );
 
     return this.dispatchMail({
       to,
@@ -218,8 +246,58 @@ export class SendGridService {
   /**
    * 3. Payment Confirmed & In Review Email
    */
-  async sendPaymentConfirmedEmail(options: SendPaymentConfirmedEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, amountPaid, balanceDue, paymentOption, currency } = options;
+  /** ADR 0016 — tells the applicant a refund was processed and what they get back. */
+  async sendRefundProcessedEmail(
+    options: SendRefundProcessedEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      refundRef,
+      originalAmount,
+      surchargeAmount,
+      netRefundAmount,
+      reason,
+      currency,
+    } = options;
+
+    const data = {
+      recipient_name: recipientName,
+      application_no: applicationNo,
+      refund_ref: refundRef,
+      currency: currency || 'USD',
+      formatted_original: formatAmountWithCommas(originalAmount),
+      formatted_surcharge: formatAmountWithCommas(surchargeAmount),
+      formatted_net_refund: formatAmountWithCommas(netRefundAmount),
+      reason,
+      tracking_url: `${this.frontendUrl}/track?ref=${applicationNo}`,
+      from_email: this.fromEmail,
+      year: new Date().getFullYear(),
+    };
+
+    const html = await this.renderEjsTemplate('refund-processed.ejs', data);
+
+    return this.dispatchMail({
+      to,
+      subject: `Refund Processed - Application ${applicationNo}`,
+      html,
+      ref: applicationNo,
+    });
+  }
+
+  async sendPaymentConfirmedEmail(
+    options: SendPaymentConfirmedEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      amountPaid,
+      balanceDue,
+      paymentOption,
+      currency,
+    } = options;
 
     const data = {
       recipient_name: recipientName,
@@ -248,10 +326,20 @@ export class SendGridService {
   /**
    * 4. Application Approved Email
    */
-  async sendApplicationApprovedEmail(options: SendStatusUpdateEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, reviewerEmail, reviewerName } = options;
+  async sendApplicationApprovedEmail(
+    options: SendStatusUpdateEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      targetCountry,
+      reviewerEmail,
+      reviewerName,
+    } = options;
 
-    const formattedReviewerName = reviewerName || formatReviewerName(reviewerEmail);
+    const formattedReviewerName =
+      reviewerName || formatReviewerName(reviewerEmail);
 
     const data = {
       recipient_name: recipientName,
@@ -277,10 +365,21 @@ export class SendGridService {
   /**
    * 5. Application Rejected Email
    */
-  async sendApplicationRejectedEmail(options: SendStatusUpdateEmailOptions): Promise<boolean> {
-    const { to, recipientName, applicationNo, targetCountry, reviewerEmail, reviewerName, rejectionReason } = options;
+  async sendApplicationRejectedEmail(
+    options: SendStatusUpdateEmailOptions,
+  ): Promise<boolean> {
+    const {
+      to,
+      recipientName,
+      applicationNo,
+      targetCountry,
+      reviewerEmail,
+      reviewerName,
+      rejectionReason,
+    } = options;
 
-    const formattedReviewerName = reviewerName || formatReviewerName(reviewerEmail);
+    const formattedReviewerName =
+      reviewerName || formatReviewerName(reviewerEmail);
 
     const data = {
       recipient_name: recipientName,
@@ -307,10 +406,13 @@ export class SendGridService {
   /**
    * 6. Team Invitation Email
    */
-  async sendTeamInviteEmail(options: SendTeamInviteEmailOptions): Promise<boolean> {
+  async sendTeamInviteEmail(
+    options: SendTeamInviteEmailOptions,
+  ): Promise<boolean> {
     const { to, recipientName, role, inviterEmail, inviterName } = options;
 
-    const formattedInviterName = inviterName || formatReviewerName(inviterEmail);
+    const formattedInviterName =
+      inviterName || formatReviewerName(inviterEmail);
 
     const data = {
       recipient_name: recipientName,
@@ -372,10 +474,7 @@ export class SendGridService {
       year: new Date().getFullYear(),
     };
 
-    const html = await this.renderEjsTemplate(
-      'applicant-invitation.ejs',
-      data,
-    );
+    const html = await this.renderEjsTemplate('applicant-invitation.ejs', data);
 
     return this.dispatchMail({
       to,
@@ -384,7 +483,6 @@ export class SendGridService {
       ref: `INVITE-APP-${applicationNo}`,
     });
   }
-
 
   /**
    * 7. OTP Email Verification
@@ -420,7 +518,12 @@ export class SendGridService {
   /**
    * SendGrid Dispatch Helper
    */
-  private async dispatchMail(options: { to: string; subject: string; html: string; ref: string }): Promise<boolean> {
+  private async dispatchMail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    ref: string;
+  }): Promise<boolean> {
     const { to, subject, html, ref } = options;
 
     const msg: sgMail.MailDataRequired = {
@@ -434,13 +537,19 @@ export class SendGridService {
     };
 
     if (!this.isConfigured) {
-      this.logger.log(`[SENDGRID MOCK DISPATCH] To: ${to} | Subject: ${subject} | Ref: ${ref}`);
-      return true;
+      this.logger.log(
+        `[SENDGRID MOCK DISPATCH] To: ${to} | Subject: ${subject} | Ref: ${ref}`,
+      );
+      // Logged, not delivered. Callers that report delivery (resend invite)
+      // must not tell staff an email went out when none did.
+      return false;
     }
 
     try {
       await sgMail.send(msg);
-      this.logger.log(`[SENDGRID SUCCESS] Email dispatched successfully to ${to} for ref=${ref}`);
+      this.logger.log(
+        `[SENDGRID SUCCESS] Email dispatched successfully to ${to} for ref=${ref}`,
+      );
       return true;
     } catch (error: any) {
       this.logger.error(
@@ -451,7 +560,10 @@ export class SendGridService {
     }
   }
 
-  private async renderEjsTemplate(templateName: string, data: Record<string, any>): Promise<string> {
+  private async renderEjsTemplate(
+    templateName: string,
+    data: Record<string, any>,
+  ): Promise<string> {
     try {
       const possiblePaths = [
         path.join(process.cwd(), 'src', 'mail', 'templates', templateName),
@@ -459,21 +571,26 @@ export class SendGridService {
         path.join(process.cwd(), 'dist', 'mail', 'templates', templateName),
       ];
 
-      let foundPath = possiblePaths.find((p) => fs.existsSync(p));
+      const foundPath = possiblePaths.find((p) => fs.existsSync(p));
 
       if (foundPath) {
         return await ejs.renderFile(foundPath, {
           formatAmount: formatAmountWithCommas,
           logo_url: this.emailLogoUrl,
-          logo_light_url: 'https://res.cloudinary.com/m7fltb77/image/upload/v1788638868/world-portal-brand/e-embassy-logo-light.png',
+          logo_light_url:
+            'https://res.cloudinary.com/m7fltb77/image/upload/v1788638868/world-portal-brand/e-embassy-logo-light.png',
           ...data,
         });
       }
 
-      this.logger.warn(`EJS template ${templateName} not found on disk, using inline fallback`);
+      this.logger.warn(
+        `EJS template ${templateName} not found on disk, using inline fallback`,
+      );
       return `<h2>Notice for ${data.application_no || data.recipient_name}</h2><p>Please check your application status.</p>`;
-    } catch (err: any) {
-      this.logger.error(`Error rendering EJS template ${templateName}: ${err?.message}`);
+    } catch (err: unknown) {
+      this.logger.error(
+        `Error rendering EJS template ${templateName}: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return `<h2>Notice for ${data.application_no || data.recipient_name}</h2>`;
     }
   }

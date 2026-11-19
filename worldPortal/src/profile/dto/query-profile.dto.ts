@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class QueryProfileDto {
   @ApiPropertyOptional({
@@ -18,4 +19,15 @@ export class QueryProfileDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Only active (`true`) or only deactivated (`false`) profiles',
+    type: Boolean,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

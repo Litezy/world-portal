@@ -3,89 +3,68 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { adminNav } from "@/config/admin-navigation";
+import {
+  type AdminNavItem,
+  isNavItemActive,
+  navGroupsFor,
+} from "@/config/admin-navigation";
+import { adminBrand } from "@/content/admin";
+import { useDashboard } from "@/features/dashboard/api/use-dashboard";
 import { cn } from "@/lib/utils";
+import type { AdminRole } from "@/types";
 
-export function AdminNav({ onNavigate }: { onNavigate?: () => void }) {
+/**
+ * Grouped, role-filtered navigation: a role only ever sees the pages the
+ * service will actually serve it. The two work queues carry a live count of
+ * open files (from the overview the dashboard already loads), after the
+ * WorldStreet desks: the number that tells you where the work is.
+ */
+export function AdminNav({
+  role,
+  onNavigate,
+}: {
+  role: AdminRole;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
-
-  // Group items by category
-  const mainItems = adminNav.slice(0, 1); // Overview
-  const opsItems = adminNav.slice(1, 4); // Visa applications, Passports, Financials
-  const mgmtItems = adminNav.slice(4); // Applicants, Settings
+  const { data } = useDashboard({ enabled: role !== "PARTNER" });
+  const counts: Record<string, number | undefined> = {
+    "/admin/applications": data?.stats.visas.active,
+    "/admin/passports": data?.stats.passports.active,
+  };
 
   return (
-    <nav aria-label="Console Navigation" className="flex flex-col gap-6">
-      {/* Main Section */}
-      <div className="flex flex-col gap-1">
-        {mainItems.map(({ title, href, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
+    <nav aria-label={adminBrand.navLabel} className="flex flex-col gap-5">
+      {navGroupsFor(role).map((group, index) => (
+        <div key={group.label ?? index} className="flex flex-col gap-0.5">
+          {group.label ? (
+            <p className="px-3 pb-1 text-[10.5px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              {group.label}
+            </p>
+          ) : null}
+          {group.items.map((item) => (
             <NavItem
-              key={href}
-              title={title}
-              href={href}
-              icon={Icon}
-              active={active}
+              key={item.href}
+              item={item}
+              count={counts[item.href]}
+              active={isNavItemActive(item, pathname)}
               onNavigate={onNavigate}
             />
-          );
-        })}
-      </div>
-
-      {/* Operations Section */}
-      <div className="flex flex-col gap-1">
-        <p className="px-3 text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest">
-          Operations
-        </p>
-        {opsItems.map(({ title, href, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <NavItem
-              key={href}
-              title={title}
-              href={href}
-              icon={Icon}
-              active={active}
-              onNavigate={onNavigate}
-            />
-          );
-        })}
-      </div>
-
-      {/* Management Section */}
-      <div className="flex flex-col gap-1">
-        <p className="px-3 text-[10.5px] font-semibold text-muted-foreground uppercase tracking-widest">
-          Management
-        </p>
-        {mgmtItems.map(({ title, href, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <NavItem
-              key={href}
-              title={title}
-              href={href}
-              icon={Icon}
-              active={active}
-              onNavigate={onNavigate}
-            />
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ))}
     </nav>
   );
 }
 
 function NavItem({
-  title,
-  href,
-  icon: Icon,
+  item: { title, href, icon: Icon },
+  count,
   active,
   onNavigate,
 }: {
-  title: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  item: AdminNavItem;
+  count?: number;
   active: boolean;
   onNavigate?: () => void;
 }) {
@@ -95,16 +74,33 @@ function NavItem({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-all duration-200",
+        "group relative flex h-9 items-center gap-2.5 rounded-lg px-3 text-[13px] transition-colors duration-200",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         active
-          ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-
+          ? "bg-muted font-semibold text-foreground"
+          : "font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground",
       )}
     >
-      <Icon className="size-[17px] shrink-0" strokeWidth={active ? 2.2 : 1.9} />
-      <span>{title}</span>
+      {/* The marker: a short bar in the brand colour, so "here" isn't colour-fill alone. */}
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-primary"
+        />
+      ) : null}
+      <Icon
+        className={cn("size-4 shrink-0", active && "text-primary")}
+        strokeWidth={active ? 2.2 : 1.9}
+      />
+      <span className="flex-1 truncate">{title}</span>
+      {count ? (
+        <span
+          aria-label={`${count} open`}
+          className="min-w-5 rounded-full bg-primary px-1.5 text-center text-[11px] leading-5 font-bold text-primary-foreground tabular-nums"
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
     </Link>
   );
 }

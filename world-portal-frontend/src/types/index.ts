@@ -78,7 +78,17 @@ export type ApiResponse<T> = {
 
 export type Paginated<T> = {
   data: T[];
-  meta: { page: number; perPage: number; total: number; totalPages: number };
+  meta: {
+    page: number;
+    perPage: number;
+    total: number;
+    totalPages: number;
+    /**
+     * Rows per status across the whole filtered set (search and dates applied,
+     * the status filter not) — the counts on a list's status tabs.
+     */
+    counts?: Record<string, number>;
+  };
 };
 
 /* ---------------------------------------------------------------------------
@@ -99,7 +109,13 @@ export type AdminUser = {
   avatar?: string;
 };
 
-export type Applicant = { name: string; email: string; phone?: string };
+export type Applicant = {
+  name: string;
+  email: string;
+  phone?: string;
+  /** Opaque link key for `/admin/customers/[key]` — never the email itself. */
+  key?: string;
+};
 
 export type ApplicationEvent = {
   status: VisaStatus | PassportStatus;
@@ -131,15 +147,20 @@ export type VisaApplication = {
   purpose: string;
   nationality: string;
   passportNumber: string;
+  passportExpiryDate: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  residenceAddress: string | null;
   verificationNotes: string | null;
   rejectionReason: string | null;
+  evaluatedBy: string | null;
+  evaluatedAt: string | null;
   reviewedBy: string | null;
   createdAt: string;
   updatedAt: string;
   timeline: ApplicationEvent[];
   documents: SubmittedDocument[];
 };
-
 
 export type PassportApplication = {
   id: string;
@@ -204,10 +225,27 @@ export type Customer = {
   phone?: string;
   country: string;
   applications: number;
-  lifetimeValue: number;
-  currency: string;
+  /**
+   * What this applicant has paid, per currency, across visas and passports.
+   * Never one summed figure: naira plus dollars is not a number.
+   */
+  paidByCurrency: Record<string, number>;
   createdAt: string;
   lastActiveAt: string;
+};
+
+/** `GET /api/admin/customers/[key]` — one applicant and everything they've applied for. */
+export type CustomerDetail = {
+  customer: Customer;
+  visas: VisaApplication[];
+  passports: PassportApplication[];
+};
+
+/** `GET /api/admin/search` — the ⌘K palette's groups. No emails: names only. */
+export type AdminSearchResults = {
+  visas: { id: string; reference: string; name: string; status: VisaStatus }[];
+  passports: { id: string; reference: string; name: string; status: PassportStatus }[];
+  applicants: { name: string; applications: number }[];
 };
 
 export type DashboardStats = {
@@ -226,10 +264,18 @@ export type DashboardStats = {
   weekly: { label: string; visas: number; passports: number }[];
 };
 
+export type SortDirection = "asc" | "desc";
+
 export type ListParams = {
   q?: string;
   status?: string;
   verification?: string;
   page?: number;
   perPage?: number;
+  /** A sort key the list's route allows; anything else falls back to newest first. */
+  sort?: string;
+  dir?: SortDirection;
+  /** Inclusive `YYYY-MM-DD` bounds on the submission date. */
+  from?: string;
+  to?: string;
 };

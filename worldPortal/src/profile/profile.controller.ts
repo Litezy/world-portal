@@ -50,7 +50,9 @@ export class ProfileController {
     @CurrentUser() user: { email?: string } | undefined,
   ) {
     const inviter = user?.email || 'manager@yopmail.com';
-    this.logger.log(`POST /profiles requested for email=${dto.email} by inviter=${inviter}`);
+    this.logger.log(
+      `POST /profiles requested for email=${dto.email} by inviter=${inviter}`,
+    );
     return this.profileService.createProfile(dto, inviter);
   }
 
@@ -104,9 +106,18 @@ export class ProfileController {
   @ApiOperation({ summary: 'Update profile details (Manager only)' })
   @ApiResponse({ status: 200, description: 'Profile updated.' })
   @ApiResponse({ status: 404, description: 'Profile not found.' })
-  async update(@Param('id') id: string, @Body() dto: UpdateProfileDto) {
+  @ApiResponse({
+    status: 409,
+    description:
+      'Refused: the change would demote or deactivate the acting manager, or leave no active manager.',
+  })
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProfileDto,
+    @CurrentUser('email') actorEmail?: string,
+  ) {
     this.logger.log(`PATCH /profiles/${id} requested`);
-    return this.profileService.updateProfile(id, dto);
+    return this.profileService.updateProfile(id, dto, actorEmail);
   }
 
   @Delete(':id')
@@ -114,8 +125,32 @@ export class ProfileController {
   @ApiOperation({ summary: 'Deactivate user profile (Manager only)' })
   @ApiResponse({ status: 200, description: 'Profile deactivated.' })
   @ApiResponse({ status: 404, description: 'Profile not found.' })
-  async deactivate(@Param('id') id: string) {
+  @ApiResponse({
+    status: 409,
+    description: 'Refused: self-deactivation, or the last active manager.',
+  })
+  async deactivate(
+    @Param('id') id: string,
+    @CurrentUser('email') actorEmail?: string,
+  ) {
     this.logger.log(`DELETE /profiles/${id} requested`);
-    return this.profileService.deactivateProfile(id);
+    return this.profileService.deactivateProfile(id, actorEmail);
+  }
+
+  @Post(':id/resend-invite')
+  @Roles(UserRole.MANAGER)
+  @ApiOperation({ summary: 'Re-send the team invitation email (Manager only)' })
+  @ApiResponse({ status: 201, description: '{ sent: boolean }' })
+  @ApiResponse({ status: 404, description: 'Profile not found.' })
+  @ApiResponse({ status: 409, description: 'The account is deactivated.' })
+  async resendInvite(
+    @Param('id') id: string,
+    @CurrentUser('email') inviterEmail?: string,
+  ) {
+    this.logger.log(`POST /profiles/${id}/resend-invite requested`);
+    return this.profileService.resendInvite(
+      id,
+      inviterEmail || 'manager@yopmail.com',
+    );
   }
 }

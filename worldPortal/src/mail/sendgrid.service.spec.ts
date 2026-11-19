@@ -31,6 +31,19 @@ describe('SendGrid OTP delivery', () => {
     expect(mailMock.send).not.toHaveBeenCalled();
   });
 
+  it('reports a logged-only team invite as not delivered', async () => {
+    const service = new SendGridService(new ConfigService());
+    await expect(
+      service.sendTeamInviteEmail({
+        to: 'staff@example.com',
+        recipientName: 'Bisi Ade',
+        role: 'STAFF',
+        inviterEmail: 'manager@example.com',
+      }),
+    ).resolves.toBe(false);
+    expect(mailMock.send).not.toHaveBeenCalled();
+  });
+
   it('submits the code to SendGrid and reports provider acceptance', async () => {
     const service = new SendGridService(
       new ConfigService({ SENDGRID_API_KEY: 'test-key' }),

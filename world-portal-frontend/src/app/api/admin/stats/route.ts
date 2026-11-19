@@ -5,7 +5,6 @@ import { requireSession } from "@/server/auth";
 import {
   type BackendPassportApplication,
   type BackendVisaApplication,
-  toAmount,
   visaCategoryValues,
   visaStatusValues,
 } from "@/server/data/backend-types";
@@ -14,6 +13,11 @@ import {
   toPassportApplication,
   toVisaApplication,
 } from "@/server/data/mappers";
+import {
+  collectedByCurrency,
+  outstandingByCurrency as outstandingByCurrencyOf,
+  type RawTransaction,
+} from "@/server/data/money";
 import { backendErrorResponse } from "@/server/http";
 import type { DashboardStats } from "@/types";
 
@@ -26,48 +30,22 @@ export async function GET() {
   if (response) return response;
 
   try {
+    // No per-call fallbacks: one failed collection used to render as a
+    // dashboard of zeros. A failure now surfaces as the page's error state.
     const [visaRecords, passportRecords, rawTx] = await Promise.all([
-      backend<BackendVisaApplication[]>("/visa-documentation", {
-        token: session.token,
-      }).catch(() => []),
+      backend<BackendVisaApplication[]>("/visa-documentation", { token: session.token }),
       backend<BackendPassportApplication[]>("/passport-application", {
         token: session.token,
-      }).catch(() => []),
-      backend<any[]>("/payments/transactions", {
-        token: session.token,
-      }).catch(() => []),
+      }),
+      backend<RawTransaction[]>("/payments/transactions", { token: session.token }),
     ]);
 
-    const visas = (visaRecords || []).map(toVisaApplication);
-    const passports = (passportRecords || []).map(toPassportApplication);
+    const visas = visaRecords.map(toVisaApplication);
+    const passports = passportRecords.map(toPassportApplication);
     const allApps = [...visas, ...passports];
 
-    const revenueByCurrency: Record<string, number> = {};
-    const outstandingByCurrency: Record<string, number> = {};
-
-    (rawTx || []).forEach((t) => {
-      const cur = t.currency || t.visaDocumentation?.currency || t.passportApplication?.currency || "NGN";
-      const amt = toAmount(t.amount);
-      if (t.status === "CONFIRMED") {
-        revenueByCurrency[cur] = (revenueByCurrency[cur] || 0) + amt;
-      }
-    });
-
-    allApps.forEach((app) => {
-      const cur = app.currency || "NGN";
-      if (app.balanceDue > 0) {
-        outstandingByCurrency[cur] = (outstandingByCurrency[cur] || 0) + app.balanceDue;
-      }
-    });
-
-    if (Object.keys(revenueByCurrency).length === 0) {
-      allApps.forEach((app) => {
-        const cur = app.currency || "NGN";
-        if (app.amountPaid > 0) {
-          revenueByCurrency[cur] = (revenueByCurrency[cur] || 0) + app.amountPaid;
-        }
-      });
-    }
+    const revenueByCurrency = collectedByCurrency(rawTx, allApps);
+    const outstandingByCurrency = outstandingByCurrencyOf(allApps);
 
     const primaryCurrency = allApps.find((app) => app.currency)?.currency || "NGN";
     const totalCollected = Object.values(revenueByCurrency).reduce((sum, amt) => sum + amt, 0);

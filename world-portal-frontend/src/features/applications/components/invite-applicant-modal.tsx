@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
+
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Calendar, Mail, Send } from "lucide-react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
@@ -22,9 +28,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/toaster";
-import { useInviteApplicant } from "../api/use-invite-applicant";
+import { appointmentInvite as copy } from "@/content/admin";
+import { useInviteApplicant } from "@/features/applications/api/use-invite-applicant";
 import { useInvitePassportApplicant } from "@/features/passports/api/use-invite-passport";
+import { type InviteApplicantInput, inviteApplicantSchema } from "@/validations/admin";
 
 type Props = {
   id: string;
@@ -34,17 +41,48 @@ type Props = {
   type?: "visa" | "passport";
 };
 
-const PURPOSE_OPTIONS = [
-  "Biometric Data Capture",
-  "Document Verification",
-  "Visa Interview",
-  "Passport Submission / Pick-up",
-  "Medical & Security Screening",
-  "Custom Purpose",
-];
+const OTHER = "__other";
 
-const DEFAULT_LOCATION = "Embassy Headquarters, Room 302";
+/** Half-hour slots across the working day, in the form the email prints. */
+const TIME_SLOTS = Array.from({ length: 18 }, (_, i) => {
+  const minutes = 8 * 60 + i * 30;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${suffix}`;
+});
 
+/** `YYYY-MM-DD` for a local date, `days` from today. */
+function localDay(days = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function blankInvite(): InviteApplicantInput {
+  return {
+    purpose: copy.purposes[0],
+    date: localDay(3),
+    time: "10:00 AM",
+    location: copy.defaultVenue,
+    note: "",
+  };
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  return message ? (
+    <p id={id} className="text-[11.5px] text-destructive-text">
+      {message}
+    </p>
+  ) : null;
+}
+
+/**
+ * Invites the applicant in person. Offered once a file is under review —
+ * before that there is nothing to see them about.
+ */
 export function InviteApplicantModal({
   id,
   applicantName,
@@ -53,240 +91,221 @@ export function InviteApplicantModal({
   type = "visa",
 }: Props) {
   const [open, setOpen] = React.useState(false);
-  const [selectedPurposeOption, setSelectedPurposeOption] = React.useState(
-    PURPOSE_OPTIONS[0],
-  );
-  const [customPurpose, setCustomPurpose] = React.useState("");
-  const [date, setDate] = React.useState("");
-  const [time, setTime] = React.useState("10:00 AM");
-  const [location, setLocation] = React.useState(DEFAULT_LOCATION);
-  const [note, setNote] = React.useState("");
-  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+  const visaInvite = useInviteApplicant(id);
+  const passportInvite = useInvitePassportApplicant(id);
+  const invite = type === "passport" ? passportInvite : visaInvite;
 
-  const visaInviteMutation = useInviteApplicant(id);
-  const passportInviteMutation = useInvitePassportApplicant(id);
-  const inviteMutation = type === "passport" ? passportInviteMutation : visaInviteMutation;
+  const form = useForm<InviteApplicantInput>({
+    resolver: zodResolver(inviteApplicantSchema),
+    defaultValues: blankInvite(),
+  });
+  const { errors } = form.formState;
+  // Which list entry is picked; "something else" opens a free-text purpose.
+  const [purposeChoice, setPurposeChoice] = React.useState<string>(copy.purposes[0]);
 
-  // Default date to 3 business days from today
-  React.useEffect(() => {
-    if (open && !date) {
-      const nextDate = new Date();
-      nextDate.setDate(nextDate.getDate() + 3);
-      setDate(nextDate.toISOString().split("T")[0]);
-    }
-  }, [open, date]);
+  if (status === "SUBMITTED" || status === "EVALUATED") return null;
 
-  // Invitations should ONLY be allowed from UNDER_REVIEW status onwards
-  if (status === "SUBMITTED" || status === "EVALUATED") {
-    return null;
-  }
-
-  const finalPurpose =
-    selectedPurposeOption === "Custom Purpose"
-      ? customPurpose.trim()
-      : selectedPurposeOption;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-
-    if (!finalPurpose) {
-      setErrorMsg("Please specify the invitation purpose.");
-      return;
-    }
-
-    if (!date) {
-      setErrorMsg("Please select an appointment date.");
-      return;
-    }
-
-    if (!time) {
-      setErrorMsg("Please enter an appointment time.");
-      return;
-    }
-
-    if (!location.trim()) {
-      setErrorMsg("Please enter the appointment location / venue.");
-      return;
-    }
-
+  const submit = form.handleSubmit(async (values) => {
     try {
-      await inviteMutation.mutateAsync({
-        purpose: finalPurpose,
-        date,
-        time,
-        location: location.trim(),
-        note: note.trim() || undefined,
+      await invite.mutateAsync({
+        purpose: values.purpose,
+        date: values.date,
+        time: values.time,
+        location: values.location,
+        note: values.note || undefined,
       });
-
-      toast.success("Invitation sent", {
-        description: `An appointment invitation email has been dispatched to ${applicantEmail}.`,
-      });
+      toast.success(copy.done(applicantEmail));
       setOpen(false);
-    } catch (err: any) {
-      setErrorMsg(
-        err?.message || "Failed to send invitation. Please try again.",
-      );
+    } catch {
+      // Shown in the dialog so nothing typed is lost.
     }
-  };
+  });
 
   return (
     <Card
       variant="solid"
       radius="lg"
       padding="none"
-      className="p-6 border-blue-500/30 bg-blue-500/5"
+      className="border-info/30 bg-info-wash p-6"
     >
-      <div className="flex items-center gap-2.5 text-blue-600 dark:text-blue-400">
-        <Calendar className="size-5 shrink-0" />
-        <CardTitle className="text-base font-semibold">
-          Applicant Appointment Invitation
-        </CardTitle>
+      <div className="flex items-center gap-2.5 text-info-text">
+        <Calendar className="size-5 shrink-0" aria-hidden />
+        <CardTitle className="text-base font-semibold">{copy.title}</CardTitle>
       </div>
       <CardDescription className="mt-1 text-[12.5px] text-muted-foreground">
-        Invite <strong>{applicantName}</strong> for biometrics capture, interview,
-        or document verification.
+        {copy.body(applicantName)}
       </CardDescription>
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-blue-500/20 pt-4">
-        <span className="text-xs text-muted-foreground">
-          Dispatches email notification with venue & time details.
-        </span>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-info/20 pt-4">
+        <span className="text-xs text-muted-foreground">{copy.hint}</span>
 
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+          open={open}
+          onOpenChange={(next) => {
+            setOpen(next);
+            if (next) {
+              form.reset(blankInvite());
+              setPurposeChoice(copy.purposes[0]);
+              invite.reset();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button
               size="sm"
               variant="primary"
-              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium shrink-0"
+              className="shrink-0 gap-1.5 font-medium"
             >
               <Mail className="size-4" />
-              Invite Applicant
+              {copy.trigger}
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-w-md p-6 backdrop-blur-2xl">
+          <DialogContent className="max-w-md p-6">
             <DialogHeader className="border-b border-border/60 pb-4">
-              <DialogTitle className="text-base font-semibold flex items-center gap-2">
-                <Calendar className="size-4 text-blue-600" />
-                Invite Applicant for Appointment
+              <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+                <Calendar className="size-4 text-info-text" aria-hidden />
+                {copy.dialogTitle}
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Send an official invitation email to <strong>{applicantEmail}</strong>.
+              <DialogDescription className="mt-0.5 text-xs">
+                {copy.dialogBody(applicantEmail)}
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-              {errorMsg && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                  {errorMsg}
-                </div>
-              )}
+            <form
+              onSubmit={(e) => void submit(e)}
+              className="mt-4 space-y-4"
+              noValidate
+            >
+              {invite.isError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {invite.error instanceof Error ? invite.error.message : copy.failed}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
 
-              {/* Purpose */}
               <div className="space-y-1.5">
-                <Label htmlFor="purpose-select">Purpose *</Label>
+                <Label htmlFor="invite-purpose">{copy.purpose}</Label>
                 <Select
-                  value={selectedPurposeOption}
-                  onValueChange={setSelectedPurposeOption}
+                  value={purposeChoice}
+                  onValueChange={(value) => {
+                    setPurposeChoice(value);
+                    form.setValue("purpose", value === OTHER ? "" : value);
+                  }}
                 >
-                  <SelectTrigger id="purpose-select">
-                    <SelectValue placeholder="Select purpose" />
+                  <SelectTrigger id="invite-purpose" className="w-full">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PURPOSE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
+                    {copy.purposes.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
                       </SelectItem>
                     ))}
+                    <SelectItem value={OTHER}>{copy.otherPurpose}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedPurposeOption === "Custom Purpose" && (
+              {purposeChoice === OTHER ? (
                 <div className="space-y-1.5">
-                  <Label htmlFor="custom-purpose">Custom Purpose *</Label>
+                  <Label htmlFor="invite-custom">{copy.customPurpose}</Label>
                   <Input
-                    id="custom-purpose"
-                    placeholder="e.g. Biometrics Data Capture"
-                    value={customPurpose}
-                    onChange={(e) => setCustomPurpose(e.target.value)}
-                    required
+                    id="invite-custom"
+                    placeholder={copy.customPurposePlaceholder}
+                    aria-invalid={Boolean(errors.purpose)}
+                    aria-describedby="invite-custom-error"
+                    {...form.register("purpose")}
+                  />
+                  <FieldError
+                    id="invite-custom-error"
+                    message={errors.purpose?.message}
                   />
                 </div>
-              )}
+              ) : null}
 
-              {/* Date & Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="date">Appointment Date *</Label>
+                  <Label htmlFor="invite-date">{copy.date}</Label>
                   <Input
-                    id="date"
+                    id="invite-date"
                     type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    required
+                    min={localDay(0)}
+                    aria-invalid={Boolean(errors.date)}
+                    aria-describedby="invite-date-error"
+                    {...form.register("date")}
                   />
+                  <FieldError id="invite-date-error" message={errors.date?.message} />
                 </div>
-
                 <div className="space-y-1.5">
-                  <Label htmlFor="time">Time *</Label>
-                  <Input
-                    id="time"
-                    type="text"
-                    placeholder="e.g. 10:30 AM"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    required
+                  <Label htmlFor="invite-time">{copy.time}</Label>
+                  <Controller
+                    control={form.control}
+                    name="time"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger id="invite-time" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIME_SLOTS.map((slot) => (
+                            <SelectItem key={slot} value={slot}>
+                              {slot}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   />
                 </div>
               </div>
 
-              {/* Location */}
               <div className="space-y-1.5">
-                <Label htmlFor="location">Location / Venue *</Label>
+                <Label htmlFor="invite-venue">{copy.venue}</Label>
                 <Input
-                  id="location"
-                  placeholder="e.g. Embassy Headquarters, Room 302"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  required
+                  id="invite-venue"
+                  aria-invalid={Boolean(errors.location)}
+                  aria-describedby="invite-venue-error"
+                  {...form.register("location")}
+                />
+                <FieldError
+                  id="invite-venue-error"
+                  message={errors.location?.message}
                 />
               </div>
 
-              {/* Optional Note */}
               <div className="space-y-1.5">
-                <Label htmlFor="note">Optional Instructions / Notes</Label>
+                <Label htmlFor="invite-note">{copy.note}</Label>
                 <Textarea
-                  id="note"
-                  placeholder="e.g. Please bring original passport, physical passport photos, and bank reference."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
+                  id="invite-note"
                   rows={3}
-                  className="text-xs"
+                  placeholder={copy.notePlaceholder}
+                  aria-invalid={Boolean(errors.note)}
+                  aria-describedby="invite-note-error"
+                  {...form.register("note")}
                 />
+                <FieldError id="invite-note-error" message={errors.note?.message} />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-border/60">
+              <div className="flex justify-end gap-3 border-t border-border/60 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setOpen(false)}
-                  disabled={inviteMutation.isPending}
+                  disabled={invite.isPending}
                 >
-                  Cancel
+                  {copy.cancel}
                 </Button>
                 <Button
                   type="submit"
                   variant="primary"
                   size="sm"
-                  isLoading={inviteMutation.isPending}
-                  loadingText="Sending..."
-                  className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+                  isLoading={invite.isPending}
+                  leftIcon={<Send className="size-3.5" />}
                 >
-                  <Send className="size-3.5" />
-                  Send Invitation
+                  {copy.submit}
                 </Button>
               </div>
             </form>

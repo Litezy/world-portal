@@ -12,6 +12,9 @@ export function ThemeProvider({
       defaultTheme="system"
       enableSystem={true}
       disableTransitionOnChange
+      // Our own key: localhost:3000 is shared with other local projects, and a
+      // generic `theme` one of them wrote used to flip this app's mode.
+      storageKey="e-embassy-theme"
       {...props}
     >
       {children}

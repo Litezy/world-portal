@@ -15,12 +15,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /** Blue water glass — the headline action. Text is hardcoded white
-         * rather than text-primary-foreground: the gradient background is
-         * the same brand blue in both themes, so the text shouldn't flip to
-         * dark navy in dark mode along with the *other* primary-foreground
-         * consumers, which do sit on the lightened dark-mode primary. */
-        primary: "glass-primary glass-3d text-white",
+        /** Blue water glass — the headline action. Its text is its own token,
+         * not text-primary-foreground: the gradient is the same fill in both
+         * themes, so the text shouldn't flip with the lightened dark-mode
+         * primary. White on the blue; ink on the admin's WorldStreet gold. */
+        primary: "glass-primary glass-3d text-primary-button-foreground",
         /** Near-black extruded pill, as used for "Explore All Locations". */
         ink: "glass-ink glass-3d text-white",
         /** Clear water glass over photography. */
@@ -34,6 +33,9 @@ const buttonVariants = cva(
           "border border-border bg-transparent transition-colors hover:bg-secondary",
         ghost: "transition-colors hover:bg-secondary",
         link: "text-foreground underline decoration-current underline-offset-4",
+        /** The one action in a confirmation that can't be taken back. */
+        destructive:
+          "bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90",
       },
       size: {
         sm: "h-9 rounded-full px-4 text-[13px]",

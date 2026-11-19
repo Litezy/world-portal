@@ -16,6 +16,7 @@ describe('PaymentController', () => {
     getPaymentConfig: jest.fn(),
     updatePaymentConfig: jest.fn(),
     findAllTransactions: jest.fn(),
+    findAllRefunds: jest.fn(),
   };
 
   const mockPrismaService = {};
@@ -78,6 +79,25 @@ describe('PaymentController', () => {
         dto,
       );
       expect(result.status).toBe('CONFIRMED');
+    });
+  });
+
+  // ADR 0016
+  describe('findAllRefunds', () => {
+    it('delegates the paged refunds query to PaymentService', async () => {
+      const page = {
+        data: [],
+        meta: { total: 0, page: 1, limit: 20, pages: 1 },
+      };
+      mockPaymentService.findAllRefunds.mockResolvedValue(page);
+
+      await expect(
+        controller.findAllRefunds({ search: 'RFD', page: 1 }),
+      ).resolves.toEqual(page);
+      expect(mockPaymentService.findAllRefunds).toHaveBeenCalledWith({
+        search: 'RFD',
+        page: 1,
+      });
     });
   });
 });

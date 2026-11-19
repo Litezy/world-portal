@@ -1,48 +1,63 @@
 "use client";
 
 import * as React from "react";
-import { Building2, CheckCircle2, CreditCard, Trash2, Pencil, ToggleLeft, ToggleRight, AlertCircle } from "lucide-react";
+
+import { Building2, CreditCard, Pencil, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { ConfirmDialog, TableError } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SkeletonList } from "@/components/ui/skeleton";
+import { bankAccounts as copy } from "@/content/admin";
+import { toastWithUndo } from "@/lib/toast";
+import { cn } from "@/lib/utils";
+
 import {
+  type BankAccount,
   useBankAccounts,
   useDeleteBankAccount,
   useUpdateBankAccount,
-  type BankAccount,
 } from "../api/bank-accounts";
+
 import { AddBankAccountModal } from "./add-bank-account-modal";
 
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : copy.genericError;
+
 export function BankAccountsSettings() {
-  const { data: accounts, isPending, isError, error } = useBankAccounts();
+  const { data: accounts, isPending, isError, error, refetch, isRefetching } = useBankAccounts();
   const deleteMutation = useDeleteBankAccount();
   const updateMutation = useUpdateBankAccount();
 
-  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [toDelete, setToDelete] = React.useState<BankAccount | null>(null);
 
+  const setActive = (account: BankAccount, isActive: boolean) =>
+    updateMutation.mutateAsync({ id: account.id, payload: { isActive } });
+
+  // Reversible, so no confirmation — just an Undo for a slip of the finger.
   const handleToggleActive = async (account: BankAccount) => {
+    const next = !account.isActive;
     try {
-      await updateMutation.mutateAsync({
-        id: account.id,
-        payload: { isActive: !account.isActive },
+      await setActive(account, next);
+      toastWithUndo(copy.toggled(account.bankName, next), () => {
+        setActive(account, !next).catch((err) => toast.error(errorMessage(err)));
       });
     } catch (err) {
-      console.error("Failed to toggle bank account status:", err);
+      toast.error(errorMessage(err));
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this bank account? Applicants will no longer see this account for payments.")) {
-      return;
-    }
-    setDeletingId(id);
+  // Not reversible: confirmed first, with the consequence spelled out.
+  const handleDelete = async () => {
+    if (!toDelete) return;
     try {
-      await deleteMutation.mutateAsync(id);
+      await deleteMutation.mutateAsync(toDelete.id);
+      toast.success(copy.deleted(toDelete.bankName));
+      setToDelete(null);
     } catch (err) {
-      console.error("Failed to delete bank account:", err);
-    } finally {
-      setDeletingId(null);
+      toast.error(errorMessage(err));
     }
   };
 
@@ -50,10 +65,12 @@ export function BankAccountsSettings() {
 
   if (isError) {
     return (
-      <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive flex items-center gap-2">
-        <AlertCircle className="size-4 shrink-0" />
-        {error instanceof Error ? error.message : "Failed to load bank accounts."}
-      </div>
+      <TableError
+        title={copy.loadFailed}
+        error={error}
+        onRetry={() => void refetch()}
+        isRetrying={isRefetching}
+      />
     );
   }
 
@@ -77,7 +94,7 @@ export function BankAccountsSettings() {
           <div>
             <p className="text-sm font-semibold text-foreground">No Bank Accounts Configured</p>
             <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-              Add your organization's bank accounts so applicants receive official transfer details when their cost evaluation is complete.
+              Add your organization&apos;s bank accounts so applicants receive official transfer details when their cost evaluation is complete.
             </p>
           </div>
           <AddBankAccountModal />
@@ -90,11 +107,12 @@ export function BankAccountsSettings() {
               variant="solid"
               radius="lg"
               padding="none"
-              className={`p-5 flex flex-col justify-between transition-all border ${
+              className={cn(
+                "flex flex-col justify-between border p-5 transition-all",
                 account.isActive
                   ? "border-primary/40 bg-card shadow-sm"
-                  : "border-border/60 bg-muted/10 opacity-75"
-              }`}
+                  : "border-border/60 bg-muted/10 opacity-75",
+              )}
             >
               <div>
                 {/* Header Badge & Bank Name */}
@@ -147,8 +165,7 @@ export function BankAccountsSettings() {
 
                   {account.instructions && (
                     <div className="mt-2 rounded-lg bg-muted/30 p-2.5 text-[11.5px] text-muted-foreground italic border border-border/40">
-                      "{account.instructions}"
-                    </div>
+                      &ldquo;{account.instructions}&rdquo;                    </div>
                   )}
                 </div>
               </div>
@@ -164,7 +181,7 @@ export function BankAccountsSettings() {
                 >
                   {account.isActive ? (
                     <>
-                      <ToggleRight className="size-4 text-emerald-500" />
+                      <ToggleRight className="size-4 text-success-text" />
                       Deactivate
                     </>
                   ) : (
@@ -192,8 +209,7 @@ export function BankAccountsSettings() {
                     size="sm"
                     variant="ghost"
                     className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => handleDelete(account.id)}
-                    isLoading={deletingId === account.id}
+                    onClick={() => setToDelete(account)}
                   >
                     <Trash2 className="size-3.5" />
                     Delete
@@ -204,6 +220,16 @@ export function BankAccountsSettings() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(open) => (!open ? setToDelete(null) : undefined)}
+        title={copy.deleteTitle(toDelete?.bankName ?? "")}
+        description={copy.deleteBody}
+        confirmLabel={copy.deleteConfirm}
+        onConfirm={() => void handleDelete()}
+        isPending={deleteMutation.isPending}
+      />
     </div>
   );
 }

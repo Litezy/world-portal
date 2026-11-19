@@ -18,12 +18,21 @@ const LOGO = { width: 1772, height: 406 } as const;
  * The mark is deliberately static. It sits in the fixed header on every page,
  * so anything that moves here moves in the corner of the eye for the whole
  * session — the swoosh already reads as motion standing still.
+ *
+ * `gold` is the admin's WorldStreet palette: the same files with only the
+ * swoosh moved to WorldStreet gold (wordmark and tagline untouched).
  */
+const SRC = {
+  blue: { light: "/images/logo-light.png", dark: "/images/logo.png" },
+  gold: { light: "/images/logo-gold-light.png", dark: "/images/logo-gold.png" },
+} as const;
+
 export function Logo({
   className,
   markClassName,
   href = "/",
   tone = "light",
+  gold = false,
   priority = false,
 }: {
   /** Applied to the outer link — layout/visibility only (e.g. "lg:hidden"). */
@@ -35,6 +44,8 @@ export function Logo({
   href?: string;
   /** "light" = for dark backgrounds (white type). */
   tone?: "light" | "dark";
+  /** The gold swoosh, for the admin's WorldStreet palette. */
+  gold?: boolean;
   priority?: boolean;
 }) {
   return (
@@ -48,7 +59,7 @@ export function Logo({
     >
       <span className={cn("block h-8 sm:h-9", markClassName)}>
         <Image
-          src={tone === "light" ? "/images/logo-light.png" : "/images/logo.png"}
+          src={SRC[gold ? "gold" : "blue"][tone]}
           alt=""
           width={LOGO.width}
           height={LOGO.height}

@@ -4,6 +4,7 @@ import type {
   BackendVisaApplication,
 } from "@/server/data/backend-types";
 import { toAmount } from "@/server/data/backend-types";
+import { customerKey } from "@/server/data/customer-key";
 import type {
   ApplicationEvent,
   Customer,
@@ -51,13 +52,22 @@ function extractVisaDocuments(record: BackendVisaApplication) {
     docs.push({ label: "Passport Data Page", url: record.passportDataPageUrl });
   }
   if (record.passportPhotoWhiteBgUrl) {
-    docs.push({ label: "Passport Photograph (White Bg)", url: record.passportPhotoWhiteBgUrl });
+    docs.push({
+      label: "Passport Photograph (White Bg)",
+      url: record.passportPhotoWhiteBgUrl,
+    });
   }
   if (record.proofOfFunds6MonthsUrl) {
-    docs.push({ label: "Proof of Funds (6 Months Statement)", url: record.proofOfFunds6MonthsUrl });
+    docs.push({
+      label: "Proof of Funds (6 Months Statement)",
+      url: record.proofOfFunds6MonthsUrl,
+    });
   }
   if (record.businessRegistrationCertUrl) {
-    docs.push({ label: "Business Registration Certificate (CAC)", url: record.businessRegistrationCertUrl });
+    docs.push({
+      label: "Business Registration Certificate (CAC)",
+      url: record.businessRegistrationCertUrl,
+    });
   }
   if (record.taxCertificateUrl) {
     docs.push({ label: "Tax Certificate", url: record.taxCertificateUrl });
@@ -96,6 +106,7 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
       name: fullName(record.firstName, record.lastName),
       email: record.email,
       phone: record.phone,
+      key: customerKey(record.email),
     },
     destination: record.targetCountry,
     category: record.visaCategory,
@@ -111,8 +122,14 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
     purpose: record.purposeOfVisit,
     nationality: record.nationality,
     passportNumber: record.passportNumber,
+    passportExpiryDate: record.passportExpiryDate || null,
+    dateOfBirth: record.dateOfBirth || null,
+    gender: record.gender || null,
+    residenceAddress: record.residenceAddress || null,
     verificationNotes: record.verificationNotes,
     rejectionReason: record.rejectionReason,
+    evaluatedBy: record.evaluatedBy,
+    evaluatedAt: record.evaluatedAt,
     reviewedBy: record.reviewedBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -121,25 +138,30 @@ export function toVisaApplication(record: BackendVisaApplication): VisaApplicati
   };
 }
 
-
-function extractPassportDocuments(record: BackendPassportApplication): SubmittedDocument[] {
+function extractPassportDocuments(
+  record: BackendPassportApplication,
+): SubmittedDocument[] {
   const docs: SubmittedDocument[] = [];
   if (record.passportPhotoUrl) {
-    docs.push({ label: "Passport Photograph (White BG)", url: record.passportPhotoUrl });
+    docs.push({
+      label: "Passport Photograph (White BG)",
+      url: record.passportPhotoUrl,
+    });
   }
   if (record.ninDocumentUrl) {
     docs.push({ label: "NIN Slip / Document", url: record.ninDocumentUrl });
   }
   if (record.birthCertificateUrl) {
-    docs.push({ label: "Birth Certificate / Age Declaration", url: record.birthCertificateUrl });
+    docs.push({
+      label: "Birth Certificate / Age Declaration",
+      url: record.birthCertificateUrl,
+    });
   }
   return docs;
 }
 
 function passportTimeline(record: BackendPassportApplication): ApplicationEvent[] {
-  const events: ApplicationEvent[] = [
-    { status: "SUBMITTED", at: record.createdAt },
-  ];
+  const events: ApplicationEvent[] = [{ status: "SUBMITTED", at: record.createdAt }];
   if (record.evaluatedAt) {
     events.push({
       status: "EVALUATED",
@@ -147,7 +169,11 @@ function passportTimeline(record: BackendPassportApplication): ApplicationEvent[
       note: `Processing fee set to ${record.currency || "USD"} ${record.totalAmount}`,
     });
   }
-  if (record.status === "UNDER_REVIEW" || record.status === "APPROVED" || record.status === "REJECTED") {
+  if (
+    record.status === "UNDER_REVIEW" ||
+    record.status === "APPROVED" ||
+    record.status === "REJECTED"
+  ) {
     events.push({
       status: record.status,
       at: record.updatedAt,
@@ -167,6 +193,7 @@ export function toPassportApplication(
       name: fullName(record.firstName, record.surname),
       email: record.email,
       phone: record.contactPhone,
+      key: customerKey(record.email),
     },
     category: record.passportCategory,
     sex: record.sex,
@@ -238,13 +265,17 @@ export function toCustomers(
     phone: string | undefined,
     country: string | undefined,
     at: string,
-    spend: number,
+    paid: number,
+    currency: string,
   ) => {
     const key = email.toLowerCase();
     const existing = byEmail.get(key);
     if (existing) {
       existing.applications += 1;
-      existing.lifetimeValue += spend;
+      if (paid > 0) {
+        existing.paidByCurrency[currency] =
+          (existing.paidByCurrency[currency] ?? 0) + paid;
+      }
       if (at > existing.lastActiveAt) existing.lastActiveAt = at;
       if (at < existing.createdAt) existing.createdAt = at;
       existing.phone ??= phone;
@@ -252,14 +283,14 @@ export function toCustomers(
       return;
     }
     byEmail.set(key, {
-      id: key,
+      // Opaque: this id goes into `/admin/customers/[key]`, and an email must not.
+      id: customerKey(email),
       name,
       email,
       phone,
       country: country ?? "",
       applications: 1,
-      lifetimeValue: spend,
-      currency: "USD",
+      paidByCurrency: paid > 0 ? { [currency]: paid } : {},
       createdAt: at,
       lastActiveAt: at,
     });
@@ -273,6 +304,7 @@ export function toCustomers(
       visa.nationality,
       visa.createdAt,
       visa.amountPaid,
+      visa.currency || "NGN",
     );
   }
   for (const passport of passports) {
@@ -282,7 +314,8 @@ export function toCustomers(
       passport.applicant.phone,
       passport.stateOfOrigin,
       passport.createdAt,
-      0,
+      passport.amountPaid,
+      passport.currency || "NGN",
     );
   }
 

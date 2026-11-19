@@ -1,5 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { applicationKeys } from "@/features/applications/api/use-applications";
+import { dashboardKeys } from "@/features/dashboard/api/use-dashboard";
+import { financeKeys } from "@/features/finance/api/use-finance";
+import { passportKeys } from "@/features/passports/api/use-passports";
 import { internalApi } from "@/lib/api-client";
 import type { ApiResponse } from "@/types";
 
@@ -10,7 +14,10 @@ export type ConfirmBankPaymentPayload = {
   notes?: string;
 };
 
-export function useConfirmBankPayment(applicationId: string, type: "visa" | "passport" = "visa") {
+export function useConfirmBankPayment(
+  applicationId: string,
+  type: "visa" | "passport" = "visa",
+) {
   const queryClient = useQueryClient();
 
   const endpoint =
@@ -20,23 +27,16 @@ export function useConfirmBankPayment(applicationId: string, type: "visa" | "pas
 
   return useMutation({
     mutationFn: (payload: ConfirmBankPaymentPayload) =>
-      internalApi.post<ApiResponse<any>>(endpoint, payload),
+      internalApi.post<ApiResponse<unknown>>(endpoint, payload),
     onSuccess: () => {
-      if (type === "passport") {
-        queryClient.invalidateQueries({
-          queryKey: ["admin", "passport", applicationId],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["admin", "passports"],
-        });
-      } else {
-        queryClient.invalidateQueries({
-          queryKey: ["admin", "application", applicationId],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ["admin", "applications"],
-        });
-      }
+      // The keys come from each feature's own factory: hand-typed keys here used
+      // to miss the detail query, leaving the file showing the old balance.
+      const keys = type === "passport" ? passportKeys : applicationKeys;
+      void queryClient.invalidateQueries({ queryKey: keys.detail(applicationId) });
+      void queryClient.invalidateQueries({ queryKey: keys.all });
+      // A payment moves the collected and outstanding totals too.
+      void queryClient.invalidateQueries({ queryKey: dashboardKeys.overview });
+      void queryClient.invalidateQueries({ queryKey: financeKeys.all });
     },
   });
 }

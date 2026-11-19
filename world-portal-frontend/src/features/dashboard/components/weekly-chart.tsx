@@ -1,12 +1,54 @@
 "use client";
 
 import * as React from "react";
+
 import { motion } from "motion/react";
 
-import { cn, formatCurrency } from "@/lib/utils";
+import { chartCopy as copy } from "@/content/admin";
+import { ChartTable } from "@/features/dashboard/components/chart-table";
+import { cn } from "@/lib/utils";
 
 export type WeeklyPoint = { label: string; visas: number; passports: number };
 
+const WIDTH = 600;
+const HEIGHT = 240;
+const PAD_X = 30;
+const PAD_Y = 24;
+
+const VISA = "var(--chart-visa)";
+const PASSPORT = "var(--chart-passport)";
+
+type Point = { x: number; y: number };
+
+function coordsFor(
+  data: WeeklyPoint[],
+  key: "visas" | "passports",
+  max: number,
+): Point[] {
+  const step = (WIDTH - PAD_X * 2) / Math.max(1, data.length - 1);
+  return data.map((d, i) => ({
+    x: PAD_X + i * step,
+    y: HEIGHT - PAD_Y - (d[key] / max) * (HEIGHT - PAD_Y * 2),
+  }));
+}
+
+/** Smooth Bézier through the points (unchanged from the original chart). */
+function pathFor(coords: Point[]) {
+  if (coords.length === 0) return "";
+  let path = `M ${coords[0].x} ${coords[0].y}`;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const cpX = (coords[i].x + coords[i + 1].x) / 2;
+    path += ` C ${cpX} ${coords[i].y}, ${cpX} ${coords[i + 1].y}, ${coords[i + 1].x} ${coords[i + 1].y}`;
+  }
+  return path;
+}
+
+/**
+ * Visas and passports per day for the last week. Same look as before; now
+ * every value is printed under its day (the readout no longer needs a
+ * hover), days are keyboard-focusable, an empty week says so, and the
+ * numbers are also available as a table.
+ */
 export function WeeklyChart({
   data,
   className,
@@ -14,141 +56,118 @@ export function WeeklyChart({
   data: WeeklyPoint[];
   className?: string;
 }) {
-  const [activePointIndex, setActivePointIndex] = React.useState<number | null>(null);
+  const [active, setActive] = React.useState<number | null>(null);
 
-  const maxVal = Math.max(1, ...data.flatMap((d) => [d.visas, d.passports]));
-  const width = 600;
-  const height = 240;
-  const paddingX = 30;
-  const paddingY = 24;
-
-
-  const pointsCount = data.length;
-  const stepX = (width - paddingX * 2) / Math.max(1, pointsCount - 1);
-
-  // Generate smooth SVG Bézier path string for series
-  const generatePath = (key: "visas" | "passports") => {
-    if (pointsCount === 0) return "";
-    const coords = data.map((d, i) => {
-      const x = paddingX + i * stepX;
-      const y = height - paddingY - (d[key] / maxVal) * (height - paddingY * 2);
-      return { x, y };
-    });
-
-    if (coords.length === 1) return `M ${coords[0]!.x} ${coords[0]!.y}`;
-
-    let path = `M ${coords[0]!.x} ${coords[0]!.y}`;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const curr = coords[i]!;
-      const next = coords[i + 1]!;
-      const cpX = (curr.x + next.x) / 2;
-      path += ` C ${cpX} ${curr.y}, ${cpX} ${next.y}, ${next.x} ${next.y}`;
-    }
-    return { path, coords };
-  };
-
-  const visaData = generatePath("visas");
-  const passportData = generatePath("passports");
-
-  const visaAreaPath = typeof visaData !== "string" && visaData.coords ? 
-    `${visaData.path} L ${visaData.coords[visaData.coords.length - 1]!.x} ${height - paddingY} L ${visaData.coords[0]!.x} ${height - paddingY} Z` : "";
-
-  const activePoint = activePointIndex !== null ? data[activePointIndex] : null;
+  const max = Math.max(1, ...data.flatMap((d) => [d.visas, d.passports]));
+  const visa = coordsFor(data, "visas", max);
+  const passport = coordsFor(data, "passports", max);
+  const visaPath = pathFor(visa);
+  const passportPath = pathFor(passport);
+  const visaArea =
+    visa.length > 1
+      ? `${visaPath} L ${visa[visa.length - 1].x} ${HEIGHT - PAD_Y} L ${visa[0].x} ${HEIGHT - PAD_Y} Z`
+      : "";
+  const step = (WIDTH - PAD_X * 2) / Math.max(1, data.length - 1);
+  const isEmpty = data.every((d) => d.visas === 0 && d.passports === 0);
+  const activePoint = active !== null ? data[active] : null;
 
   return (
     <div className={cn("relative flex flex-col gap-4", className)}>
-      {/* Legend & Tooltip Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-brand-600 shadow-sm" />
-            <span className="font-medium text-foreground">Visas</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-cyan-400 shadow-sm" />
-            <span className="font-medium text-foreground">Passports</span>
-          </div>
+          <span className="flex items-center gap-2">
+            <span
+              className="size-2.5 rounded-full shadow-sm"
+              style={{ background: VISA }}
+            />
+            <span className="font-medium text-foreground">{copy.visas}</span>
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              className="size-2.5 rounded-full shadow-sm"
+              style={{ background: PASSPORT }}
+            />
+            <span className="font-medium text-foreground">{copy.passports}</span>
+          </span>
         </div>
 
-        {activePoint && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/60 px-2.5 py-1 text-xs"
-          >
-            <span className="font-semibold text-foreground">{activePoint.label}:</span>
-            <span className="text-brand-600 font-semibold">{activePoint.visas} Visas</span>
-            <span className="text-cyan-600 font-semibold">{activePoint.passports} Passports</span>
-          </motion.div>
-        )}
+        {/* Live readout for the hovered or focused day. */}
+        <p aria-live="polite" className="min-h-6 text-xs">
+          {activePoint ? (
+            <span className="inline-flex items-center gap-3 rounded-lg border border-border/60 bg-muted/60 px-2.5 py-1">
+              <span className="font-semibold text-foreground">
+                {activePoint.label}:
+              </span>
+              <span className="font-semibold text-foreground">
+                {activePoint.visas} {copy.visas}
+              </span>
+              <span className="font-semibold text-foreground">
+                {activePoint.passports} {copy.passports}
+              </span>
+            </span>
+          ) : null}
+        </p>
       </div>
 
-      {/* SVG Interactive Chart */}
       <div className="relative w-full overflow-hidden rounded-xl border border-border/40 bg-muted/20 p-2">
+        {isEmpty ? (
+          <p className="grid h-[180px] place-items-center text-[13px] text-muted-foreground">
+            {copy.weeklyEmpty}
+          </p>
+        ) : (
+          <svg
+            viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+            className="w-full overflow-visible"
+            role="img"
+            aria-label={copy.weeklyCaption}
+          >
+            <defs>
+              <linearGradient id="visaGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" style={{ stopColor: VISA, stopOpacity: 0.35 }} />
+                <stop offset="100%" style={{ stopColor: VISA, stopOpacity: 0 }} />
+              </linearGradient>
+            </defs>
 
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="w-full overflow-visible"
-        >
-          <defs>
-            <linearGradient id="visaGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0050C0" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#0050C0" stopOpacity="0.0" />
-            </linearGradient>
-            <linearGradient id="passportGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#00B8F8" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#00B8F8" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+            {[0, 0.5, 1].map((ratio) => {
+              const y = HEIGHT - PAD_Y - ratio * (HEIGHT - PAD_Y * 2);
+              return (
+                <line
+                  key={ratio}
+                  x1={PAD_X}
+                  y1={y}
+                  x2={WIDTH - PAD_X}
+                  y2={y}
+                  stroke="currentColor"
+                  strokeDasharray="4 4"
+                  className="text-border/60"
+                />
+              );
+            })}
 
-          {/* Grid lines */}
-          {[0, 0.5, 1].map((ratio, i) => {
-            const y = height - paddingY - ratio * (height - paddingY * 2);
-            return (
-              <line
-                key={i}
-                x1={paddingX}
-                y1={y}
-                x2={width - paddingX}
-                y2={y}
-                stroke="currentColor"
-                strokeDasharray="4 4"
-                className="text-border/60"
+            {visaArea ? (
+              <motion.path
+                d={visaArea}
+                fill="url(#visaGradient)"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1 }}
               />
-            );
-          })}
+            ) : null}
 
-          {/* Visa Area Fill */}
-          {visaAreaPath && (
             <motion.path
-              d={visaAreaPath}
-              fill="url(#visaGradient)"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1 }}
-            />
-          )}
-
-          {/* Visa Curve Line */}
-          {typeof visaData !== "string" && (
-            <motion.path
-              d={visaData.path}
+              d={visaPath}
               fill="none"
-              stroke="#0050C0"
+              style={{ stroke: VISA }}
               strokeWidth="3"
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
             />
-          )}
-
-          {/* Passport Curve Line */}
-          {typeof passportData !== "string" && (
             <motion.path
-              d={passportData.path}
+              d={passportPath}
               fill="none"
-              stroke="#00B8F8"
+              style={{ stroke: PASSPORT }}
               strokeWidth="2.5"
               strokeDasharray="6 3"
               strokeLinecap="round"
@@ -156,75 +175,104 @@ export function WeeklyChart({
               animate={{ pathLength: 1 }}
               transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
             />
-          )}
 
-          {/* Interactive Hover Indicators */}
-          {data.map((d, i) => {
-            const x = paddingX + i * stepX;
-            const isHovered = activePointIndex === i;
-
-            return (
-              <g key={d.label} className="cursor-pointer">
-                {/* Transparent hover column catch area */}
-                <rect
-                  x={x - stepX / 2}
-                  y={0}
-                  width={stepX}
-                  height={height}
-                  fill="transparent"
-                  onMouseEnter={() => setActivePointIndex(i)}
-                  onMouseLeave={() => setActivePointIndex(null)}
-                />
-
-                {/* Vertical hover guide line */}
-                {isHovered && (
-                  <line
-                    x1={x}
-                    y1={paddingY}
-                    x2={x}
-                    y2={height - paddingY}
-                    stroke="#0050C0"
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
-                    className="opacity-70"
+            {data.map((d, i) => {
+              const x = visa[i].x;
+              const hovered = active === i;
+              return (
+                <g key={d.label}>
+                  <rect
+                    x={x - step / 2}
+                    y={0}
+                    width={step}
+                    height={HEIGHT}
+                    fill="transparent"
+                    onMouseEnter={() => setActive(i)}
+                    onMouseLeave={() => setActive(null)}
                   />
-                )}
-
-                {/* Visa Point Circle */}
-                {typeof visaData !== "string" && visaData.coords[i] && (
+                  {hovered ? (
+                    <line
+                      x1={x}
+                      y1={PAD_Y}
+                      x2={x}
+                      y2={HEIGHT - PAD_Y}
+                      style={{ stroke: VISA }}
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                      className="opacity-70"
+                    />
+                  ) : null}
                   <circle
                     cx={x}
-                    cy={visaData.coords[i]!.y}
-                    r={isHovered ? 6 : 4}
-                    fill="#0050C0"
-                    stroke="#ffffff"
+                    cy={visa[i].y}
+                    r={hovered ? 6 : 4}
+                    style={{ fill: VISA }}
+                    className="stroke-background transition-all duration-200"
                     strokeWidth="2"
-                    className="transition-all duration-200"
                   />
-                )}
-              </g>
-            );
-          })}
-        </svg>
+                  {/* Passports get markers too, so both series read at a glance. */}
+                  <circle
+                    cx={x}
+                    cy={passport[i].y}
+                    r={hovered ? 5 : 3}
+                    style={{ fill: PASSPORT }}
+                    className="stroke-background transition-all duration-200"
+                    strokeWidth="2"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        )}
       </div>
 
-      {/* X-Axis Labels */}
-      <div className="flex justify-between px-4 text-[11.5px] font-medium text-muted-foreground">
+      {/* Days with both values always visible — no value hides behind a hover. */}
+      <div
+        className="grid text-center"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`,
+        }}
+      >
         {data.map((point, i) => (
           <button
             key={point.label}
             type="button"
-            onMouseEnter={() => setActivePointIndex(i)}
-            onMouseLeave={() => setActivePointIndex(null)}
+            onMouseEnter={() => setActive(i)}
+            onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive(null)}
             className={cn(
-              "transition-colors hover:text-foreground",
-              activePointIndex === i && "font-semibold text-primary",
+              "flex flex-col items-center gap-0.5 rounded-md py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground",
+              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              active === i && "text-foreground",
             )}
           >
-            {point.label}
+            <span className={cn(active === i && "font-semibold text-primary")}>
+              {point.label}
+            </span>
+            <span className="flex items-center gap-1 text-[10.5px] tabular-nums">
+              <span
+                className="size-1.5 rounded-full"
+                style={{ background: VISA }}
+                aria-hidden
+              />
+              {point.visas}
+              <span
+                className="ml-1 size-1.5 rounded-full"
+                style={{ background: PASSPORT }}
+                aria-hidden
+              />
+              {point.passports}
+            </span>
           </button>
         ))}
       </div>
+
+      <ChartTable
+        caption={copy.weeklyCaption}
+        columns={[copy.day, copy.visas, copy.passports]}
+        rows={data.map((d) => [d.label, d.visas, d.passports])}
+      />
     </div>
   );
 }

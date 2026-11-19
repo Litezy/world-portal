@@ -5,7 +5,10 @@ import { serverEnv } from "@/config/env";
 import { backend, BackendError } from "@/server/api/backend";
 import { SESSION_COOKIE, verifySessionToken } from "@/server/auth/session";
 import type { BackendProfile } from "@/server/data/backend-types";
-import type { AdminUser } from "@/types";
+import type { AdminRole, AdminUser } from "@/types";
+
+/** Console roles that work the desk. Partners are external and never see it. */
+export const DESK_ROLES = ["MANAGER", "STAFF"] as const satisfies readonly AdminRole[];
 
 export async function getSession() {
   const store = await cookies();
@@ -23,6 +26,27 @@ export async function requireSession() {
     session: null,
     response: NextResponse.json({ message: "Sign in to continue" }, { status: 401 }),
   };
+}
+
+/**
+ * Route-handler guard for routes the service itself leaves unguarded (agency
+ * and professional management). 401 without a session, 403 when the role is
+ * not one of `roles` — the console must not be the only thing standing
+ * between a partner account and another business's verification status.
+ */
+export async function requireRole(roles: readonly AdminRole[]) {
+  const result = await requireSession();
+  if (result.response) return result;
+  if (!roles.includes(result.session.role)) {
+    return {
+      session: null,
+      response: NextResponse.json(
+        { message: "Your role can't open this. Ask a manager for access." },
+        { status: 403 },
+      ),
+    };
+  }
+  return result;
 }
 
 export function profileToAdminUser(profile: BackendProfile): AdminUser {

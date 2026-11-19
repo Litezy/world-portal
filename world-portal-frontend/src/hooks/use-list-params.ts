@@ -14,11 +14,16 @@ export function useListParams(defaults: Pick<ListParams, "perPage"> = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const dir = searchParams.get("dir");
   const params: ListParams = {
     q: searchParams.get("q") ?? undefined,
     status: searchParams.get("status") ?? undefined,
     page: Number(searchParams.get("page") ?? 1),
     perPage: defaults.perPage ?? 10,
+    sort: searchParams.get("sort") ?? undefined,
+    dir: dir === "asc" || dir === "desc" ? dir : undefined,
+    from: searchParams.get("from") ?? undefined,
+    to: searchParams.get("to") ?? undefined,
   };
 
   const set = React.useCallback(

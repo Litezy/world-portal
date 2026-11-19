@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/admin";
+import { RoleGate } from "@/components/admin/role-gate";
 import { finance as copy } from "@/content/admin";
 import { FinanceView } from "@/features/finance/components/finance-view";
 import { buildMetadata } from "@/lib/seo";
@@ -19,7 +20,9 @@ export default async function FinancePage() {
         accent={copy.headingAccent}
         body={copy.body}
       />
-      <FinanceView />
+      <RoleGate href="/admin/finance">
+        <FinanceView role={session.role} />
+      </RoleGate>
     </div>
   );
 }

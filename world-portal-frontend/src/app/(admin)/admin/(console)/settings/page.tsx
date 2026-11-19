@@ -2,7 +2,13 @@ import { redirect } from "next/navigation";
 
 import { DetailItem, DetailList, PageHeader, UserAvatar } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { roleLabels, settings } from "@/content/admin";
 import { BankAccountsSettings } from "@/features/settings/components/bank-accounts-settings";
@@ -29,7 +35,7 @@ export default async function SettingsPage() {
       />
 
       <Tabs defaultValue="team" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-xl">
+        <TabsList className="grid w-full max-w-xl grid-cols-4">
           <TabsTrigger value="team">Team & Access</TabsTrigger>
           <TabsTrigger value="bank-accounts">Bank Accounts</TabsTrigger>
           <TabsTrigger value="profile">Profile & Security</TabsTrigger>
@@ -44,13 +50,17 @@ export default async function SettingsPage() {
                 <div>
                   <CardTitle className="text-base">{settings.team.title}</CardTitle>
                   <CardDescription className="text-[13px]">
-                    Manage admin users, processing staff, and partner access permissions.
+                    Manage admin users, processing staff, and partner access
+                    permissions.
                   </CardDescription>
                 </div>
                 {user.role === "MANAGER" && <InviteMemberModal />}
               </CardHeader>
               <CardContent className="p-6 pt-0">
-                <TeamList />
+                <TeamList
+                  currentUserEmail={user.email}
+                  canManage={user.role === "MANAGER"}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -74,8 +84,12 @@ export default async function SettingsPage() {
                 <div className="mt-6 flex items-center gap-4">
                   <UserAvatar user={user} size="lg" className="ring-border" />
                   <div className="min-w-0">
-                    <p className="truncate text-[15px] font-semibold text-foreground">{user.name}</p>
-                    <p className="truncate text-[13px] text-muted-foreground">{user.email}</p>
+                    <p className="truncate text-[15px] font-semibold text-foreground">
+                      {user.name}
+                    </p>
+                    <p className="truncate text-[13px] text-muted-foreground">
+                      {user.email}
+                    </p>
                   </div>
                 </div>
 
@@ -103,8 +117,10 @@ export default async function SettingsPage() {
 
           {/* Tab 4: Notifications */}
           <TabsContent value="notifications" className="m-0">
-            <Card variant="solid" radius="lg" padding="none" className="p-6 max-w-2xl">
-              <CardTitle className="text-base">{settings.notifications.title}</CardTitle>
+            <Card variant="solid" radius="lg" padding="none" className="max-w-2xl p-6">
+              <CardTitle className="text-base">
+                {settings.notifications.title}
+              </CardTitle>
               <CardDescription className="text-[13px]">
                 {settings.notifications.body}
               </CardDescription>

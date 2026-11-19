@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { z } from "zod";
 
 import { BackendError } from "@/server/api/backend";
@@ -79,22 +80,36 @@ export async function POST(request: Request) {
       },
     );
 
+    // The record exists, so its own id is a truthful reference if the service
+    // ever omits the application number — never a made-up one.
     return NextResponse.json({
-      data: { reference: record.applicationNo || `PASSPORT-${Date.now()}` },
+      data: { reference: record.applicationNo || record.id },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // A definite refusal — no session, a suspended account, a rejected field —
-    // must reach the form. Inventing a reference here would tell the applicant
-    // they had applied when nothing was filed.
+    // must reach the form as it is.
     if (err instanceof BackendError && err.status >= 400 && err.status < 500) {
       return NextResponse.json(
         { message: err.message, errors: err.errors },
         { status: err.status },
       );
     }
-    // If backend isn't reachable or errors out, fallback to local reference generation
-    console.warn("[passport-application] API fallback:", err?.message);
-    const reference = `PASSPORT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    return NextResponse.json({ data: { reference } });
+    // The outcome is unknown: the service may be down, or it may have filed
+    // the application and failed (or timed out) before answering. Never
+    // invent a reference (the console would never see that application),
+    // and never promise "nothing was submitted": a retry after a lost reply
+    // files the same person twice. The service emails a confirmation when
+    // it files one, so that is what to check before trying again.
+    console.warn(
+      "[passport-application] outcome unknown:",
+      err instanceof Error ? err.message : err,
+    );
+    return NextResponse.json(
+      {
+        message:
+          "We couldn't confirm your application went through. Check your email for a confirmation from E-Embassy before you try again, so it isn't filed twice. If nothing arrives within an hour, try again.",
+      },
+      { status: 503 },
+    );
   }
 }

@@ -202,6 +202,13 @@ function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
 
 const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
 
+/**
+ * Outside production, an admin change the service didn't take is made on the
+ * in-memory fixtures instead, so the console still works with no service
+ * running. In production that would report a save that never happened.
+ */
+const LOCAL_FALLBACK = process.env.NODE_ENV !== "production";
+
 function normalizeAgency(raw: any): Agency {
   if (!raw || typeof raw !== "object") return raw;
   const agency = raw.data ?? raw;
@@ -318,8 +325,7 @@ export async function updateAgencyVerification(
       ? "rejected"
       : "submitted";
 
-  const agency = agencyRecord(agencyId) ?? db.agencies[0];
-  if (agency) {
+  const applyLocally = (agency: Agency) => {
     agency.verification = verificationStatus;
     agency.listingStatus = listingStatus;
     if (verificationStatus === "verified" && agency.documents) {
@@ -329,24 +335,42 @@ export async function updateAgencyVerification(
         }
       });
     }
-  }
+  };
 
+  // The service is the record. The in-memory copy used to change first and
+  // be returned whenever the service failed, so the console said
+  // "Verification updated" during an outage although nothing was saved.
+  let res: Response | null = null;
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/verify`, {
+    res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/verify`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ verification }),
       cache: "no-store",
     });
-    if (res.ok) {
-      const json = await res.json();
-      return normalizeAgency(json);
-    }
-  } catch {
-    // Fallback to local store
+  } catch (error) {
+    if (!LOCAL_FALLBACK) throw error;
   }
 
-  return agency ? clone(agency) : null;
+  // Never fall back to another agency: verifying an unknown id used to flip the
+  // first agency in the store instead.
+  const local = agencyRecord(agencyId);
+
+  if (res?.ok) {
+    const saved = normalizeAgency(await res.json());
+    if (local) applyLocally(local);
+    return saved;
+  }
+  if (!LOCAL_FALLBACK) {
+    if (res?.status === 404) return null;
+    throw new Error(`Agency verification was not saved (HTTP ${res?.status})`);
+  }
+
+  // Local development: the fixtures stand in for an agency service that
+  // isn't running, or for an agency only they know about.
+  if (!local) return null;
+  applyLocally(local);
+  return clone(local);
 }
 
 export async function updateAgencyDocumentStatus(

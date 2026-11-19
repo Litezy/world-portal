@@ -29,6 +29,8 @@ All major technical decisions, architectural patterns, data model definitions, a
 - **0013 Admin Catalog Oversight for Agencies & Professional Services**: [Technical ADR](./0013-admin-catalog-oversight.md) | [ADR for Dummies](./0013-admin-catalog-oversight.dummies.md)
 - **0014 WorldStreet Applicant Authentication**: [Technical ADR](./0014-worldstreet-applicant-authentication.md) | [ADR for Dummies](./0014-worldstreet-applicant-authentication.dummies.md)
 - **0015 Vivid Voice Assistant**: [Technical ADR](./0015-vivid-voice-assistant.md) | [ADR for Dummies](./0015-vivid-voice-assistant.dummies.md)
+- **0016 Admin Finance & Team Actions — Backend Fixes**: [Technical ADR](./0016-admin-finance-and-team-actions.md) | [ADR for Dummies](./0016-admin-finance-and-team-actions.dummies.md)
+- **0017 Admin Case Workflow — Audit Log, Assignment, Document Review & Server Rules**: [Technical ADR](./0017-admin-case-workflow.md) | [ADR for Dummies](./0017-admin-case-workflow.dummies.md)
 
 
 

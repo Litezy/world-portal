@@ -20,6 +20,7 @@ import { ConfirmBankTransferDto } from './dto/confirm-bank-transfer.dto';
 import { InitiateRefundDto } from './dto/initiate-refund.dto';
 import { UpdatePaymentConfigDto } from './dto/update-payment-config.dto';
 import { QueryPaymentTransactionDto } from './dto/query-payment-transaction.dto';
+import { QueryRefundDto } from './dto/query-refund.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -90,7 +91,8 @@ export class PaymentController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Bank transfer payment confirmed and visa application moved to UNDER_REVIEW',
+    description:
+      'Bank transfer payment confirmed and visa application moved to UNDER_REVIEW',
   })
   confirmBankTransfer(
     @Body() dto: ConfirmBankTransferDto,
@@ -163,5 +165,22 @@ export class PaymentController {
   })
   findAllTransactions(@Query() query: QueryPaymentTransactionDto) {
     return this.paymentService.findAllTransactions(query);
+  }
+
+  @Get('refunds')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiOperation({
+    summary: 'List processed refunds, newest first (Manager / Staff)',
+    description:
+      'Paged. Each refund carries its original transaction reference, application number and currency (ADR 0016).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '{ data, meta: { total, page, limit, pages } }',
+  })
+  findAllRefunds(@Query() query: QueryRefundDto) {
+    return this.paymentService.findAllRefunds(query);
   }
 }

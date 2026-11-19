@@ -87,6 +87,19 @@
   --info: var(--cyan-500);
   --info-foreground: #04263a;
 
+  /* Status on tinted surfaces — badges, notices, KPI icon tiles. The fills
+   * above are too light to read as text on white (warning is ~1.6:1), so each
+   * status has a `-text` shade that clears 4.5:1 on --card and on its own
+   * `-wash` in both themes (src/app/__tests__/contrast.test.ts). */
+  --success-text: #11673a;
+  --warning-text: #7a5000;
+  --destructive-text: #b3121a;
+  --info-text: #085f84;
+  --success-wash: color-mix(in oklab, var(--success) 14%, transparent);
+  --warning-wash: color-mix(in oklab, var(--warning) 14%, transparent);
+  --destructive-wash: color-mix(in oklab, var(--destructive) 14%, transparent);
+  --info-wash: color-mix(in oklab, var(--info) 14%, transparent);
+
   --border: var(--ink-200);
   --input: var(--ink-200);
   --ring: var(--brand-600);
@@ -96,12 +109,50 @@
   --field: var(--ink-50);
   --field-focus: #ffffff;
 
+  /* The filled primary button (.glass-primary): its fill and the text on it.
+   * White on the blue; WorldStreet gold carries ink instead. */
+  --primary-button: var(--brand-600);
+  --primary-button-foreground: #ffffff;
+
+  /* The admin sidebar sits a step apart from the page. */
+  --sidebar: var(--ink-50);
+
+  /* The colour menu's swatches: each palette's own colours, never re-pointed. */
+  --swatch-embassy: linear-gradient(135deg, #0050c0, #00b8f8);
+  --swatch-worldstreet: linear-gradient(135deg, #facc15, #eab308 55%, #1c1917 55%);
+
   /* Chart series. Validated for CVD separation and lightness on both surfaces;
    * slot 1 is the brand ramp. Assign in order, never cycle. */
   --chart-1: var(--brand-600);
   --chart-2: #2a78d6;
   --chart-3: #e87ba4;
   --chart-grid: var(--ink-200);
+
+  /* The console dashboard's own palette — the colours its charts already
+   * used, moved here unchanged so no component carries a hex value. Every
+   * chart value also has a visible number, so colour is never the only cue. */
+  --chart-visa: var(--brand-600);
+  --chart-passport: var(--cyan-500);
+  --chart-cat-tourist: var(--brand-600);
+  --chart-cat-tourist-to: var(--cyan-500);
+  --chart-cat-business: var(--cyan-500);
+  --chart-cat-business-to: #60a5fa;
+  --chart-cat-student: #8b5cf6;
+  --chart-cat-student-to: #818cf8;
+  --chart-cat-work: #10b981;
+  --chart-cat-work-to: #2dd4bf;
+  --chart-cat-transit: #f59e0b;
+  --chart-cat-transit-to: #facc15;
+  --chart-stage-submitted: #2563eb;
+  --chart-stage-submitted-to: var(--cyan-500);
+  --chart-stage-evaluated: #f59e0b;
+  --chart-stage-evaluated-to: #facc15;
+  --chart-stage-under-review: #9333ea;
+  --chart-stage-under-review-to: #6366f1;
+  --chart-stage-approved: #10b981;
+  --chart-stage-approved-to: #2dd4bf;
+  --chart-stage-rejected: #e11d48;
+  --chart-stage-rejected-to: #ec4899;
 
   /* Glass system — tuned once, consumed by every glass surface */
   --glass-blur: 32px;
@@ -143,6 +194,12 @@
   --accent: var(--cyan-400);
   --accent-foreground: #04263a;
 
+  /* Lifted for the dark surfaces; the washes reuse the fills above. */
+  --success-text: #63d69a;
+  --warning-text: #fcd062;
+  --destructive-text: #ff8a8f;
+  --info-text: #6fd8ff;
+
   --border: rgb(255 255 255 / 12%);
   --input: rgb(255 255 255 / 16%);
   --ring: var(--primary);
@@ -158,6 +215,140 @@
   --chart-2: #3987e5;
   --chart-3: #d55181;
   --chart-grid: rgb(255 255 255 / 12%);
+
+  --sidebar: #08090b;
+}
+
+/* ---------------------------------------------------------------------------
+ * WorldStreet gold — the admin's second colour choice (AppearanceMenu).
+ *
+ * E-Embassy is a WorldStreet service, and this is WorldStreet's own system
+ * (worldstreet/design-system, brands/worldstreet.css): a stone base, gold for
+ * "do this" with ink text on it (white on gold fails contrast), and
+ * E-Embassy's periwinkle (lib/hues "embassy") as the quiet companion colour.
+ *
+ * Only the admin ever sets `data-palette` on <html> (AdminPalette), so the
+ * public site never changes. It re-points the ramps the semantic tokens are
+ * built from, plus the few semantic tokens that need a different shade, so
+ * every component follows without being touched. Light and dark are both
+ * covered; src/app/__tests__/contrast.test.ts measures them like the others.
+ * ------------------------------------------------------------------------- */
+html[data-palette="worldstreet"] {
+  /* Gold ramp, anchored at 600 like the blue one: #EAB308 is WorldStreet gold. */
+  --brand-50: #fefce8;
+  --brand-100: #fef9c3;
+  --brand-200: #fef08a;
+  --brand-300: #fde047;
+  --brand-400: #facc15;
+  --brand-500: #f2bd0d;
+  --brand-600: #eab308;
+  --brand-700: #ca8a04;
+  --brand-800: #a16207;
+  --brand-900: #854d0e;
+  --brand-950: #422006;
+
+  /* The companion: E-Embassy's passport blue, softened to periwinkle. */
+  --cyan-300: #c6cdfa;
+  --cyan-400: #a3aef0;
+  --cyan-500: #8a96e6;
+  --cyan-600: #5f6bc4;
+  --cyan-700: #3c4aa0;
+
+  /* Stone neutrals. */
+  --ink-950: #0c0a09;
+  --ink-900: #1c1917;
+  --ink-800: #292524;
+  --ink-700: #44403c;
+  --ink-500: #78716c;
+  --ink-400: #a8a29e;
+  --ink-200: #e7e5e4;
+  --ink-100: #f5f5f4;
+  --ink-50: #fafaf9;
+
+  --background: #fafaf9;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+
+  /* Gold as text on paper needs its deep shade (#EAB308 on white is ~1.9:1). */
+  --primary: #a16207;
+  --primary-foreground: #ffffff;
+  --primary-hover: #854d0e;
+  --primary-active: #713f12;
+  --primary-subtle: #fef6d8;
+  --primary-button: var(--brand-600);
+  --primary-button-foreground: #1c1917;
+  --accent-foreground: #1c1917;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
+  --info: var(--cyan-400);
+  --info-foreground: #1c1917;
+  --success-text: #047857;
+  --warning-text: #92400e;
+  --destructive-text: #b91c1c;
+  --info-text: #3c4aa0;
+
+  --ring: #a16207;
+
+  --glass-tint: 255 255 255;
+  --glass-shadow: 28 25 23;
+
+  --sidebar: #f5f5f4;
+
+  --ws-sheen: rgb(254 243 199 / 0.9);
+  --ws-press: rgb(120 70 0 / 0.35);
+  --ws-glow: rgb(234 179 8 / 0.45);
+}
+
+html.dark[data-palette="worldstreet"] {
+  --ink-950: #0c0a09;
+  --ink-900: #fafaf9;
+  --ink-800: #e7e5e4;
+  --ink-700: #d6d3d1;
+  --ink-500: #a8a29e;
+  --ink-400: #78716c;
+  --ink-200: rgb(255 255 255 / 14%);
+  --ink-100: #292524;
+  --ink-50: #1c1917;
+
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --card: #1c1917;
+  --card-foreground: #fafaf9;
+  --popover: #1c1917;
+  --popover-foreground: #fafaf9;
+
+  --primary: #eab308;
+  --primary-foreground: #1c1917;
+  --primary-hover: #facc15;
+  --primary-active: #ca8a04;
+  --primary-subtle: #2a2410;
+  --secondary: #292524;
+  --secondary-foreground: #fafaf9;
+  --muted: #292524;
+  --muted-foreground: #a8a29e;
+  --accent: var(--cyan-400);
+
+  --success-text: #34d399;
+  --warning-text: #fbbf24;
+  --destructive-text: #f87171;
+  --info-text: #c6cdfa;
+
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #eab308;
+
+  --field: #292524;
+  --field-focus: #1c1917;
+
+  --glass-tint: 28 25 23;
+  --glass-shadow: 0 0 0;
+
+  --sidebar: #0c0a09;
 }
 
 @theme inline {
@@ -186,11 +377,22 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-destructive-text: var(--destructive-text);
+  --color-info-text: var(--info-text);
+  --color-success-wash: var(--success-wash);
+  --color-warning-wash: var(--warning-wash);
+  --color-destructive-wash: var(--destructive-wash);
+  --color-info-wash: var(--info-wash);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-field: var(--field);
   --color-field-focus: var(--field-focus);
+  --color-primary-button: var(--primary-button);
+  --color-primary-button-foreground: var(--primary-button-foreground);
+  --color-sidebar: var(--sidebar);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -399,7 +601,7 @@
     background: linear-gradient(
       180deg,
       var(--brand-400) 0%,
-      var(--brand-600) 52%,
+      var(--primary-button) 52%,
       var(--brand-700) 100%
     );
     border: 1px solid rgb(255 255 255 / 0.28);
@@ -411,6 +613,17 @@
       0 1px 1px 0 rgb(7 31 69 / 0.22),
       0 8px 18px -6px rgb(0 80 193 / 0.5),
       0 20px 42px -22px rgb(7 31 69 / 0.55);
+  }
+
+  /* On WorldStreet gold: a warm catch-light and glow in place of the cyan and
+   * navy, so the button reads as gold glass rather than blue glass recoloured. */
+  html[data-palette="worldstreet"] .glass-primary {
+    border-color: rgb(255 255 255 / 0.35);
+    box-shadow:
+      inset 0 1px 0 0 var(--ws-sheen),
+      inset 0 -2px 5px 0 var(--ws-press),
+      0 1px 1px 0 rgb(28 25 23 / 0.2),
+      0 8px 18px -6px var(--ws-glow);
   }
 
   /* Ink glass — the secondary/solid action from the design's black pills. */

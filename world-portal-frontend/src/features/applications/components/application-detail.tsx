@@ -2,45 +2,54 @@
 
 import Link from "next/link";
 
-import { ArrowLeft, ExternalLink, FileText, Mail } from "lucide-react";
-
+import { ArrowLeft, FileText, Mail } from "lucide-react";
 
 import {
   DetailItem,
   DetailList,
+  DetailLoadError,
   PaymentStatusBadge,
   VisaStatusBadge,
 } from "@/components/admin";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { applications as copy, visaCategoryLabels } from "@/content/admin";
 import { useApplication } from "@/features/applications/api/use-application";
-import { AdvanceApplicationForm } from "@/features/applications/components/advance-application-form";
 import { ApplicationTimeline } from "@/features/applications/components/application-timeline";
 import { ConfirmBankPaymentModal } from "@/features/applications/components/confirm-bank-payment-modal";
 import { DocumentViewerModal } from "@/features/applications/components/document-viewer-modal";
 import { EvaluateCostForm } from "@/features/applications/components/evaluate-cost-form";
 import { InviteApplicantModal } from "@/features/applications/components/invite-applicant-modal";
+import { ReadOnlyCaseNote } from "@/features/applications/components/read-only-case-note";
+import { StatusActions } from "@/features/applications/components/status-actions";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
+/**
+ * Most embassies want six months of validity beyond the stay. Flag a passport
+ * that runs out before then so it is caught at review, not at the border.
+ */
+function passportExpiresSoon(expiry: string, returnDate: string) {
+  const expires = Date.parse(expiry);
+  const back = Date.parse(returnDate);
+  if (Number.isNaN(expires) || Number.isNaN(back)) return false;
+  const sixMonths = 182 * 86_400_000;
+  return expires < back + sixMonths;
+}
 
-import { formatCurrency, formatDate } from "@/lib/utils";
-
-export function ApplicationDetail({ id }: { id: string }) {
-  const { data: application, isPending, isError, error } = useApplication(id);
+/** `canAct`: the signed-in role may work the desk (MANAGER or STAFF). */
+export function ApplicationDetail({ id, canAct }: { id: string; canAct: boolean }) {
+  const { data: application, isPending, isError, error, refetch } = useApplication(id);
 
   if (isError) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Could not load this application</AlertTitle>
-        <AlertDescription className="flex flex-col items-start gap-3">
-          {error instanceof Error ? error.message : "It may have been removed."}
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/applications">Back to applications</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <DetailLoadError
+        error={error}
+        onRetry={() => void refetch()}
+        backHref="/admin/applications"
+        backLabel="Back to applications"
+        noun="application"
+      />
     );
   }
 
@@ -67,8 +76,17 @@ export function ApplicationDetail({ id }: { id: string }) {
               <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
                 {copy.detail.eyebrow} · {application.reference}
               </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-ink-900">
-                {application.applicant.name}
+              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-foreground">
+                {application.applicant.key ? (
+                  <Link
+                    href={`/admin/customers/${application.applicant.key}`}
+                    className="hover:underline"
+                  >
+                    {application.applicant.name}
+                  </Link>
+                ) : (
+                  application.applicant.name
+                )}
               </h1>
               <p className="mt-1 text-[13px] text-muted-foreground">
                 {application.destination} · {visaCategoryLabels[application.category]}
@@ -90,13 +108,55 @@ export function ApplicationDetail({ id }: { id: string }) {
                 {application.applicant.email}
               </a>
             </DetailItem>
+            <DetailItem label={copy.detail.phone}>
+              {application.applicant.phone ? (
+                <a
+                  href={`tel:${application.applicant.phone}`}
+                  className="hover:underline"
+                >
+                  {application.applicant.phone}
+                </a>
+              ) : (
+                copy.detail.notGiven
+              )}
+            </DetailItem>
             <DetailItem label={copy.detail.nationality}>
               {application.nationality}
+            </DetailItem>
+            <DetailItem label={copy.detail.dateOfBirth}>
+              {application.dateOfBirth
+                ? formatDate(application.dateOfBirth)
+                : copy.detail.notGiven}
+            </DetailItem>
+            <DetailItem label={copy.detail.gender}>
+              {application.gender ?? copy.detail.notGiven}
             </DetailItem>
             <DetailItem label={copy.detail.passport}>
               <span className="font-mono text-[12.5px]">
                 {application.passportNumber}
               </span>
+            </DetailItem>
+            <DetailItem label={copy.detail.passportExpiry}>
+              {application.passportExpiryDate ? (
+                <span
+                  className={cn(
+                    passportExpiresSoon(
+                      application.passportExpiryDate,
+                      application.returnDate,
+                    ) && "font-medium text-destructive-text",
+                  )}
+                >
+                  {formatDate(application.passportExpiryDate)}
+                  {passportExpiresSoon(
+                    application.passportExpiryDate,
+                    application.returnDate,
+                  )
+                    ? ` · ${copy.detail.expiresSoon}`
+                    : null}
+                </span>
+              ) : (
+                copy.detail.notGiven
+              )}
             </DetailItem>
             <DetailItem label={copy.detail.travel}>
               {formatDate(application.travelDate, { day: "numeric", month: "short" })}
@@ -117,13 +177,28 @@ export function ApplicationDetail({ id }: { id: string }) {
             </DetailItem>
           </DetailList>
 
-          <div className="mt-8">
+          <DetailList className="mt-8 sm:grid-cols-2">
             <DetailItem label={copy.detail.purpose}>{application.purpose}</DetailItem>
-          </div>
+            <DetailItem label={copy.detail.address}>
+              {application.residenceAddress ?? copy.detail.notGiven}
+            </DetailItem>
+            <DetailItem label={copy.detail.evaluatedBy}>
+              {application.evaluatedBy
+                ? `${application.evaluatedBy}${
+                    application.evaluatedAt
+                      ? ` · ${formatDate(application.evaluatedAt)}`
+                      : ""
+                  }`
+                : copy.detail.notYet}
+            </DetailItem>
+            <DetailItem label={copy.detail.reviewedBy}>
+              {application.reviewedBy ?? copy.detail.notYet}
+            </DetailItem>
+          </DetailList>
 
           {/* Uploaded Documents & Files */}
           <div className="mt-8">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="size-4 text-primary" />
               Uploaded Documents & Files
             </CardTitle>
@@ -138,20 +213,23 @@ export function ApplicationDetail({ id }: { id: string }) {
                     key={`${doc.label}-${idx}`}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3.5 transition-colors hover:border-primary/40"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                         <FileText className="size-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-foreground">{doc.label}</p>
-                        <p className="truncate text-[11px] text-muted-foreground font-mono">Attachment #{idx + 1}</p>
+                        <p className="truncate text-xs font-semibold text-foreground">
+                          {doc.label}
+                        </p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          Attachment #{idx + 1}
+                        </p>
                       </div>
                     </div>
 
                     <DocumentViewerModal label={doc.label} url={doc.url} />
                   </div>
                 ))
-
               ) : (
                 <div className="col-span-2 rounded-xl border border-dashed border-border/70 bg-muted/20 p-4 text-center text-xs text-muted-foreground">
                   No uploaded document files attached to this application.
@@ -169,42 +247,54 @@ export function ApplicationDetail({ id }: { id: string }) {
           </div>
         </Card>
 
-        <div className="flex flex-col gap-4">
-          <Card variant="solid" radius="lg" padding="none" className="p-6">
-            <AdvanceApplicationForm id={id} status={application.status} />
-          </Card>
+        {canAct ? (
+          <div className="flex flex-col gap-4">
+            <Card variant="solid" radius="lg" padding="none" className="p-6">
+              <StatusActions
+                type="visa"
+                id={id}
+                status={application.status}
+                reference={application.reference}
+                applicantName={application.applicant.name}
+              />
+            </Card>
 
-          <Card variant="solid" radius="lg" padding="none" className="gap-4 p-6">
-            <CardTitle className="text-base">{copy.detail.evaluate}</CardTitle>
-            <EvaluateCostForm
+            <Card variant="solid" radius="lg" padding="none" className="gap-4 p-6">
+              <CardTitle className="text-base">{copy.detail.evaluate}</CardTitle>
+              <EvaluateCostForm
+                id={id}
+                totalAmount={application.totalAmount}
+                currency={application.currency}
+                allowInstallment={application.allowInstallment}
+                status={application.status}
+                paymentStatus={application.paymentStatus}
+                applicantName={application.applicant.name}
+              />
+            </Card>
+
+            <ConfirmBankPaymentModal
               id={id}
               totalAmount={application.totalAmount}
+              amountPaid={application.amountPaid}
+              balanceDue={application.balanceDue}
               currency={application.currency}
               allowInstallment={application.allowInstallment}
             />
-          </Card>
 
-          <ConfirmBankPaymentModal
-            id={id}
-            totalAmount={application.totalAmount}
-            amountPaid={application.amountPaid}
-            balanceDue={application.balanceDue}
-            currency={application.currency}
-            allowInstallment={application.allowInstallment}
-          />
-
-          <InviteApplicantModal
-            id={id}
-            applicantName={application.applicant.name}
-            applicantEmail={application.applicant.email}
-            status={application.status}
-          />
-        </div>
+            <InviteApplicantModal
+              id={id}
+              applicantName={application.applicant.name}
+              applicantEmail={application.applicant.email}
+              status={application.status}
+            />
+          </div>
+        ) : (
+          <ReadOnlyCaseNote />
+        )}
       </div>
     </div>
   );
 }
-
 
 function DetailSkeleton() {
   return (

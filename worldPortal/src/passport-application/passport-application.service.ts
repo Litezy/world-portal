@@ -3,12 +3,15 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { serializable } from '../prisma/serializable';
 import { CreatePassportApplicationDto } from './dto/create-passport-application.dto';
 import { UpdatePassportStatusDto } from './dto/update-passport-status.dto';
 import { QueryPassportApplicationDto } from './dto/query-passport-application.dto';
 import {
+  PassportApplication,
   PassportApplicationStatus,
   PassportValidity,
   BookletType,
@@ -297,12 +300,23 @@ export class PassportApplicationService {
     const record = await this.findApplicationById(id);
     const evaluatorName = await this.resolveReviewerDisplayName(evaluatorEmail);
 
+    // Same rule as visas (ADR 0016): priced while no money is held and no
+    // decision has been made, including a review started before pricing or
+    // a payment that was refunded.
     if (
-      record.status !== PassportApplicationStatus.SUBMITTED &&
-      record.status !== PassportApplicationStatus.EVALUATED
+      record.status === PassportApplicationStatus.APPROVED ||
+      record.status === PassportApplicationStatus.REJECTED
     ) {
       throw new BadRequestException(
-        `Cost evaluation can only be updated for applications in SUBMITTED or EVALUATED status. Current status is ${record.status}.`,
+        `Cost evaluation is closed once an application is approved or rejected. Current status is ${record.status}.`,
+      );
+    }
+    if (
+      record.paymentStatus === PaymentStatus.PARTIALLY_PAID ||
+      record.paymentStatus === PaymentStatus.FULLY_PAID
+    ) {
+      throw new ConflictException(
+        'The applicant has already paid against this price. Refund the payment before changing it.',
       );
     }
 
@@ -332,7 +346,11 @@ export class PassportApplicationService {
         balanceDue,
         allowInstallment: dto.allowInstallment ?? false,
         paymentStatus,
-        status: PassportApplicationStatus.EVALUATED,
+        // A review already under way stays under way.
+        status:
+          record.status === PassportApplicationStatus.UNDER_REVIEW
+            ? PassportApplicationStatus.UNDER_REVIEW
+            : PassportApplicationStatus.EVALUATED,
         evaluatedBy: evaluatorName,
         evaluatedAt: new Date(),
       },
@@ -360,13 +378,35 @@ export class PassportApplicationService {
     return updated;
   }
 
+  /** Records a confirmed payment on the file, then emails the applicant. */
   async handlePaymentConfirmed(
     passportId: string,
     amount: Prisma.Decimal,
     paymentOption: PaymentOption,
   ) {
-    const record = await this.findApplicationById(passportId);
+    const { id } = await this.findApplicationById(passportId);
+    const updated = await serializable(this.prisma, async (tx) => {
+      const record = await tx.passportApplication.findUniqueOrThrow({
+        where: { id },
+      });
+      return this.applyPayment(tx, record, amount, paymentOption);
+    });
+    await this.notifyPaymentConfirmed(updated, amount, paymentOption);
+    return updated;
+  }
 
+  /**
+   * Adds `amount` to `record` inside the caller's transaction, and moves a
+   * file waiting for payment into review. `record` must have been read in the
+   * same transaction, so the amount is added to the balance that was checked.
+   * Sends nothing: call `notifyPaymentConfirmed` once the transaction commits.
+   */
+  async applyPayment(
+    tx: Prisma.TransactionClient,
+    record: PassportApplication,
+    amount: Prisma.Decimal,
+    paymentOption: PaymentOption,
+  ) {
     const currentTotal = Number(record.totalAmount || 0);
     const currentPaid = Number(record.amountPaid || 0);
     const addedAmount = Number(amount);
@@ -389,7 +429,7 @@ export class PassportApplicationService {
       newStatus = PassportApplicationStatus.UNDER_REVIEW;
     }
 
-    const updated = await this.prisma.passportApplication.update({
+    return tx.passportApplication.update({
       where: { id: record.id },
       data: {
         amountPaid: new Prisma.Decimal(newAmountPaid),
@@ -399,7 +439,14 @@ export class PassportApplicationService {
         selectedPaymentOption: paymentOption,
       },
     });
+  }
 
+  /** The payment-confirmed email. A mail failure is logged, never thrown. */
+  async notifyPaymentConfirmed(
+    updated: PassportApplication,
+    amount: Prisma.Decimal,
+    paymentOption: PaymentOption,
+  ) {
     try {
       await this.sendGridService.sendPaymentConfirmedEmail({
         to: updated.email,
@@ -415,8 +462,6 @@ export class PassportApplicationService {
         `SendGrid passport payment confirmation email error for applicationNo=${updated.applicationNo}: ${err?.message}`,
       );
     }
-
-    return updated;
   }
 
 

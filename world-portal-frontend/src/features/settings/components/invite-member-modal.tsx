@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { zodResolver } from "@hookform/resolvers/zod";
 import { UserPlus } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -17,141 +19,142 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { internalApi } from "@/lib/api-client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { team } from "@/content/admin";
+import { useInviteMember } from "@/features/admin/api/use-team";
+import { type InviteMemberInput, inviteMemberSchema } from "@/validations/admin";
 
-type InviteFormValues = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: "MANAGER" | "STAFF" | "PARTNER";
-  phone?: string;
-};
+const copy = team.invite;
+const ROLES = ["STAFF", "MANAGER", "PARTNER"] as const;
 
+function FieldError({ id, message }: { id: string; message?: string }) {
+  return message ? (
+    <p id={id} className="text-[11.5px] text-destructive-text">
+      {message}
+    </p>
+  ) : null;
+}
+
+/** One zod schema for this form and `/api/admin/team` (CLAUDE.md: one schema per form). */
 export function InviteMemberModal() {
   const [open, setOpen] = React.useState(false);
-  const queryClient = useQueryClient();
+  const invite = useInviteMember();
 
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<InviteFormValues>({
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      role: "STAFF",
-      phone: "",
-    },
+  const form = useForm<InviteMemberInput>({
+    resolver: zodResolver(inviteMemberSchema),
+    defaultValues: { firstName: "", lastName: "", email: "", role: "STAFF", phone: "" },
   });
+  const { errors } = form.formState;
 
-  const selectedRole = watch("role");
-
-  const inviteMutation = useMutation({
-    mutationFn: (values: InviteFormValues) =>
-      internalApi.post<{ success: boolean; data: any }>("/admin/team", values),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "team"] });
-      reset();
-      setOpen(false);
-    },
+  const onSubmit = form.handleSubmit(async (values) => {
+    await invite.mutateAsync(values);
+    toast.success(copy.sent(values.email));
+    form.reset();
+    setOpen(false);
   });
-
-  const onSubmit = (values: InviteFormValues) => {
-    inviteMutation.mutate(values);
-  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) invite.reset();
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="primary" size="sm" className="gap-2">
           <UserPlus className="size-4" />
-          Invite Team Member
+          {copy.trigger}
         </Button>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="size-5 text-primary" />
-            Invite Admin / Staff Member
-          </DialogTitle>
-          <DialogDescription>
-            Grant system access to processing staff, managers, or external partner agencies.
-          </DialogDescription>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.body}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          {inviteMutation.isError && (
+        <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" noValidate>
+          {invite.isError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                {inviteMutation.error instanceof Error
-                  ? inviteMutation.error.message
-                  : "Failed to send invitation."}
+                {invite.error instanceof Error
+                  ? invite.error.message
+                  : team.genericError}
               </AlertDescription>
             </Alert>
-          )}
+          ) : null}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="invite-first">{copy.firstName}</Label>
               <Input
-                id="firstName"
-                placeholder="Jane"
-                {...register("firstName", { required: "First name is required" })}
+                id="invite-first"
+                aria-invalid={Boolean(errors.firstName)}
+                aria-describedby="invite-first-error"
+                {...form.register("firstName")}
               />
-              {errors.firstName && (
-                <p className="text-[11px] text-destructive">{errors.firstName.message}</p>
-              )}
+              <FieldError id="invite-first-error" message={errors.firstName?.message} />
             </div>
-
             <div className="space-y-1.5">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="invite-last">{copy.lastName}</Label>
               <Input
-                id="lastName"
-                placeholder="Doe"
-                {...register("lastName", { required: "Last name is required" })}
+                id="invite-last"
+                aria-invalid={Boolean(errors.lastName)}
+                aria-describedby="invite-last-error"
+                {...form.register("lastName")}
               />
-              {errors.lastName && (
-                <p className="text-[11px] text-destructive">{errors.lastName.message}</p>
-              )}
+              <FieldError id="invite-last-error" message={errors.lastName?.message} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email">Work Email</Label>
+            <Label htmlFor="invite-email">{copy.email}</Label>
             <Input
-              id="email"
+              id="invite-email"
               type="email"
-              placeholder="jane@worldportal.travel"
-              {...register("email", { required: "Email is required" })}
+              autoComplete="off"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby="invite-email-error"
+              {...form.register("email")}
             />
-            {errors.email && (
-              <p className="text-[11px] text-destructive">{errors.email.message}</p>
-            )}
+            <FieldError id="invite-email-error" message={errors.email?.message} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="role">Role & Access Level</Label>
-            <Select
-              value={selectedRole}
-              onValueChange={(val: "MANAGER" | "STAFF" | "PARTNER") => setValue("role", val)}
-            >
-              <SelectTrigger id="role" className="w-full">
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MANAGER">Manager (Full System & Finance Access)</SelectItem>
-                <SelectItem value="STAFF">Staff (Visa & Passport Verification)</SelectItem>
-                <SelectItem value="PARTNER">Partner (Agency Submission Portal)</SelectItem>
-
-              </SelectContent>
-            </Select>
+            <Label htmlFor="invite-role">{copy.role}</Label>
+            <Controller
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="invite-role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {copy.roles[role]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-border/60">
+          <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {copy.cancel}
             </Button>
-            <Button type="submit" variant="primary" isLoading={inviteMutation.isPending}>
-              Send Invitation
+            <Button type="submit" variant="primary" isLoading={invite.isPending}>
+              {copy.submit}
             </Button>
           </div>
         </form>

@@ -21,7 +21,7 @@ test.describe("admin console", () => {
   test("guards every console route behind sign in", async ({ page }) => {
     await page.goto("/admin/applications");
     await expect(page).toHaveURL(/\/admin\/login\?next=%2Fadmin%2Fapplications/);
-    await expect(page.getByRole("heading", { name: /welcome/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /e-embassy admin/i })).toBeVisible();
   });
 
   test("rejects the wrong password without signing in", async ({ page }) => {
@@ -75,23 +75,19 @@ test.describe("admin console", () => {
     await expect(page.getByRole("link", { name: /ada/i }).first()).toBeVisible();
   });
 
-  test("opens an application and advances its stage", async ({ page }) => {
+  test("opens a submitted application and starts its review", async ({ page }) => {
     await signIn(page);
-    await page.goto("/admin/applications?q=ada");
+    await page.goto("/admin/applications?status=SUBMITTED");
     await page.getByRole("link", { name: /ada/i }).first().click();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    const stage = page.getByLabel("Move to stage");
-    const current = await stage.textContent();
-    const next = current?.includes("Under review") ? "Evaluated" : "Under review";
-    const note = `Stage moved to ${next}.`;
+    // Only the moves the workflow allows are offered — no free stage select.
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Start review" }).click();
+    await page.getByLabel(/note/i).fill("Documents look complete.");
+    await page.getByRole("button", { name: "Start review" }).last().click();
 
-    await stage.click();
-    await page.getByRole("option", { name: next, exact: true }).click();
-    await page.getByLabel("Verification notes").fill(note);
-    await page.getByRole("button", { name: "Update application" }).click();
-
-    await expect(page.getByText("Application updated")).toBeVisible();
+    await expect(page.getByText("Review started")).toBeVisible();
   });
 
   test("shows passport applications on their own screen", async ({ page }) => {
@@ -100,15 +96,18 @@ test.describe("admin console", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/passport/i);
   });
 
-  test("survives a stale dark theme left in localStorage", async ({ page }) => {
+  test("ignores a stale `theme` another local project left in localStorage", async ({
+    page,
+  }) => {
     // localhost:3000 is shared with every other local project, so a `theme`
     // another app wrote used to put the console into a theme it was never
-    // designed against — white-on-white fields and an invisible heading.
+    // designed against. The console keeps its toggle but stores the choice under
+    // its own `e-embassy-theme` key, so a foreign `theme` must change nothing.
     await page.goto("/admin/login");
     await page.evaluate(() => localStorage.setItem("theme", "dark"));
     await page.reload();
 
-    await expect(page.getByRole("heading", { name: /welcome/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /e-embassy admin/i })).toBeVisible();
     await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
 
     const email = page.getByLabel("Email");

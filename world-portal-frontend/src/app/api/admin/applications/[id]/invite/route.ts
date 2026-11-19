@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { backend } from "@/server/api/backend";
-import { requireSession } from "@/server/auth";
+import { DESK_ROLES, requireRole } from "@/server/auth";
 import type { BackendVisaApplication } from "@/server/data/backend-types";
 import { toVisaApplication } from "@/server/data/mappers";
 import { backendErrorResponse, parseBody } from "@/server/http";
@@ -11,7 +11,7 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/admin/applications/[id]/invite">,
 ) {
-  const { session, response } = await requireSession();
+  const { session, response } = await requireRole(DESK_ROLES);
   if (response) return response;
 
   const body = await parseBody(request, inviteApplicantSchema);

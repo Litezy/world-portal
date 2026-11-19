@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/admin";
+import { RoleGate } from "@/components/admin/role-gate";
 import { overview } from "@/content/admin";
 import { DashboardOverview } from "@/features/dashboard/components/dashboard-overview";
 import { buildMetadata } from "@/lib/seo";
@@ -13,7 +14,9 @@ export default async function AdminOverviewPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader lead={overview.headingLead} accent={firstName} body={overview.body} />
-      <DashboardOverview />
+      <RoleGate href="/admin">
+        <DashboardOverview />
+      </RoleGate>
     </div>
   );
 }

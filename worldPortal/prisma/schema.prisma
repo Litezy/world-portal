@@ -301,6 +301,8 @@ model PaymentTransaction {
   paymentOption         PaymentOption
   status                PaymentTransactionStatus @default(INITIATED)
   paymentMethod         String?                  @default("CARD")
+  /// Staff notes captured when a bank transfer is confirmed (ADR 0016).
+  notes                 String?
   initiatedBy           String
   confirmedAt           DateTime?
   refundedAt            DateTime?

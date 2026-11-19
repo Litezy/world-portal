@@ -39,7 +39,25 @@ export function DataTableToolbar({
   children?: React.ReactNode;
 }) {
   const [value, setValue] = React.useState(search ?? "");
-  const commit = useDebouncedCallback(onSearch, 300);
+  // What this box last sent to the URL, and the URL value it last saw. When the
+  // URL changes for any other reason (the topbar search, back/forward), the box
+  // follows it; our own debounced commit coming back must not clobber whatever
+  // has been typed since.
+  const [committed, setCommitted] = React.useState(search ?? "");
+  const [seen, setSeen] = React.useState(search ?? "");
+  const external = search ?? "";
+  if (external !== seen) {
+    setSeen(external);
+    if (external !== committed) {
+      setCommitted(external);
+      setValue(external);
+    }
+  }
+
+  const commit = useDebouncedCallback((q: string) => {
+    setCommitted(q);
+    onSearch(q);
+  }, 300);
 
   return (
     <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -62,6 +80,7 @@ export function DataTableToolbar({
                 className="pointer-events-auto rounded-full p-1 hover:text-foreground"
                 onClick={() => {
                   setValue("");
+                  setCommitted("");
                   onSearch("");
                 }}
               >

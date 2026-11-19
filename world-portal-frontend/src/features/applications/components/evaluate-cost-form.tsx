@@ -1,14 +1,16 @@
 "use client";
 
+import * as React from "react";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
+import { ConfirmDialog } from "@/components/admin";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -23,11 +25,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/toaster";
-import { applications as copy } from "@/content/admin";
+import { applications as copy, caseWorkflow, visaStatusLabels } from "@/content/admin";
 import { useEvaluateApplication } from "@/features/applications/api/use-evaluate-application";
+import { canEvaluate, type CaseStatus } from "@/features/applications/workflow";
 import { useEvaluatePassport } from "@/features/passports/api/use-evaluate-passport";
 import { ApiError } from "@/lib/api-client";
-import { formatWithCommas } from "@/lib/utils";
+import { formatCurrency, formatWithCommas } from "@/lib/utils";
+import type { BackendPaymentStatus } from "@/server/data/backend-types";
 import { evaluateVisaFormSchema, type EvaluateVisaInput } from "@/validations/admin";
 
 const CURRENCIES = [
@@ -46,38 +50,94 @@ export function EvaluateCostForm({
   currency = "USD",
   allowInstallment,
   type = "visa",
+  status,
+  paymentStatus,
+  applicantName,
 }: {
   id: string;
   totalAmount: number;
   currency?: string;
   allowInstallment: boolean;
   type?: "visa" | "passport";
+  status: CaseStatus;
+  paymentStatus: BackendPaymentStatus;
+  applicantName: string;
 }) {
   const evaluateVisa = useEvaluateApplication(id);
   const evaluatePassport = useEvaluatePassport(id);
   const evaluate = type === "passport" ? evaluatePassport : evaluateVisa;
   const form = useForm<EvaluateVisaInput>({
     resolver: zodResolver(evaluateVisaFormSchema),
-    defaultValues: { totalAmount, currency: currency || "USD", allowInstallment },
+    defaultValues: {
+      // A file that was never priced starts empty rather than at 0.
+      totalAmount: totalAmount > 0 ? totalAmount : Number.NaN,
+      currency: currency || "USD",
+      allowInstallment,
+    },
   });
+  // Validated values wait here while the "this emails the applicant" check is open.
+  const [pending, setPending] = React.useState<EvaluateVisaInput | null>(null);
 
-  async function onSubmit(values: EvaluateVisaInput) {
+  if (!canEvaluate(status, paymentStatus)) {
+    const moneyHeld =
+      paymentStatus === "PARTIALLY_PAID" || paymentStatus === "FULLY_PAID";
+    return (
+      <div className="grid gap-2">
+        <p className="text-[13px] font-semibold text-foreground tabular-nums">
+          {totalAmount > 0 ? formatCurrency(totalAmount, currency) : null}
+        </p>
+        <p className="rounded-xl border border-border/70 bg-muted/30 p-3.5 text-[12.5px] text-muted-foreground">
+          {moneyHeld
+            ? caseWorkflow.evaluate.locked
+            : caseWorkflow.evaluate.closed(visaStatusLabels[status])}
+        </p>
+      </div>
+    );
+  }
+
+  async function save(values: EvaluateVisaInput) {
     try {
       await evaluate.mutateAsync(values);
-      toast.success("Cost evaluated", {
-        description: "The applicant has been emailed the amount due.",
-      });
+      toast.success(caseWorkflow.evaluate.done);
+      setPending(null);
     } catch (error) {
-      toast.error("Could not save the evaluation", {
+      setPending(null);
+      toast.error(caseWorkflow.evaluate.failed, {
         description:
           error instanceof ApiError ? error.message : "Please try again shortly.",
       });
     }
   }
 
+  const amountLabel = pending
+    ? formatCurrency(pending.totalAmount, pending.currency)
+    : "";
+  const instalmentLabel = pending?.allowInstallment
+    ? formatCurrency(pending.totalAmount / 2, pending.currency)
+    : null;
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4" noValidate>
+      {pending ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => (!open ? setPending(null) : null)}
+          tone="default"
+          title={caseWorkflow.evaluate.confirmTitle(amountLabel)}
+          description={caseWorkflow.evaluate.confirmBody(
+            applicantName,
+            instalmentLabel,
+          )}
+          confirmLabel={caseWorkflow.evaluate.confirmAction}
+          isPending={evaluate.isPending}
+          onConfirm={() => void save(pending)}
+        />
+      ) : null}
+      <form
+        onSubmit={form.handleSubmit((values) => setPending(values))}
+        className="grid gap-4"
+        noValidate
+      >
         <div className="grid grid-cols-3 gap-3">
           <FormField
             control={form.control}

@@ -7,9 +7,10 @@ import type { PassportEnquiryInput } from "@/validations/passport";
 type Result = { data: { reference: string } };
 
 /**
- * Posts to this app's own route handler, not the World Portal API — there is
- * no passport endpoint upstream yet. Uses `fetch` rather than the shared axios
- * client because that client's baseURL points at the external API.
+ * Posts to this app's own route handler, which files the application with the
+ * World Portal API (`POST /passport-application`) as the signed-in applicant.
+ * Uses `fetch` rather than the shared axios client because that client's
+ * baseURL points at the external API.
  */
 export function useSubmitPassportEnquiry() {
   return useMutation({

@@ -341,11 +341,12 @@ arrive through the store, and that file is deleted rather than edited.
 
 ## Non-negotiables
 
-- **The app is light-only and forces it.** `ThemeProvider` sets
-  `forcedTheme="light"`, because `localhost:3000` is shared with every other
-  local project and a stale `theme` in localStorage otherwise renders screens
-  in a mode none were designed against. Drop it in the same change that mounts
-  a toggle — and check the fields first.
+- **Light and dark are both supported, behind `ThemeToggle`.** `ThemeProvider`
+  stores the choice under its own key, `e-embassy-theme`, never the generic
+  `theme`: `localhost:3000` is shared with every other local project, and a
+  `theme` another app left in localStorage used to put screens into a mode they
+  were never checked against (`e2e/admin.spec.ts` guards this). Any new screen
+  must be checked in both themes — fields first.
 - **A field's fill is `bg-field`, never a fixed light value.** `--field` /
   `--field-focus` move with `--foreground`; `bg-ink-50` plus `text-foreground`
   is how you get near-white text on a near-white input.

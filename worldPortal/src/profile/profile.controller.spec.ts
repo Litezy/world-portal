@@ -27,6 +27,7 @@ describe('ProfileController', () => {
     findProfileByExternalAuthId: jest.fn(),
     updateProfile: jest.fn(),
     deactivateProfile: jest.fn(),
+    resendInvite: jest.fn(),
   };
 
   const mockPrismaService = {};
@@ -81,7 +82,10 @@ describe('ProfileController', () => {
       const user = { email: 'manager@loveworld.com' };
       const result = await controller.createProfile(dto, user);
       expect(result).toEqual(mockProfile);
-      expect(mockProfileService.createProfile).toHaveBeenCalledWith(dto, 'manager@loveworld.com');
+      expect(mockProfileService.createProfile).toHaveBeenCalledWith(
+        dto,
+        'manager@loveworld.com',
+      );
     });
   });
 
@@ -100,6 +104,42 @@ describe('ProfileController', () => {
 
       const result = await controller.findOne('profile-uuid-001');
       expect(result).toEqual(mockProfile);
+    });
+  });
+
+  // ADR 0016 — the acting manager is passed down so the service can refuse
+  // self-demotion and removing the last manager.
+  describe('team changes', () => {
+    it('passes the acting manager to updates', async () => {
+      await controller.update(
+        'p1',
+        { role: UserRole.STAFF },
+        'manager@loveworld.com',
+      );
+      expect(mockProfileService.updateProfile).toHaveBeenCalledWith(
+        'p1',
+        { role: UserRole.STAFF },
+        'manager@loveworld.com',
+      );
+    });
+
+    it('passes the acting manager to deactivation', async () => {
+      await controller.deactivate('p1', 'manager@loveworld.com');
+      expect(mockProfileService.deactivateProfile).toHaveBeenCalledWith(
+        'p1',
+        'manager@loveworld.com',
+      );
+    });
+
+    it('re-sends an invite as the acting manager', async () => {
+      mockProfileService.resendInvite.mockResolvedValue({ sent: true });
+      await expect(
+        controller.resendInvite('p1', 'manager@loveworld.com'),
+      ).resolves.toEqual({ sent: true });
+      expect(mockProfileService.resendInvite).toHaveBeenCalledWith(
+        'p1',
+        'manager@loveworld.com',
+      );
     });
   });
 });

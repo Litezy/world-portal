@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Download, ExternalLink, Eye, FileText, Loader2, ShieldCheck } from "lucide-react";
+import { Download, ExternalLink, Eye, FileText, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { documentViewer } from "@/content/admin";
 
 type Props = {
   label: string;
@@ -54,8 +55,8 @@ export function DocumentViewerModal({ label, url }: Props) {
               {label}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5 text-emerald-500" />
-              Verified applicant document attachment
+              <FileText className="size-3.5" />
+              {documentViewer.description}
             </DialogDescription>
           </div>
 
@@ -91,7 +92,7 @@ export function DocumentViewerModal({ label, url }: Props) {
                   initial={{ top: "0%" }}
                   animate={{ top: ["0%", "100%", "0%"] }}
                   transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#38bdf8]"
+                  className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_var(--cyan-400)]"
                 />
 
                 {/* Animated Spinner & Glass Badge */}

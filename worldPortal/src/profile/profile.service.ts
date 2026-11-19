@@ -5,11 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { serializable } from '../prisma/serializable';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryProfileDto } from './dto/query-profile.dto';
 import { SendGridService } from '../mail/sendgrid.service';
-import { Profile, Prisma } from '@prisma/client';
+import { Profile, Prisma, UserRole } from '@prisma/client';
 
 @Injectable()
 export class ProfileService {
@@ -20,7 +21,9 @@ export class ProfileService {
     private readonly sendGridService: SendGridService,
   ) {}
 
-  private async resolveReviewerDisplayName(emailOrName: string): Promise<string> {
+  private async resolveReviewerDisplayName(
+    emailOrName: string,
+  ): Promise<string> {
     if (!emailOrName) return 'Admin Consultant';
     if (!emailOrName.includes('@')) return emailOrName;
 
@@ -100,14 +103,15 @@ export class ProfileService {
           inviterName,
         })
         .catch((err) => {
-          this.logger.error(`SendGrid team invite email error: ${err?.message}`);
+          this.logger.error(
+            `SendGrid team invite email error: ${err instanceof Error ? err.message : String(err)}`,
+          );
         });
     }
 
     this.logger.log(`Profile created successfully with ID=${profile.id}`);
     return profile;
   }
-
 
   async findAllProfiles(query?: QueryProfileDto): Promise<Profile[]> {
     this.logger.log(
@@ -117,6 +121,10 @@ export class ProfileService {
 
     if (query?.role) {
       where.role = query.role;
+    }
+
+    if (query?.isActive !== undefined) {
+      where.isActive = query.isActive;
     }
 
     if (query?.search) {
@@ -163,49 +171,130 @@ export class ProfileService {
     });
   }
 
-  async updateProfile(id: string, dto: UpdateProfileDto): Promise<Profile> {
-    this.logger.log(`Updating profile ID=${id}`);
-    await this.findProfileById(id);
+  /**
+   * ADR 0016 — the console must never lock itself out. Refuses (409) when the
+   * change would take a manager's own role or access away from themselves,
+   * or leave no active manager at all.
+   *
+   * Runs in the same serializable transaction as the change it guards (see
+   * `updateProfile` / `deactivateProfile`). Counted outside it, two managers
+   * removing each other at the same moment both saw two managers and both
+   * went through, leaving none.
+   */
+  private async assertTeamChangeAllowed(
+    tx: Prisma.TransactionClient,
+    target: Profile,
+    change: { role?: Profile['role']; isActive?: boolean },
+    actorEmail?: string,
+  ) {
+    const losesRole = change.role !== undefined && change.role !== target.role;
+    const losesAccess = change.isActive === false && target.isActive;
+    if (!losesRole && !losesAccess) return;
 
-    if (dto.email) {
-      const existing = await this.prisma.profile.findUnique({
-        where: { email: dto.email },
-      });
-      if (existing && existing.id !== id) {
-        throw new ConflictException(`Email ${dto.email} is already in use`);
-      }
+    if (actorEmail && actorEmail.toLowerCase() === target.email.toLowerCase()) {
+      throw new ConflictException(
+        "You can't change your own role or deactivate yourself. Ask another manager to do it.",
+      );
     }
 
-    if (dto.externalAuthId) {
-      const existingExt = await this.prisma.profile.findUnique({
-        where: { externalAuthId: dto.externalAuthId },
+    const stopsBeingManager =
+      target.role === UserRole.MANAGER &&
+      target.isActive &&
+      (losesAccess || (losesRole && change.role !== UserRole.MANAGER));
+    if (stopsBeingManager) {
+      const activeManagers = await tx.profile.count({
+        where: { role: UserRole.MANAGER, isActive: true },
       });
-      if (existingExt && existingExt.id !== id) {
+      if (activeManagers <= 1) {
         throw new ConflictException(
-          `External Auth ID ${dto.externalAuthId} is already linked to another profile`,
+          'This is the only active manager. Make someone else a manager first.',
         );
       }
     }
+  }
 
-    const updated = await this.prisma.profile.update({
-      where: { id },
-      data: dto,
+  async updateProfile(
+    id: string,
+    dto: UpdateProfileDto,
+    actorEmail?: string,
+  ): Promise<Profile> {
+    this.logger.log(`Updating profile ID=${id}`);
+    await this.findProfileById(id);
+
+    const updated = await serializable(this.prisma, async (tx) => {
+      const target = await tx.profile.findUniqueOrThrow({ where: { id } });
+      await this.assertTeamChangeAllowed(tx, target, dto, actorEmail);
+
+      if (dto.email) {
+        const existing = await tx.profile.findUnique({
+          where: { email: dto.email },
+        });
+        if (existing && existing.id !== id) {
+          throw new ConflictException(`Email ${dto.email} is already in use`);
+        }
+      }
+
+      if (dto.externalAuthId) {
+        const existingExt = await tx.profile.findUnique({
+          where: { externalAuthId: dto.externalAuthId },
+        });
+        if (existingExt && existingExt.id !== id) {
+          throw new ConflictException(
+            `External Auth ID ${dto.externalAuthId} is already linked to another profile`,
+          );
+        }
+      }
+
+      return tx.profile.update({ where: { id }, data: dto });
     });
 
     this.logger.log(`Profile ID=${id} updated successfully`);
     return updated;
   }
 
-  async deactivateProfile(id: string): Promise<Profile> {
+  async deactivateProfile(id: string, actorEmail?: string): Promise<Profile> {
     this.logger.log(`Deactivating profile ID=${id}`);
     await this.findProfileById(id);
 
-    const deactivated = await this.prisma.profile.update({
-      where: { id },
-      data: { isActive: false },
+    const deactivated = await serializable(this.prisma, async (tx) => {
+      const target = await tx.profile.findUniqueOrThrow({ where: { id } });
+      await this.assertTeamChangeAllowed(
+        tx,
+        target,
+        { isActive: false },
+        actorEmail,
+      );
+      return tx.profile.update({ where: { id }, data: { isActive: false } });
     });
 
     this.logger.log(`Profile ID=${id} deactivated successfully`);
     return deactivated;
+  }
+
+  /** ADR 0016 — re-send the team invitation to an active member. */
+  async resendInvite(
+    id: string,
+    inviterEmail: string,
+  ): Promise<{ sent: boolean }> {
+    const profile = await this.findProfileById(id);
+    if (!profile.isActive) {
+      throw new ConflictException(
+        'This account is deactivated. Reactivate it before sending an invite.',
+      );
+    }
+
+    const inviterName = await this.resolveReviewerDisplayName(inviterEmail);
+    const sent = await this.sendGridService.sendTeamInviteEmail({
+      to: profile.email,
+      recipientName: `${profile.firstName} ${profile.lastName}`.trim(),
+      role: profile.role,
+      inviterEmail,
+      inviterName,
+    });
+
+    this.logger.log(
+      `Team invite re-sent for profile ID=${id} by inviter=${inviterEmail}, sent=${sent}`,
+    );
+    return { sent };
   }
 }

@@ -5,7 +5,7 @@ import { customers } from "@/content/admin";
 import { CustomersTable } from "@/features/customers/components/customers-table";
 import { buildMetadata } from "@/lib/seo";
 
-export const metadata = buildMetadata({ title: "Customers", noIndex: true });
+export const metadata = buildMetadata({ title: "Applicants", noIndex: true });
 
 export default function CustomersPage() {
   return (
