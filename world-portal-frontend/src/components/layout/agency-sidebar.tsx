@@ -5,9 +5,9 @@ import { ArrowUpRight } from "lucide-react";
 import { UserAvatar } from "@/components/admin/user-avatar";
 import { Logo } from "@/components/common/logo";
 import { AgencyNav } from "@/components/layout/agency-nav";
-import type { AgencyUser } from "@/features/agency/types";
+import type { ClientAgencyUser } from "@/features/agency/types";
 
-export function AgencySidebar({ user }: { user: AgencyUser }) {
+export function AgencySidebar({ user }: { user: ClientAgencyUser }) {
   return (
     <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col border-r border-border/60 bg-background/95 px-5 py-6 text-foreground backdrop-blur-2xl lg:flex">
       <div className="flex items-center justify-between gap-2">

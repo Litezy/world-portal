@@ -46,7 +46,7 @@ export function DocumentRow({
   const entry = documentCatalog[kind];
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const upload = useUploadDocument();
+  const upload = useUploadDocument({ via: "agency" });
   const setDocument = useSetListingDocument();
   const fileId = React.useId();
   const expiryId = `${fileId}-expiry`;

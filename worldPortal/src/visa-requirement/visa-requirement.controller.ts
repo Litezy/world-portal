@@ -13,6 +13,14 @@ import { DestinationDto } from './dto/destination.dto';
 import { VisaCheckQueryDto, VisaCheckDataDto } from './dto/visa-check.dto';
 import { VisaMapQueryDto } from './dto/visa-map.dto';
 
+/**
+ * Public by design, with no guard: the first screen of /apply works signed
+ * out. Every route, `POST /map` included, is a read-only lookup of public
+ * reference data proxied from RapidAPI (it writes nothing, reads no one's
+ * records, and the map is the same data `/check` gives one pair at a time).
+ * The only cost of abuse is our RapidAPI quota, which per-IP rate limiting
+ * covers. See visa-requirement.access.spec.ts.
+ */
 @ApiTags('Visa Requirement')
 @Controller('visa-requirement')
 export class VisaRequirementController {
@@ -68,9 +76,7 @@ export class VisaRequirementController {
   })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   @ApiResponse({ status: 502, description: 'External RapidAPI service error' })
-  async checkVisa(
-    @Body() query: VisaCheckQueryDto,
-  ): Promise<VisaCheckDataDto> {
+  async checkVisa(@Body() query: VisaCheckQueryDto): Promise<VisaCheckDataDto> {
     const result = await this.visaRequirementService.checkVisa(query);
     return result.data;
   }

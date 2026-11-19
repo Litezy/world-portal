@@ -1,3 +1,10 @@
 allowBuilds:
   sharp: false
   unrs-resolver: false
+
+overrides:
+  # ajv (under @hookform/resolvers) accepts any fast-uri 3.x, but pnpm keeps
+  # the locked 3.1.6, which has high-severity advisories, and `pnpm update`
+  # will not move it. This replaces only the vulnerable versions, so it is a
+  # no-op once the tree resolves 3.1.9 or later by itself; delete it then.
+  "fast-uri@<3.1.9": "^3.1.9"

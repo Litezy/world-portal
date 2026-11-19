@@ -24,12 +24,6 @@ export class ExternalAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
 
-    // Skip auth check for /api/auth/test-token endpoint
-    const url = request.url;
-    if (url.includes('/auth/test-token')) {
-      return true;
-    }
-
     const authHeader = request.headers['authorization'];
 
     if (
@@ -75,39 +69,44 @@ export class ExternalAuthGuard implements CanActivate {
       'external-auth-manager-001',
     );
 
+    // Off unless explicitly switched on: a deploy that forgets the variable
+    // must not fall back to accepting hand-written tokens.
     const isMockAuthEnabled =
-      this.configService.get<string>('ENABLE_MOCK_AUTH', 'true') === 'true';
+      this.configService.get<string>('ENABLE_MOCK_AUTH', 'false') === 'true';
 
-    // Attempt JWT decoding & validation
-    try {
-      const decoded: unknown = this.jwtService.decode(token);
-
-      if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
-        const payloadObj = decoded as Record<string, unknown>;
-        const email =
-          typeof payloadObj.email === 'string'
-            ? payloadObj.email
-            : 'user@loveworld.com';
-
-        let externalAuthId: string;
-        if (typeof payloadObj.externalAuthId === 'string') {
-          externalAuthId = payloadObj.externalAuthId;
-        } else if (typeof payloadObj.sub === 'string') {
-          externalAuthId = payloadObj.sub;
-        } else if (email === defaultManagerEmail) {
-          externalAuthId = defaultManagerAuthId;
-        } else {
-          externalAuthId = `ext-id-${email}`;
-        }
-
-        return {
-          externalAuthId,
-          email,
-          token,
-        };
+    // Anything shaped like a JWT must carry a valid signature (and an
+    // unexpired `exp`) made with JWT_SECRET. Reading the payload without
+    // verifying it would let anyone claim any email, so a bad token is
+    // refused outright and never falls through to the mock path below.
+    if (token.split('.').length === 3) {
+      const payloadObj = this.jwtService.verify<Record<string, unknown>>(token);
+      // Desk tokens carry no audience. Anything else JWT_SECRET signs does
+      // (the applicant lookup token, see auth/lookup-token.ts) and is never a
+      // desk credential, however valid its signature.
+      if (payloadObj.aud !== undefined) {
+        throw new Error('Token was issued for another purpose');
       }
-    } catch {
-      // Ignore JWT decode error
+      const email =
+        typeof payloadObj.email === 'string'
+          ? payloadObj.email
+          : 'user@loveworld.com';
+
+      let externalAuthId: string;
+      if (typeof payloadObj.externalAuthId === 'string') {
+        externalAuthId = payloadObj.externalAuthId;
+      } else if (typeof payloadObj.sub === 'string') {
+        externalAuthId = payloadObj.sub;
+      } else if (email === defaultManagerEmail) {
+        externalAuthId = defaultManagerAuthId;
+      } else {
+        externalAuthId = `ext-id-${email}`;
+      }
+
+      return {
+        externalAuthId,
+        email,
+        token,
+      };
     }
 
     // Dev / Mock auth string fallback (only when ENABLE_MOCK_AUTH=true)

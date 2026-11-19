@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSessionToken } from "@/server/auth/session";
 import type { AdminRole } from "@/types";
@@ -80,6 +80,10 @@ beforeEach(() => {
   Object.values(store).forEach((fn) => fn.mockReset());
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("/api/admin/agencies", () => {
   it("refuses without a session and never touches the store", async () => {
     const response = await agencies.GET(get("/api/admin/agencies"));
@@ -115,6 +119,7 @@ describe("/api/admin/agencies", () => {
     await expect(response.json()).resolves.toEqual(page);
     expect(store.listAgencies).toHaveBeenCalledWith(
       expect.objectContaining({ q: "ridge", page: 1 }),
+      { token: "backend-token" },
     );
   });
 
@@ -144,6 +149,54 @@ describe("/api/admin/agencies", () => {
     const response = await agencies.PATCH(patch("/api/admin/agencies?id=ag_1", {}));
 
     expect(response.status).toBe(422);
+  });
+
+  // The API checks the desk member's own role on these, so the console must
+  // ask as that member: the service key is the agency portal's credential.
+  it("reads the list with the desk member's token", async () => {
+    signInAs("STAFF");
+    store.listAgencies.mockResolvedValue({ data: [], meta: {} });
+
+    await agencies.GET(get("/api/admin/agencies"));
+
+    expect(store.listAgencies).toHaveBeenCalledWith(expect.any(Object), {
+      token: "backend-token",
+    });
+  });
+
+  it("verifies an agency with the desk member's token", async () => {
+    signInAs("MANAGER");
+    store.updateAgencyVerification.mockResolvedValue({ id: "ag_1" });
+
+    const response = await agencies.PATCH(
+      patch("/api/admin/agencies?id=ag_1", { verification: "VERIFIED" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.updateAgencyVerification).toHaveBeenCalledWith("ag_1", "VERIFIED", {
+      token: "backend-token",
+    });
+  });
+
+  it("rules on a document with the desk member's token", async () => {
+    signInAs("STAFF");
+    store.updateAgencyDocumentStatus.mockResolvedValue({ id: "ag_1" });
+
+    const response = await agencies.PATCH(
+      patch("/api/admin/agencies?id=ag_1", {
+        docId: "tax_certificate",
+        docStatus: "approved",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.updateAgencyDocumentStatus).toHaveBeenCalledWith(
+      "ag_1",
+      "tax_certificate",
+      "approved",
+      undefined,
+      { token: "backend-token" },
+    );
   });
 });
 
@@ -281,6 +334,24 @@ describe("/api/admin/professionals", () => {
 
     expect(response.status).toBe(422);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("verifies with the session's token and never the service key", async () => {
+    vi.stubEnv("SERVICE_AUTH_KEY", "k".repeat(40));
+    signInAs("MANAGER");
+    routeFetch({
+      "/hire/professionals/pro_1/verify": () => ok({ id: "pro_1", isVerified: true }),
+    });
+
+    const response = await professionals.PATCH(
+      patch("/api/admin/professionals?id=pro_1", { isVerified: true }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer backend-token");
+    expect(headers["x-service-key"]).toBeUndefined();
   });
 });
 

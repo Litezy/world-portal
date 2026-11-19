@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClerkTokenVerifier } from '../auth/clerk/clerk-token.verifier';
+import { ApplicantService } from '../applicant/applicant.service';
 import { PaymentOption } from '@prisma/client';
 
 describe('PaymentController', () => {
@@ -24,6 +26,11 @@ describe('PaymentController', () => {
   const mockConfigService = {
     get: jest.fn((key: string, defaultValue: string) => defaultValue),
   };
+  const mockApplicantService = {
+    requireActiveApplicant: jest.fn((clerkUserId: string) =>
+      Promise.resolve({ clerkUserId, email: 'user@gmail.com' }),
+    ),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -33,6 +40,8 @@ describe('PaymentController', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: ClerkTokenVerifier, useValue: { verify: jest.fn() } },
+        { provide: ApplicantService, useValue: mockApplicantService },
       ],
     }).compile();
 
@@ -45,7 +54,7 @@ describe('PaymentController', () => {
   });
 
   describe('initiateTransaction', () => {
-    it('should delegate payment initiation to PaymentService', async () => {
+    it('should delegate payment initiation to PaymentService as the signed-in applicant', async () => {
       const dto = {
         visaDocumentationId: 'visa-001',
         paymentOption: PaymentOption.FULL,
@@ -54,14 +63,19 @@ describe('PaymentController', () => {
         transactionRef: 'TXN-PAY-1001',
       });
 
-      const result = await controller.initiateTransaction(
-        dto,
-        'user@gmail.com',
-      );
+      const result = await controller.initiateTransaction(dto, {
+        clerkUserId: 'user_1',
+      });
 
+      expect(mockApplicantService.requireActiveApplicant).toHaveBeenCalledWith(
+        'user_1',
+      );
       expect(
         mockPaymentService.initiatePaymentTransaction,
-      ).toHaveBeenCalledWith(dto, 'user@gmail.com');
+      ).toHaveBeenCalledWith(dto, {
+        clerkUserId: 'user_1',
+        email: 'user@gmail.com',
+      });
       expect(result.transactionRef).toBe('TXN-PAY-1001');
     });
   });

@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEmail, IsOptional, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
 
 export class CreateHireBookingDto {
   @ApiProperty({ description: 'ID of professional to hire' })
@@ -36,25 +42,42 @@ export class CreateHireBookingDto {
   @IsNotEmpty()
   endsAt: string;
 
-  @ApiProperty({ description: 'Calculated total booking amount' })
+  /**
+   * Ignored, as are `currency` and `profileId`: the server prices a booking
+   * from the professional's own listing and files it under the signed-in
+   * applicant. Still accepted so a browser on an older build isn't refused.
+   */
+  @ApiPropertyOptional({
+    deprecated: true,
+    description: 'Ignored: the server prices the booking itself.',
+  })
+  @IsOptional()
   @IsNumber()
-  @Min(0)
-  totalAmount: number;
+  totalAmount?: number;
 
-  @ApiPropertyOptional({ description: 'Optional applicant profile ID' })
+  @ApiPropertyOptional({
+    deprecated: true,
+    description: 'Ignored: the booking is filed under the signed-in applicant.',
+  })
   @IsOptional()
   @IsString()
   profileId?: string;
 
-  @ApiPropertyOptional({ description: 'Optional visa documentation ID' })
+  @ApiPropertyOptional({
+    description:
+      "One of the signed-in applicant's own visa applications (404 otherwise)",
+  })
   @IsOptional()
   @IsString()
   visaDocumentationId?: string;
 
-  @ApiPropertyOptional({ description: 'Currency code', default: 'USD' })
+  @ApiPropertyOptional({
+    deprecated: true,
+    description: "Ignored: the booking is in the professional's currency.",
+  })
   @IsOptional()
   @IsString()
-  currency?: string = 'USD';
+  currency?: string;
 
   @ApiPropertyOptional({ description: 'Optional booking notes' })
   @IsOptional()

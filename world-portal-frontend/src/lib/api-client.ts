@@ -126,8 +126,9 @@ apiClient.interceptors.request.use((config) => {
     delete config.headers["Content-Type"];
   }
   // No global auth header. Calls that act as the applicant pass their
-  // WorldStreet session token per call (see `useSubmitVisaApplication`); the
-  // status lookup and uploads stay public and must not carry one.
+  // WorldStreet session token per call (see `useSubmitVisaApplication` and
+  // `useUploadDocument`); the /track status lookup must not carry one (it
+  // sends the OTP lookup token as `x-lookup-token` instead).
   return config;
 });
 

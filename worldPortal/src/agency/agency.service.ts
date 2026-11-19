@@ -2,15 +2,21 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAgencyDto } from './dto/create-agency.dto';
-import { UpdateAgencyListingDto } from './dto/update-agency-listing.dto';
-import { AddAgencyStaffDto, UpdateAgencyStaffDto } from './dto/add-agency-staff.dto';
-import { UploadAgencyDocumentDto, UpdateDocumentStatusDto } from './dto/upload-agency-document.dto';
+import {
+  DESK_ONLY_LISTING_STATUSES,
+  UpdateAgencyListingDto,
+} from './dto/update-agency-listing.dto';
+import {
+  AddAgencyStaffDto,
+  UpdateAgencyStaffDto,
+} from './dto/add-agency-staff.dto';
+import { UploadAgencyDocumentDto } from './dto/upload-agency-document.dto';
 import { AssignStaffDto } from './dto/assign-staff.dto';
-import { createHash } from 'crypto';
 import {
   AgencyDocumentKind,
   AgencyDocumentStatus,
@@ -20,9 +26,37 @@ import {
   AgencyVerificationStatus,
   AgencyListingStatus,
   AgencyUserRole,
+  Prisma,
 } from '@prisma/client';
 
 import { NotificationService } from '../notification/notification.service';
+
+/**
+ * The only states a job can be completed from: someone is on it. A requested
+ * job has nobody assigned, and a completed or cancelled one must not be
+ * credited to the agency (or announced to the traveller) a second time.
+ */
+const COMPLETABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
+  AssignmentStatus.ASSIGNED,
+  AssignmentStatus.IN_PROGRESS,
+];
+
+/** A caught error's message, for a log line. */
+const reasonOf = (err: unknown) =>
+  err instanceof Error ? err.message : String(err);
+
+/**
+ * The agency user fields any response may carry. Every read of `users` goes
+ * through this select: a bare `users: true` returns every column, and
+ * `passwordHash` is one of them.
+ */
+export const AGENCY_USER_FIELDS = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
+} satisfies Prisma.AgencyUserSelect;
 
 @Injectable()
 export class AgencyService {
@@ -31,7 +65,7 @@ export class AgencyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   /** Create slug from agency name */
   private slugify(name: string): string {
@@ -43,12 +77,13 @@ export class AgencyService {
       .replace(/^-+|-+$/g, '');
   }
 
-  private hashPassword(password: string): string {
-    return createHash('sha256').update(password).digest('hex');
-  }
-
   /**
-   * Register a new agency listing
+   * Register a new agency listing.
+   *
+   * The owner gets no password: agencies sign in with a code emailed to them,
+   * and nothing reads `passwordHash`. (It used to be set to a hash of a
+   * published default, which anyone could have used the day a password login
+   * was added.)
    */
   async createAgency(dto: CreateAgencyDto) {
     if (dto.email) {
@@ -56,17 +91,19 @@ export class AgencyService {
         where: { email: { equals: dto.email.trim(), mode: 'insensitive' } },
       });
       if (existingEmail) {
-        throw new BadRequestException('An agency is already listed with that email.');
+        throw new BadRequestException(
+          'An agency is already listed with that email.',
+        );
       }
     }
 
     let slug = this.slugify(dto.name);
-    const existingSlug = await this.prisma.agency.findUnique({ where: { slug } });
+    const existingSlug = await this.prisma.agency.findUnique({
+      where: { slug },
+    });
     if (existingSlug) {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
-
-    const defaultPasswordHash = this.hashPassword((dto as any).password || 'Password@2');
 
     const agency = await this.prisma.agency.create({
       data: {
@@ -91,7 +128,6 @@ export class AgencyService {
           create: {
             name: `${dto.name} Manager`,
             email: dto.email,
-            passwordHash: defaultPasswordHash,
             role: AgencyUserRole.OWNER,
           },
         },
@@ -100,11 +136,13 @@ export class AgencyService {
         documents: true,
         staff: true,
         offerings: true,
-        users: true,
+        users: { select: AGENCY_USER_FIELDS },
       },
     });
 
-    this.logger.log(`Created new agency id=${agency.id} slug=${agency.slug} with user email=${dto.email}`);
+    this.logger.log(
+      `Created new agency id=${agency.id} slug=${agency.slug} with user email=${dto.email}`,
+    );
     return agency;
   }
 
@@ -119,22 +157,14 @@ export class AgencyService {
         OR: [
           { id: needle },
           { slug: needle },
-          { email: { equals: needle, mode: "insensitive" } },
+          { email: { equals: needle, mode: 'insensitive' } },
         ],
       },
       include: {
         documents: true,
         staff: true,
         offerings: true,
-        users: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            createdAt: true,
-          },
-        },
+        users: { select: AGENCY_USER_FIELDS },
       },
     });
 
@@ -156,9 +186,25 @@ export class AgencyService {
   }
 
   /**
-   * Update agency listing / profile
+   * Update agency listing / profile.
+   *
+   * An agency may draft, submit or pause its listing. LIVE, IN_REVIEW and
+   * REJECTED are the desk's verdicts and only `updateVerification` sets them,
+   * so they are refused here whoever calls; the DTO refuses them too.
+   *
+   * `dto.email` is never written: the agency's email is its sign-in identity
+   * (and what `findAgency` matches), so moving it needs a verified flow.
    */
   async updateAgencyListing(id: string, dto: UpdateAgencyListingDto) {
+    if (
+      dto.listingStatus &&
+      DESK_ONLY_LISTING_STATUSES.includes(dto.listingStatus)
+    ) {
+      throw new BadRequestException(
+        `A listing can't be set to ${dto.listingStatus} here: only the desk decides that, when it verifies the agency.`,
+      );
+    }
+
     const agency = await this.getAgencyById(id);
     const realId = agency.id;
 
@@ -168,14 +214,19 @@ export class AgencyService {
       });
       if (dto.offerings.length > 0) {
         await this.prisma.agencyServiceOffering.createMany({
-          data: dto.offerings.map((o: any) => ({
+          data: dto.offerings.map((o) => ({
             agencyId: realId,
-            category: o.category || "security",
-            title: o.title || "Service Offering",
-            description: o.description || "",
-            price: o.price !== null && o.price !== undefined && !isNaN(Number(o.price)) ? Number(o.price) : null,
-            currency: o.currency || "USD",
-            unit: o.unit || "day",
+            category: o.category || 'security',
+            title: o.title || 'Service Offering',
+            description: o.description || '',
+            price:
+              o.price !== null &&
+              o.price !== undefined &&
+              !isNaN(Number(o.price))
+                ? Number(o.price)
+                : null,
+            currency: o.currency || 'USD',
+            unit: o.unit || 'day',
             leadTimeHours: o.leadTimeHours ? Number(o.leadTimeHours) : 24,
             capacity: o.capacity ? Number(o.capacity) : 1,
           })),
@@ -188,13 +239,14 @@ export class AgencyService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.legalName && { legalName: dto.legalName }),
-        ...(dto.registrationNumber && { registrationNumber: dto.registrationNumber }),
+        ...(dto.registrationNumber && {
+          registrationNumber: dto.registrationNumber,
+        }),
         ...(dto.countryCode && { countryCode: dto.countryCode }),
         ...(dto.country && { country: dto.country }),
         ...(dto.summary && { summary: dto.summary }),
         ...(dto.about && { about: dto.about }),
         ...(dto.logoUrl && { logoUrl: dto.logoUrl }),
-        ...(dto.email && { email: dto.email }),
         ...(dto.phone && { phone: dto.phone }),
         ...(dto.website && { website: dto.website }),
         ...(dto.yearFounded && { yearFounded: dto.yearFounded }),
@@ -225,7 +277,13 @@ export class AgencyService {
     const openAssignmentsCount = await this.prisma.agencyAssignment.count({
       where: {
         agencyId: realAgencyId,
-        status: { in: [AssignmentStatus.REQUESTED, AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS] },
+        status: {
+          in: [
+            AssignmentStatus.REQUESTED,
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.IN_PROGRESS,
+          ],
+        },
       },
     });
 
@@ -262,7 +320,9 @@ export class AgencyService {
     const pendingPayouts = await this.prisma.agencyPayout.aggregate({
       where: {
         agencyId: realAgencyId,
-        status: { in: [AgencyPayoutStatus.PENDING, AgencyPayoutStatus.PROCESSING] },
+        status: {
+          in: [AgencyPayoutStatus.PENDING, AgencyPayoutStatus.PROCESSING],
+        },
       },
       _sum: {
         net: true,
@@ -272,7 +332,9 @@ export class AgencyService {
     const outstandingDocuments = await this.prisma.agencyDocument.count({
       where: {
         agencyId: realAgencyId,
-        status: { in: [AgencyDocumentStatus.MISSING, AgencyDocumentStatus.REJECTED] },
+        status: {
+          in: [AgencyDocumentStatus.MISSING, AgencyDocumentStatus.REJECTED],
+        },
       },
     });
 
@@ -324,7 +386,11 @@ export class AgencyService {
     return staff;
   }
 
-  async updateStaff(agencyId: string, staffId: string, dto: UpdateAgencyStaffDto) {
+  async updateStaff(
+    agencyId: string,
+    staffId: string,
+    dto: UpdateAgencyStaffDto,
+  ) {
     const agency = await this.getAgencyById(agencyId);
     const realAgencyId = agency.id;
 
@@ -333,7 +399,9 @@ export class AgencyService {
     });
 
     if (!existing) {
-      throw new NotFoundException(`Staff member "${staffId}" not found for this agency`);
+      throw new NotFoundException(
+        `Staff member "${staffId}" not found for this agency`,
+      );
     }
 
     return this.prisma.agencyStaff.update({
@@ -345,8 +413,12 @@ export class AgencyService {
         ...(dto.photoUrl !== undefined && { photoUrl: dto.photoUrl }),
         ...(dto.phone && { phone: dto.phone }),
         ...(dto.languages && { languages: dto.languages }),
-        ...(dto.experienceYears !== undefined && { experienceYears: dto.experienceYears }),
-        ...(dto.backgroundChecked !== undefined && { backgroundChecked: dto.backgroundChecked }),
+        ...(dto.experienceYears !== undefined && {
+          experienceYears: dto.experienceYears,
+        }),
+        ...(dto.backgroundChecked !== undefined && {
+          backgroundChecked: dto.backgroundChecked,
+        }),
         ...(dto.status && { status: dto.status }),
       },
     });
@@ -401,7 +473,12 @@ export class AgencyService {
     });
   }
 
-  async updateDocumentStatus(agencyId: string, docId: string, status: string, note?: string) {
+  async updateDocumentStatus(
+    agencyId: string,
+    docId: string,
+    status: string,
+    note?: string,
+  ) {
     const agency = await this.getAgencyById(agencyId);
     const realAgencyId = agency.id;
 
@@ -419,16 +496,16 @@ export class AgencyService {
     const validKinds = Object.values(AgencyDocumentKind);
 
     const matchedKind = validKinds.find(
-      (k) => k === docId || k === normalizedKindStr || k.toLowerCase() === docId.toLowerCase()
+      (k) =>
+        k === docId ||
+        k === normalizedKindStr ||
+        k.toLowerCase() === docId.toLowerCase(),
     );
 
     const existing = await this.prisma.agencyDocument.findFirst({
       where: {
         agencyId: realAgencyId,
-        OR: [
-          { id: docId },
-          ...(matchedKind ? [{ kind: matchedKind }] : []),
-        ],
+        OR: [{ id: docId }, ...(matchedKind ? [{ kind: matchedKind }] : [])],
       },
     });
 
@@ -437,10 +514,17 @@ export class AgencyService {
         where: { id: existing.id },
         data: {
           status: docStatusEnum,
-          note: note !== undefined ? note : (docStatusEnum === AgencyDocumentStatus.APPROVED ? null : existing.note),
+          note:
+            note !== undefined
+              ? note
+              : docStatusEnum === AgencyDocumentStatus.APPROVED
+                ? null
+                : existing.note,
         },
       });
-      this.logger.log(`Updated document status agencyId=${realAgencyId} docId=${existing.id} kind=${existing.kind} status=${docStatusEnum}`);
+      this.logger.log(
+        `Updated document status agencyId=${realAgencyId} docId=${existing.id} kind=${existing.kind} status=${docStatusEnum}`,
+      );
       return updated;
     }
 
@@ -456,7 +540,9 @@ export class AgencyService {
         note: note || null,
       },
     });
-    this.logger.log(`Created document for status change agencyId=${realAgencyId} kind=${targetKind} status=${docStatusEnum}`);
+    this.logger.log(
+      `Created document for status change agencyId=${realAgencyId} kind=${targetKind} status=${docStatusEnum}`,
+    );
     return created;
   }
 
@@ -482,13 +568,16 @@ export class AgencyService {
       });
 
       for (const booking of hireBookings) {
-        const existingAssignment = await this.prisma.agencyAssignment.findUnique({
-          where: { reference: booking.reference },
-        });
+        const existingAssignment =
+          await this.prisma.agencyAssignment.findUnique({
+            where: { reference: booking.reference },
+          });
 
         if (!existingAssignment) {
           const grossAmount = Number(booking.totalAmount) || 150;
-          const commissionRate = agency.commissionRate ? Number(agency.commissionRate) : 0.15;
+          const commissionRate = agency.commissionRate
+            ? Number(agency.commissionRate)
+            : 0.15;
           const platformFee = grossAmount * commissionRate;
           const netToAgency = grossAmount - platformFee;
 
@@ -502,36 +591,46 @@ export class AgencyService {
                   ? AssignmentStatus.CANCELLED
                   : AssignmentStatus.REQUESTED;
 
-          await this.prisma.agencyAssignment.create({
-            data: {
-              reference: booking.reference,
-              agencyId: realAgencyId,
-              category: agency.categories?.[0] || 'freelancer',
-              offeringId: agency.offerings?.[0]?.id || `offering-${realAgencyId}`,
-              offeringTitle: agency.offerings?.[0]?.title || `${agency.name} Service Package`,
-              travellerName: booking.travellerName || 'Applicant',
-              travellerEmail: booking.travellerEmail,
-              travellerPhone: booking.travellerPhone || null,
-              partySize: 1,
-              destinationCity: booking.destinationCity || agency.cities?.[0] || 'Destination City',
-              destinationCountry: agency.country || 'Destination Country',
-              destinationCountryCode: agency.countryCode || 'US',
-              startsAt: booking.startsAt,
-              endsAt: booking.endsAt,
-              status: assignmentStatus,
-              assignedStaffIds: [],
-              staffRequired: 1,
-              notes: booking.notes || null,
-              gross: grossAmount,
-              currency: booking.currency || 'USD',
-              platformFee,
-              netToAgency,
-            },
-          }).catch(() => null);
+          await this.prisma.agencyAssignment
+            .create({
+              data: {
+                reference: booking.reference,
+                agencyId: realAgencyId,
+                category: agency.categories?.[0] || 'freelancer',
+                offeringId:
+                  agency.offerings?.[0]?.id || `offering-${realAgencyId}`,
+                offeringTitle:
+                  agency.offerings?.[0]?.title ||
+                  `${agency.name} Service Package`,
+                travellerName: booking.travellerName || 'Applicant',
+                travellerEmail: booking.travellerEmail,
+                travellerPhone: booking.travellerPhone || null,
+                partySize: 1,
+                destinationCity:
+                  booking.destinationCity ||
+                  agency.cities?.[0] ||
+                  'Destination City',
+                destinationCountry: agency.country || 'Destination Country',
+                destinationCountryCode: agency.countryCode || 'US',
+                startsAt: booking.startsAt,
+                endsAt: booking.endsAt,
+                status: assignmentStatus,
+                assignedStaffIds: [],
+                staffRequired: 1,
+                notes: booking.notes || null,
+                gross: grossAmount,
+                currency: booking.currency || 'USD',
+                platformFee,
+                netToAgency,
+              },
+            })
+            .catch(() => null);
         }
       }
-    } catch (err: any) {
-      this.logger.warn(`Error auto-syncing hire bookings to agency assignments: ${err?.message || err}`);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Error auto-syncing hire bookings to agency assignments: ${reasonOf(err)}`,
+      );
     }
 
     return this.prisma.agencyAssignment.findMany({
@@ -540,7 +639,11 @@ export class AgencyService {
     });
   }
 
-  async assignStaffToAssignment(agencyId: string, assignmentId: string, dto: AssignStaffDto) {
+  async assignStaffToAssignment(
+    agencyId: string,
+    assignmentId: string,
+    dto: AssignStaffDto,
+  ) {
     const agency = await this.getAgencyById(agencyId);
     const realAgencyId = agency.id;
 
@@ -552,10 +655,15 @@ export class AgencyService {
     });
 
     if (!assignment) {
-      throw new NotFoundException(`Assignment "${assignmentId}" not found for this agency`);
+      throw new NotFoundException(
+        `Assignment "${assignmentId}" not found for this agency`,
+      );
     }
 
-    const newStatus = dto.assignedStaffIds.length > 0 ? AssignmentStatus.ASSIGNED : AssignmentStatus.REQUESTED;
+    const newStatus =
+      dto.assignedStaffIds.length > 0
+        ? AssignmentStatus.ASSIGNED
+        : AssignmentStatus.REQUESTED;
 
     const updated = await this.prisma.agencyAssignment.update({
       where: { id: assignment.id },
@@ -567,13 +675,18 @@ export class AgencyService {
 
     // Sync status to the HireBooking record on applicant side
     if (assignment.reference) {
-      const hireStatus = dto.assignedStaffIds.length > 0 ? 'CONFIRMED' : 'REQUESTED';
-      await this.prisma.hireBooking.updateMany({
-        where: { reference: assignment.reference },
-        data: { status: hireStatus },
-      }).catch((err) => {
-        this.logger.warn(`Failed to sync hireBooking status for ref=${assignment.reference}: ${err?.message || err}`);
-      });
+      const hireStatus =
+        dto.assignedStaffIds.length > 0 ? 'CONFIRMED' : 'REQUESTED';
+      await this.prisma.hireBooking
+        .updateMany({
+          where: { reference: assignment.reference },
+          data: { status: hireStatus },
+        })
+        .catch((err: unknown) => {
+          this.logger.warn(
+            `Failed to sync hireBooking status for ref=${assignment.reference}: ${reasonOf(err)}`,
+          );
+        });
     }
 
     // Update staff status to ASSIGNED if staff members were selected
@@ -589,38 +702,51 @@ export class AgencyService {
         },
       });
 
-      assignedStaffMembers = await this.prisma.agencyStaff.findMany({
-        where: { id: { in: dto.assignedStaffIds } },
-        select: { name: true, role: true },
-      }).catch(() => []);
+      assignedStaffMembers = await this.prisma.agencyStaff
+        .findMany({
+          where: { id: { in: dto.assignedStaffIds } },
+          select: { name: true, role: true },
+        })
+        .catch(() => []);
     }
 
-    const staffNames = assignedStaffMembers.map((s) => s.name).join(', ') || 'Specialist';
+    const staffNames =
+      assignedStaffMembers.map((s) => s.name).join(', ') || 'Specialist';
 
     // In-app notifications
     if (dto.assignedStaffIds.length > 0) {
       if (assignment.travellerEmail) {
-        await this.notificationService.create({
-          recipientId: assignment.travellerEmail,
-          recipientType: 'APPLICANT',
-          title: 'Specialist Assigned',
-          message: `${staffNames} has been assigned to your booking #${assignment.reference}.`,
-          type: 'STAFF_ASSIGNED',
-          metadata: { reference: assignment.reference, staffNames },
-        }).catch(() => null);
+        await this.notificationService
+          .create({
+            recipientId: assignment.travellerEmail,
+            recipientType: 'APPLICANT',
+            title: 'Specialist Assigned',
+            message: `${staffNames} has been assigned to your booking #${assignment.reference}.`,
+            type: 'STAFF_ASSIGNED',
+            metadata: { reference: assignment.reference, staffNames },
+          })
+          .catch(() => null);
       }
 
-      await this.notificationService.create({
-        recipientId: realAgencyId,
-        recipientType: 'AGENCY',
-        title: 'Staff Confirmed',
-        message: `${staffNames} was assigned to booking #${assignment.reference}.`,
-        type: 'STAFF_ASSIGNED',
-        metadata: { reference: assignment.reference, assignmentId: assignment.id, staffNames },
-      }).catch(() => null);
+      await this.notificationService
+        .create({
+          recipientId: realAgencyId,
+          recipientType: 'AGENCY',
+          title: 'Staff Confirmed',
+          message: `${staffNames} was assigned to booking #${assignment.reference}.`,
+          type: 'STAFF_ASSIGNED',
+          metadata: {
+            reference: assignment.reference,
+            assignmentId: assignment.id,
+            staffNames,
+          },
+        })
+        .catch(() => null);
     }
 
-    this.logger.log(`Assigned staff [${dto.assignedStaffIds.join(', ')}] to assignment id=${assignment.id} ref=${assignment.reference}`);
+    this.logger.log(
+      `Assigned staff [${dto.assignedStaffIds.join(', ')}] to assignment id=${assignment.id} ref=${assignment.reference}`,
+    );
     return updated;
   }
 
@@ -636,12 +762,34 @@ export class AgencyService {
     });
 
     if (!assignment) {
-      throw new NotFoundException(`Assignment "${assignmentId}" not found for this agency`);
+      throw new NotFoundException(
+        `Assignment "${assignmentId}" not found for this agency`,
+      );
     }
 
-    const updated = await this.prisma.agencyAssignment.update({
-      where: { id: assignment.id },
+    if (!COMPLETABLE_ASSIGNMENT_STATUSES.includes(assignment.status)) {
+      throw new ConflictException(
+        `Assignment "${assignment.reference}" is ${assignment.status.toLowerCase().replace('_', ' ')}; only an assigned or in-progress job can be completed.`,
+      );
+    }
+
+    // Matches only while the job is still under way, so of two completes
+    // racing (a double click), one wins and the other is a 409 before any
+    // staff are released or payout announced.
+    const { count } = await this.prisma.agencyAssignment.updateMany({
+      where: {
+        id: assignment.id,
+        status: { in: COMPLETABLE_ASSIGNMENT_STATUSES },
+      },
       data: { status: AssignmentStatus.COMPLETED },
+    });
+    if (count !== 1) {
+      throw new ConflictException(
+        `Assignment "${assignment.reference}" was changed by someone else at the same moment. Reload it before trying again.`,
+      );
+    }
+    const updated = await this.prisma.agencyAssignment.findUniqueOrThrow({
+      where: { id: assignment.id },
     });
 
     // Release assigned staff back to available
@@ -657,36 +805,50 @@ export class AgencyService {
 
     // Sync HireBooking to COMPLETED
     if (assignment.reference) {
-      await this.prisma.hireBooking.updateMany({
-        where: { reference: assignment.reference },
-        data: { status: 'COMPLETED' },
-      }).catch((err) => {
-        this.logger.warn(`Failed to sync hireBooking to COMPLETED for ref=${assignment.reference}: ${err?.message || err}`);
-      });
+      await this.prisma.hireBooking
+        .updateMany({
+          where: { reference: assignment.reference },
+          data: { status: 'COMPLETED' },
+        })
+        .catch((err: unknown) => {
+          this.logger.warn(
+            `Failed to sync hireBooking to COMPLETED for ref=${assignment.reference}: ${reasonOf(err)}`,
+          );
+        });
     }
 
     // In-app notifications on completion
     if (assignment.travellerEmail) {
-      await this.notificationService.create({
-        recipientId: assignment.travellerEmail,
-        recipientType: 'APPLICANT',
-        title: 'Service Completed',
-        message: `Your booking #${assignment.reference} has been marked completed. Thank you for using World Portal!`,
-        type: 'JOB_COMPLETED',
-        metadata: { reference: assignment.reference },
-      }).catch(() => null);
+      await this.notificationService
+        .create({
+          recipientId: assignment.travellerEmail,
+          recipientType: 'APPLICANT',
+          title: 'Service Completed',
+          message: `Your booking #${assignment.reference} has been marked completed. Thank you for using World Portal!`,
+          type: 'JOB_COMPLETED',
+          metadata: { reference: assignment.reference },
+        })
+        .catch(() => null);
     }
 
-    await this.notificationService.create({
-      recipientId: realAgencyId,
-      recipientType: 'AGENCY',
-      title: 'Job Completed',
-      message: `Assignment #${assignment.reference} completed. $${assignment.netToAgency} net earnings credited to your Pending Payouts.`,
-      type: 'JOB_COMPLETED',
-      metadata: { reference: assignment.reference, assignmentId: assignment.id, netToAgency: assignment.netToAgency },
-    }).catch(() => null);
+    await this.notificationService
+      .create({
+        recipientId: realAgencyId,
+        recipientType: 'AGENCY',
+        title: 'Job Completed',
+        message: `Assignment #${assignment.reference} completed. $${String(assignment.netToAgency)} net earnings credited to your Pending Payouts.`,
+        type: 'JOB_COMPLETED',
+        metadata: {
+          reference: assignment.reference,
+          assignmentId: assignment.id,
+          netToAgency: assignment.netToAgency,
+        },
+      })
+      .catch(() => null);
 
-    this.logger.log(`Completed assignment id=${assignment.id} ref=${assignment.reference}`);
+    this.logger.log(
+      `Completed assignment id=${assignment.id} ref=${assignment.reference}`,
+    );
     return updated;
   }
 
@@ -718,13 +880,13 @@ export class AgencyService {
     const limit = Math.max(1, Number(query.limit) || 20);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.AgencyWhereInput = {};
 
     if (query.verification) {
-      where.verification = query.verification;
+      where.verification = query.verification as AgencyVerificationStatus;
     }
     if (query.status) {
-      where.listingStatus = query.status;
+      where.listingStatus = query.status as AgencyListingStatus;
     }
 
     if (query.search) {
@@ -809,8 +971,9 @@ export class AgencyService {
       },
     });
 
-    this.logger.log(`Updated agency id=${id} verification=${verificationEnum} listingStatus=${listingStatusEnum}`);
+    this.logger.log(
+      `Updated agency id=${id} verification=${verificationEnum} listingStatus=${listingStatusEnum}`,
+    );
     return updated;
   }
 }
-

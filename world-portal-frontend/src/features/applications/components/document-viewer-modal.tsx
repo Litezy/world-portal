@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Download, ExternalLink, Eye, FileText, Loader2 } from "lucide-react";
+import { Download, ExternalLink, Eye, FileText, Link2Off, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -15,21 +15,47 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { documentViewer } from "@/content/admin";
+import { safeHttpsUrl } from "@/lib/safe-url";
+import { cn } from "@/lib/utils";
 
 type Props = {
   label: string;
+  /** Supplied by an applicant or an agency: framed only when it is https. */
   url: string;
 };
 
-export function DocumentViewerModal({ label, url }: Props) {
+/** What stands in for a supplied link that isn't https — see `safeHttpsUrl`. */
+export function LinkUnavailable({ className }: { className?: string }) {
+  return (
+    <span
+      title={documentViewer.linkUnavailableHint}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground",
+        className,
+      )}
+    >
+      <Link2Off className="size-3.5" aria-hidden />
+      {documentViewer.linkUnavailable}
+    </span>
+  );
+}
+
+export function DocumentViewerModal({ label, url: suppliedUrl }: Props) {
   const [open, setOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const isPdf = url.toLowerCase().endsWith(".pdf") || url.toLowerCase().includes(".pdf");
+  // The record's URL is the applicant's or agency's own input. Anything but
+  // https (a javascript: or data: URL above all) never reaches the iframe, the
+  // img or a link.
+  const url = safeHttpsUrl(suppliedUrl);
+  if (!url) return <LinkUnavailable />;
+
+  const isPdf =
+    url.toLowerCase().endsWith(".pdf") || url.toLowerCase().includes(".pdf");
   const isImage =
     /\.(jpg|jpeg|png|webp|avif|gif|svg)$/i.test(url) ||
     url.toLowerCase().includes("/image/upload/") ||
-    (!isPdf && Boolean(url));
+    !isPdf;
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
@@ -41,34 +67,48 @@ export function DocumentViewerModal({ label, url }: Props) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs shrink-0 font-medium hover:border-primary/50">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 shrink-0 gap-1.5 text-xs font-medium hover:border-primary/50"
+        >
           <Eye className="size-3.5 text-primary" />
           View Document
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-4xl p-6 sm:max-w-4xl overflow-hidden border-border/80 bg-background/95 backdrop-blur-2xl">
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-border/60 pb-4 pr-8">
+      <DialogContent className="max-w-4xl overflow-hidden border-border/80 bg-background/95 p-6 backdrop-blur-2xl sm:max-w-4xl">
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-border/60 pr-8 pb-4">
           <div>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2 text-foreground">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
               <FileText className="size-4 text-primary" />
               {label}
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+            <DialogDescription className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
               <FileText className="size-3.5" />
               {documentViewer.description}
             </DialogDescription>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs font-medium">
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 text-xs font-medium"
+            >
               <a href={url} download target="_blank" rel="noreferrer">
                 <Download className="size-3.5" />
                 Download
               </a>
             </Button>
 
-            <Button asChild size="sm" variant="ghost" className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground">
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
               <a href={url} target="_blank" rel="noreferrer">
                 <ExternalLink className="size-3.5" />
                 Open External
@@ -78,7 +118,7 @@ export function DocumentViewerModal({ label, url }: Props) {
         </DialogHeader>
 
         {/* Viewport Frame with Modern Asset Loader */}
-        <div className="relative mt-4 flex min-h-[480px] max-h-[70vh] w-full items-center justify-center overflow-hidden rounded-2xl border border-border/70 bg-muted/20 backdrop-blur-md">
+        <div className="relative mt-4 flex max-h-[70vh] min-h-[480px] w-full items-center justify-center overflow-hidden rounded-2xl border border-border/70 bg-muted/20 backdrop-blur-md">
           <AnimatePresence>
             {isLoading && (
               <motion.div
@@ -92,16 +132,16 @@ export function DocumentViewerModal({ label, url }: Props) {
                   initial={{ top: "0%" }}
                   animate={{ top: ["0%", "100%", "0%"] }}
                   transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_var(--cyan-400)]"
+                  className="absolute right-0 left-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_var(--cyan-400)]"
                 />
 
                 {/* Animated Spinner & Glass Badge */}
                 <div className="relative grid size-16 place-items-center rounded-2xl border border-primary/30 bg-primary/10 shadow-lg shadow-primary/10">
-                  <div className="absolute inset-0 rounded-2xl animate-pulse bg-primary/15" />
+                  <div className="absolute inset-0 animate-pulse rounded-2xl bg-primary/15" />
                   <Loader2 className="size-8 animate-spin text-primary" />
                 </div>
 
-                <div className="flex flex-col items-center text-center px-4">
+                <div className="flex flex-col items-center px-4 text-center">
                   <p className="text-xs font-semibold tracking-wide text-foreground uppercase">
                     Loading Asset
                   </p>
@@ -127,7 +167,7 @@ export function DocumentViewerModal({ label, url }: Props) {
                 alt={label}
                 onLoad={() => setIsLoading(false)}
                 onError={() => setIsLoading(false)}
-                className="max-h-[65vh] w-auto max-w-full object-contain rounded-xl shadow-md border border-border/40"
+                className="max-h-[65vh] w-auto max-w-full rounded-xl border border-border/40 object-contain shadow-md"
               />
             </motion.div>
           ) : isPdf ? (
@@ -151,7 +191,8 @@ export function DocumentViewerModal({ label, url }: Props) {
               </div>
               <p className="text-sm font-semibold text-foreground">{label}</p>
               <p className="max-w-xs text-xs text-muted-foreground">
-                This document format cannot be rendered inline. Click below to download or view the file directly.
+                This document format cannot be rendered inline. Click below to download
+                or view the file directly.
               </p>
               <Button asChild size="sm" variant="primary" className="mt-2 gap-2">
                 <a href={url} target="_blank" rel="noreferrer">

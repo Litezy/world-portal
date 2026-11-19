@@ -1,27 +1,34 @@
 import { NextResponse } from "next/server";
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/api";
+import { visitorIpHeaders } from "@/server/api/service-key";
+import { applicantBackend } from "@/server/applicant/backend";
+import { backendErrorResponse } from "@/server/http";
 
+/**
+ * POST /api/payments/checkout-package — open a payment for the basket, as the
+ * signed-in WorldStreet applicant. The session token is forwarded and the API
+ * files the basket under that account's verified email; any `email` in the
+ * body is ignored there. Signed out, this is a 401 and the API is not called.
+ */
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const res = await fetch(`${BACKEND_API_URL}/payments/checkout-package`, {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
+  }
+
+  try {
+    const result = await applicantBackend<unknown>("/payments/checkout-package", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      // The API rate-limits this per visitor (by their IP) rather than per
+      // this server's address, which every visitor's checkout shares.
+      service: true,
+      headers: visitorIpHeaders(request),
     });
-
-    if (res.ok) {
-      const data = await res.json();
-      return NextResponse.json(data, { status: res.status });
-    }
-
-    const err = await res.json();
-    return NextResponse.json(err, { status: res.status });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      { message: "Backend payment service unavailable" },
-      { status: 503 }
-    );
+    return backendErrorResponse(error);
   }
 }

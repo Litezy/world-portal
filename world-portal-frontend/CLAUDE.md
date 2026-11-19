@@ -82,8 +82,25 @@ statusCode: 422, message: "Validation failed", errors: { field: [...] } }`.
 
 Documents upload one at a time to `POST /upload` (field name `file`, 10MB,
 PDF/JPG/PNG/WEBP) _before_ submission; the returned `url` goes into the matching
-`*Url` field. `GET /visa-documentation/:id` is deliberately public — never add
-an auth header to it.
+`*Url` field. Uploads are **not** public: `useUploadDocument()` sends the
+applicant's WorldStreet session token, and the agency checklist
+(`{ via: "agency" }`) posts to `/api/agency/listing/upload`, which checks the
+agency session and uploads with `SERVICE_AUTH_KEY`. The API judges the type by
+the file's bytes, not its MIME claim, and generates the stored name.
+`GET /visa-documentation/:id` (and `/passport-application/:id`) is
+the public status lookup, used only by `/track`. Without an `Authorization`
+header the service **requires `?email=` and the verified-email lookup token**
+in `x-lookup-token` (400 without the email, 401 without a valid token, 403 when
+the token is for another email, 404 when the file is not under that email),
+because references are only 4 random digits and an email is often public.
+`POST /otp/verify` returns that token (`lookupToken`, 30 minutes, only for the
+email the code was sent to); `TrackPanel` keeps it in React state for the visit
+and `useVisaApplication()` sends it. Never store it in localStorage or a
+cookie. Never add an `Authorization` header to the applicant-side call — it
+makes the service treat the caller as desk staff and demand a valid staff
+token (a lookup token is refused there). The console's BFF calls it with the
+session token instead; signed-in applicants and Vivid read their own files
+through `/me/applications` with the WorldStreet token.
 
 ## Applicants sign in with WorldStreet
 
@@ -102,8 +119,9 @@ WorldStreet's `/login` with `redirect_url` back. ADR 0014 in
   reintroduce an applicant store, an email-code login, or an email in a URL.
 - **Acting as the applicant means forwarding the session token.** Server
   routes use `applicantBackend()` (`src/server/applicant/backend.ts`); the visa
-  submission passes `getToken()` per call. The status lookup and uploads stay
-  public — no token.
+  submission and document uploads pass `getToken()` per call. The `/track`
+  status lookup needs no sign-in and no session token: it sends the
+  OTP-verified `x-lookup-token` instead (see the API contract above).
 - **The `(applicant)` layout joins on entry** (`POST /me/join`, idempotent).
   That is the whole onboarding.
 - **Signing out is WorldStreet-wide** — it is the same session.
@@ -174,10 +192,27 @@ same two-tone headings — a console, not a second design language.
 - **The session is an HMAC-signed cookie** (`src/server/auth/session.ts`),
   `httpOnly` + `sameSite=lax`, verified with `timingSafeEqual`. It also carries
   the service's access token. `authenticate()` exchanges the email for a token
-  and then proves the account exists and is active via `/profiles/me`.
+  and then proves the account exists and is active via `/profiles/me`. The
+  token request carries `x-service-key` (`SERVICE_AUTH_KEY`, the same value as
+  the backend's): with mock auth off, the service issues tokens to nobody else.
+  The service verifies every token's signature and its 7-day expiry.
+- **Each session cookie names its audience** (`aud: "admin"` / `"agency"`),
+  and each verifier refuses the other's, so an agency cannot paste its cookie
+  into the admin one. Both are signed with `SESSION_SECRET`.
+- **Sign-in is throttled here, not just at the API.** The console password is
+  compared in constant time, and `src/server/auth/login-throttle.ts` refuses a
+  sixth failure in 15 minutes per visitor IP and per email (429). It is in
+  memory, per instance.
+- **The visitor's IP comes from one trusted header** (`visitorIpHeaders()`,
+  `CLIENT_IP_HEADER`: Vercel's or Traefik's by default, `cf-connecting-ip`
+  behind Cloudflare). Relayed calls (OTP, checkout, the token request) send it
+  as `x-visitor-ip` with the service key, so the API rate-limits each visitor
+  rather than this server's one address.
 - **`ADMIN_PASSWORD` and `SESSION_SECRET` have dev defaults that
   `src/config/env.ts` refuses in production.** Deploying without setting them
-  fails the build rather than shipping a public password.
+  fails the build rather than shipping a public password. Production also needs
+  `ADMIN_PASSWORD` of 16+ characters, `SESSION_SECRET` of 32+ and a real
+  `SERVICE_AUTH_KEY` (not the `.env.example` development value).
 - **Roles are the service's, not ours.** `AdminRole` mirrors its `UserRole`
   (`MANAGER` / `STAFF` / `PARTNER`); `RolesGuard` decides what each may read, so
   a 403 from `/admin/team` is a correct answer for a non-manager, not a bug.
@@ -300,14 +335,17 @@ assignment, and a payout's totals are the sums over the assignments it batches.
 A unit test asserts both, so add a job by giving it a `gross` and let the
 fixture builders derive the rest.
 
-**There is no agency API.** Like WorldSpace, the whole feature hangs off one
-seam — `src/server/agency/store.ts` — and every screen goes through the route
-handlers rather than talking to anything directly. The catch is that the store's
-writes are **in memory**: assigning staff, uploading a document or submitting a
-listing survives navigation and dies on the next `next dev` restart. That is
-fine for a demo and a trap in a bug report, so check whether the server was
-restarted before chasing a "lost" assignment. Swap the store, not the screens,
-when a real service exists.
+**The agency API is the World Portal service's `/agency` routes, reached only
+through `src/server/agency/store.ts`** (sign-in goes through
+`src/server/agency/auth.ts`). Every screen goes through the route handlers,
+which pass the store `session.agencyId` and nothing else. The store sends
+`SERVICE_AUTH_KEY` as `x-service-key` for the portal and the public `/hire`
+list, and the desk member's token for the admin console. Verifying an agency
+and ruling on its documents take the desk token only. The catch: when the
+service refuses or is unreachable, most writes (staff, documents, listing,
+assignments) fall back to the in-memory fixtures and still report success.
+That survives navigation and dies on the next `next dev` restart, so check the
+service and the key before chasing a "lost" assignment.
 
 **The agency session is a different cookie from the admin one, and the two must
 never cross.** `/admin` is E-Embassy staff; `/agency` is an outside business

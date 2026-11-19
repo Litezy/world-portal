@@ -78,13 +78,19 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (err) {
-    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    // The error stays in the server log. Its message can carry Sira's own
+    // reply (which has echoed the key and the vendor's model), internal
+    // addresses and stack names, none of which may reach the browser.
     console.error(`[vivid/sira-session] ${stage} failed for ${userId}:`, err);
     // Sira's own status codes (a bad key is a 401 from Sira) must not read as
     // "you are signed out" in the browser — collapse them to 502.
     const status = err instanceof SiraError && err.status === 503 ? 503 : 502;
     return NextResponse.json(
-      { error: "session_mint_failed", stage, detail },
+      {
+        error: "session_mint_failed",
+        stage,
+        detail: "Vivid could not start a voice session. Try again in a moment.",
+      },
       { status },
     );
   }

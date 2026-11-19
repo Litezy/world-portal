@@ -39,12 +39,20 @@ const countryCodeSchema = z
   .toUpperCase();
 
 /**
+ * A link an agency supplies. Desk staff open these in the admin console, so
+ * only https is accepted: `z.url()` on its own takes any scheme, including
+ * `javascript:` and `data:`.
+ */
+const httpsUrlSchema = (message: string) =>
+  z.url({ protocol: /^https$/, error: message });
+
+/**
  * A link a form may legitimately leave blank. An empty input arrives as `""`,
  * which fails `z.url()`, so blanks normalise to `null` — the shape `Agency`
  * declares for `logoUrl` and `website`.
  */
 const optionalUrlSchema = z
-  .union([z.url("Enter a valid URL"), z.literal(""), z.null()])
+  .union([httpsUrlSchema("Enter a full https:// link"), z.literal(""), z.null()])
   .transform((value) => value || null);
 
 /** ISO 8601 date, as the documents carry it. */
@@ -213,7 +221,12 @@ export const agencyListingSchema = z.object({
 export const patchOfferingSchema = z.object({
   id: z.string().min(1).optional(),
   category: agencyCategorySchema,
-  title: z.string().trim().max(80, "That title is too long").optional().or(z.literal("")),
+  title: z
+    .string()
+    .trim()
+    .max(80, "That title is too long")
+    .optional()
+    .or(z.literal("")),
   description: z
     .string()
     .trim()
@@ -250,6 +263,9 @@ export const patchOfferingSchema = z.object({
 /**
  * The listing is edited a step at a time, so the PATCH takes any subset. An
  * absent key means "leave it alone" — it is never read as a clear.
+ *
+ * No `email`: it is the agency's sign-in email, and changing it needs a
+ * verified flow that doesn't exist yet. One sent anyway is dropped.
  */
 export const listingPatchSchema = z.object({
   name: z.string().trim().max(120).optional().or(z.literal("")),
@@ -262,20 +278,22 @@ export const listingPatchSchema = z.object({
   summary: z.string().trim().max(200).optional().or(z.literal("")),
   about: z.string().trim().max(2000).optional().or(z.literal("")),
   logoUrl: optionalUrlSchema.optional(),
-  email: z.string().trim().optional().or(z.literal("")),
   phone: z.string().trim().optional().or(z.literal("")),
   website: optionalUrlSchema.optional(),
   yearFounded: z.coerce.number().optional(),
   staffCount: z.coerce.number().optional(),
   languages: z.array(z.string().trim()).optional(),
-  offerings: z.array(patchOfferingSchema).max(40, "That is more than we can list").optional(),
+  offerings: z
+    .array(patchOfferingSchema)
+    .max(40, "That is more than we can list")
+    .optional(),
 });
 
 /** One uploaded file recorded against the agency's compliance file. */
 export const setDocumentSchema = z.object({
   kind: agencyDocumentKindSchema,
   fileName: z.string().trim().min(1, "The file needs a name").max(200),
-  fileUrl: z.url("The upload did not return a URL"),
+  fileUrl: httpsUrlSchema("The upload did not return an https:// URL"),
   /** Only asked for where `documentCatalog[kind].expires` is true. */
   expiresAt: isoDateSchema.optional(),
 });

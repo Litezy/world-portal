@@ -24,9 +24,11 @@ import {
   RefundStatus,
   PaymentOption,
   Prisma,
+  VisaDocumentation,
 } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { serializable } from '../prisma/serializable';
+import { ApplicationOwner } from '../applicant/applicant.service';
 
 /** The money fields every payable application shares (visa and passport). */
 type PayableApplication = {
@@ -61,6 +63,37 @@ export function balancesAfterRefund(app: PayableApplication, refunded: number) {
     balanceDue: new Prisma.Decimal(balance),
     paymentStatus,
   };
+}
+
+/**
+ * Only an INITIATED payment may be confirmed. Anything else is a 409 that
+ * says why, so a double click, or a confirm after a refund, can never credit
+ * the application a second time.
+ */
+function assertConfirmable(
+  status: PaymentTransactionStatus,
+  transactionRef: string,
+) {
+  switch (status) {
+    case PaymentTransactionStatus.INITIATED:
+      return;
+    case PaymentTransactionStatus.CONFIRMED:
+      throw new ConflictException(
+        `Payment transaction '${transactionRef}' is already confirmed.`,
+      );
+    case PaymentTransactionStatus.REFUNDED:
+      throw new ConflictException(
+        `Payment transaction '${transactionRef}' was refunded, so it can't be confirmed again. Start a new payment instead.`,
+      );
+    case PaymentTransactionStatus.FAILED:
+      throw new ConflictException(
+        `Payment transaction '${transactionRef}' failed, so it can't be confirmed. Start a new payment instead.`,
+      );
+    default:
+      throw new ConflictException(
+        `Payment transaction '${transactionRef}' is ${String(status)}; only an initiated payment can be confirmed.`,
+      );
+  }
 }
 
 @Injectable()
@@ -124,9 +157,15 @@ export class PaymentService {
     return updated;
   }
 
+  /**
+   * Opens a payment on the signed-in applicant's own visa application. Any
+   * other application is a 404, exactly like one that does not exist, so the
+   * guessable application numbers reveal nothing. The payer is recorded as the
+   * owner's verified email; `dto.profileId` is not trusted.
+   */
   async initiatePaymentTransaction(
     dto: InitiatePaymentTransactionDto,
-    initiatorEmail: string,
+    owner: ApplicationOwner,
   ) {
     if (!dto.visaDocumentationId) {
       throw new BadRequestException(
@@ -137,6 +176,12 @@ export class PaymentService {
     const visaDoc = await this.visaDocService.findVisaApplicationById(
       dto.visaDocumentationId,
     );
+
+    if (visaDoc.clerkUserId !== owner.clerkUserId) {
+      throw new NotFoundException(
+        `No application '${dto.visaDocumentationId}' was found on your account.`,
+      );
+    }
 
     if (!visaDoc.totalAmount) {
       throw new BadRequestException(
@@ -200,11 +245,11 @@ export class PaymentService {
       data: {
         transactionRef,
         visaDocumentationId: visaDoc.id,
-        profileId: dto.profileId || visaDoc.profileId || null,
+        profileId: visaDoc.profileId || null,
         amount: new Prisma.Decimal(finalAmount),
         paymentOption: dto.paymentOption,
         status: PaymentTransactionStatus.INITIATED,
-        initiatedBy: initiatorEmail || visaDoc.email,
+        initiatedBy: owner.email,
       },
     });
 
@@ -225,55 +270,100 @@ export class PaymentService {
     };
   }
 
+  /**
+   * Marks an INITIATED payment CONFIRMED and credits its application, in one
+   * serializable transaction (like bank transfers and refunds), so the status
+   * and the balance move together or not at all.
+   *
+   * - Only an INITIATED payment can be confirmed: a confirmed, refunded or
+   *   failed one is a 409, so a refunded payment can't be credited again.
+   * - The status flips with a conditional update that matches only while it
+   *   is still INITIATED; of two confirms racing, only one matches, and the
+   *   other is a 409 before any money is credited.
+   * - The amount must fit the balance read inside the transaction, exactly as
+   *   a bank transfer must (`assertPaymentAllowed`): an overpayment is refused,
+   *   never recorded past the price.
+   *
+   * The receipt email goes out only after the transaction commits.
+   */
   async confirmPaymentTransaction(dto: ConfirmPaymentTransactionDto) {
-    const transaction = await this.prisma.paymentTransaction.findUnique({
-      where: { transactionRef: dto.transactionRef },
+    const { confirmed, visa } = await serializable(this.prisma, async (tx) => {
+      const transaction = await tx.paymentTransaction.findUnique({
+        where: { transactionRef: dto.transactionRef },
+      });
+
+      if (!transaction) {
+        throw new NotFoundException(
+          `Payment transaction with reference '${dto.transactionRef}' not found.`,
+        );
+      }
+      assertConfirmable(transaction.status, dto.transactionRef);
+
+      const { count } = await tx.paymentTransaction.updateMany({
+        where: {
+          id: transaction.id,
+          status: PaymentTransactionStatus.INITIATED,
+        },
+        data: {
+          status: PaymentTransactionStatus.CONFIRMED,
+          confirmedAt: new Date(),
+        },
+      });
+      if (count !== 1) {
+        throw new ConflictException(
+          `Payment transaction '${dto.transactionRef}' was confirmed or changed by someone else at the same moment. Reload it before trying again.`,
+        );
+      }
+
+      let visa: VisaDocumentation | null = null;
+      if (transaction.visaDocumentationId) {
+        const visaDoc = await tx.visaDocumentation.findUniqueOrThrow({
+          where: { id: transaction.visaDocumentationId },
+        });
+        this.assertPaymentAllowed(
+          visaDoc,
+          {
+            amount: Number(transaction.amount),
+            paymentOption: transaction.paymentOption,
+          },
+          'Visa application',
+        );
+        // Updates amountPaid / balanceDue / paymentStatus and moves a
+        // SUBMITTED or EVALUATED file to UNDER_REVIEW.
+        visa = await this.visaDocService.applyPayment(
+          tx,
+          visaDoc,
+          transaction.amount,
+          transaction.paymentOption,
+        );
+      }
+
+      const confirmed = await tx.paymentTransaction.findUniqueOrThrow({
+        where: { id: transaction.id },
+      });
+      return { confirmed, visa };
     });
 
-    if (!transaction) {
-      throw new NotFoundException(
-        `Payment transaction with reference '${dto.transactionRef}' not found.`,
-      );
+    if (visa) {
+      this.visaDocService.notifyPaymentConfirmed(visa, confirmed.paymentOption);
     }
-
-    if (transaction.status === PaymentTransactionStatus.CONFIRMED) {
-      throw new ConflictException(
-        `Payment transaction '${dto.transactionRef}' is already confirmed.`,
-      );
-    }
-
-    // Direct Service Call (Option 1): Immediately invoke VisaDocumentationService to update visa application status to UNDER_REVIEW
-    if (transaction.visaDocumentationId) {
-      await this.visaDocService.handlePaymentConfirmed(
-        transaction.visaDocumentationId,
-        transaction.amount,
-        transaction.paymentOption,
-      );
-    }
-
-    const updatedTxn = await this.prisma.paymentTransaction.update({
-      where: { id: transaction.id },
-      data: {
-        status: PaymentTransactionStatus.CONFIRMED,
-        confirmedAt: new Date(),
-      },
-    });
 
     this.logger.log(
-      `Payment transaction CONFIRMED via Direct Service Call: transactionRef=${transaction.transactionRef}, amount=${transaction.amount.toString()}`,
+      `Payment transaction CONFIRMED: transactionRef=${confirmed.transactionRef}, amount=${confirmed.amount.toString()}`,
     );
 
-    return updatedTxn;
+    return confirmed;
   }
 
   /**
-   * The checks every bank-transfer confirmation must pass before money is
-   * recorded (ADR 0016): the file is priced, not already paid, the amount fits
-   * the balance, and a half payment is only taken where instalments are on.
+   * The checks every payment must pass before it is recorded against a file
+   * (ADR 0016), whether staff record a bank transfer or confirm an initiated
+   * payment: the file is priced, not already paid, the amount fits the
+   * balance, and a half payment is only taken where instalments are on.
    */
-  private assertBankTransferAllowed(
+  private assertPaymentAllowed(
     app: PayableApplication,
-    dto: ConfirmBankTransferDto,
+    payment: { amount: number; paymentOption: PaymentOption },
     label: string,
   ) {
     if (!app.totalAmount) {
@@ -290,13 +380,13 @@ export class PaymentService {
     if (balance <= 0) {
       throw new ConflictException(`${label} is already fully paid.`);
     }
-    if (dto.amount > balance) {
+    if (payment.amount > balance) {
       throw new ConflictException(
-        `Payment amount (${dto.amount}) cannot exceed the remaining balance due of ${balance}.`,
+        `Payment amount (${payment.amount}) cannot exceed the remaining balance due of ${balance}.`,
       );
     }
     if (
-      dto.paymentOption === PaymentOption.HALF_INSTALLMENT &&
+      payment.paymentOption === PaymentOption.HALF_INSTALLMENT &&
       !app.allowInstallment
     ) {
       throw new ConflictException(
@@ -374,11 +464,7 @@ export class PaymentService {
           const passportApp = await tx.passportApplication.findUniqueOrThrow({
             where: { id },
           });
-          this.assertBankTransferAllowed(
-            passportApp,
-            dto,
-            'Passport application',
-          );
+          this.assertPaymentAllowed(passportApp, dto, 'Passport application');
           const created = await bankTransaction(
             tx,
             { passportApplicationId: id },
@@ -427,7 +513,7 @@ export class PaymentService {
         const visaDoc = await tx.visaDocumentation.findUniqueOrThrow({
           where: { id },
         });
-        this.assertBankTransferAllowed(visaDoc, dto, 'Visa application');
+        this.assertPaymentAllowed(visaDoc, dto, 'Visa application');
         const created = await bankTransaction(
           tx,
           { visaDocumentationId: id },
@@ -689,19 +775,24 @@ export class PaymentService {
   }
 
   /**
-   * Multi-item basket checkout transaction creation
+   * Multi-item basket checkout transaction creation, for the signed-in
+   * applicant: the basket is filed under their verified email, whatever
+   * `dto.email` says.
    */
-  async createPackageCheckout(dto: {
-    email: string;
-    items: Array<{
-      type: string;
-      title: string;
-      entityId?: string;
-      amount: number;
-    }>;
-    totalAmount: number;
-    currency?: string;
-  }) {
+  async createPackageCheckout(
+    dto: {
+      email?: string;
+      items: Array<{
+        type: string;
+        title: string;
+        entityId?: string;
+        amount: number;
+      }>;
+      totalAmount: number;
+      currency?: string;
+    },
+    owner: ApplicationOwner,
+  ) {
     const transactionRef = `TXN-PKG-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const transaction = await this.prisma.paymentTransaction.create({
@@ -711,13 +802,13 @@ export class PaymentService {
         paymentOption: PaymentOption.FULL,
         status: PaymentTransactionStatus.INITIATED,
         paymentMethod: 'CARD',
-        initiatedBy: dto.email,
-        packageItemsJson: dto.items as any,
+        initiatedBy: owner.email,
+        packageItemsJson: dto.items,
       },
     });
 
     this.logger.log(
-      `Created package checkout transactionRef=${transactionRef} for email=${dto.email}`,
+      `Created package checkout transactionRef=${transactionRef} for clerkUserId=${owner.clerkUserId}`,
     );
     return {
       transactionRef: transaction.transactionRef,

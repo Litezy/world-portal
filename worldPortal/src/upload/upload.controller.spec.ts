@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClerkTokenVerifier } from '../auth/clerk/clerk-token.verifier';
 
 describe('UploadController', () => {
   let controller: UploadController;
@@ -54,6 +55,11 @@ describe('UploadController', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        // UploadAccessGuard verifies applicant (WorldStreet) tokens with it.
+        {
+          provide: ClerkTokenVerifier,
+          useValue: { verify: jest.fn() },
         },
       ],
     }).compile();

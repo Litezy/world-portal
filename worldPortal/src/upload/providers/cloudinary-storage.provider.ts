@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   Logger,
@@ -7,9 +7,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 
-import { randomUUID } from 'crypto';
 import {
   IStorageProvider,
+  StorageObject,
   StorageUploadResult,
 } from './storage-provider.interface';
 
@@ -46,9 +46,8 @@ export class CloudinaryStorageProvider implements IStorageProvider {
     }
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<StorageUploadResult> {
-    const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `documents/${randomUUID()}-${sanitizedFilename}`;
+  async uploadFile(object: StorageObject): Promise<StorageUploadResult> {
+    const { key } = object;
 
     if (!this.isConfigured) {
       const mockUrl = `https://res.cloudinary.com/demo/raw/upload/${this.folder}/${key}`;
@@ -85,7 +84,7 @@ export class CloudinaryStorageProvider implements IStorageProvider {
         },
       );
 
-      uploadStream.end(file.buffer);
+      uploadStream.end(object.body);
     });
   }
 }

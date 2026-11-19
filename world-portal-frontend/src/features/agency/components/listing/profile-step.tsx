@@ -242,13 +242,19 @@ export function ProfileStep({
             <FormItem>
               <FormLabel required>{copy.email}</FormLabel>
               <FormControl>
+                {/* Read-only: it is the sign-in email, and changing that needs
+                    a verified flow. toPatch() never sends it either. */}
                 <Input
                   {...field}
                   type="email"
+                  readOnly
+                  aria-readonly
                   disabled={disabled}
                   autoComplete="email"
+                  className="cursor-default text-muted-foreground"
                 />
               </FormControl>
+              <FormDescription>{copy.emailLocked}</FormDescription>
               <FormMessage />
             </FormItem>
           )}

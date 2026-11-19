@@ -33,7 +33,9 @@ describe('PassportApplicationService', () => {
 
   const passportApplication = {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
     findUniqueOrThrow: jest.fn(),
+    create: jest.fn(),
     update: jest.fn(),
   };
   const prisma = {
@@ -47,6 +49,7 @@ describe('PassportApplicationService', () => {
   // The transaction client is the same mock.
   prisma.$transaction.mockImplementation((work) => work(prisma));
   const sendGrid = {
+    sendApplicationConfirmationEmail: jest.fn().mockResolvedValue(true),
     sendCostEvaluatedEmail: jest.fn().mockResolvedValue(true),
     sendPaymentConfirmedEmail: jest.fn().mockResolvedValue(true),
   };
@@ -63,6 +66,52 @@ describe('PassportApplicationService', () => {
       sendGrid as unknown as SendGridService,
       {} as OtpService,
     );
+  });
+
+  /**
+   * Only the signed-in applicant's route creates an application, so a
+   * `profileId` in the form is theirs to make up: it is ignored, never used
+   * to link the file to a desk member's profile.
+   */
+  describe('createApplication profileId', () => {
+    const owner = { clerkUserId: 'user_abc', email: 'ada@example.com' };
+    const form = {
+      passportCategory: 'FRESH' as const,
+      surname: 'Okafor',
+      firstName: 'Ada',
+      sex: 'FEMALE' as const,
+      ninNumber: '12345678901',
+      email: 'ada@example.com',
+    };
+
+    beforeEach(() => {
+      passportApplication.findUnique.mockResolvedValue(null);
+      passportApplication.create.mockResolvedValue(record);
+    });
+
+    it('never links the file to a desk profile the applicant names', async () => {
+      prisma.profile.findUnique.mockResolvedValueOnce({
+        id: 'desk-profile-1',
+        email: 'partner@example.com',
+      });
+
+      await service.createApplication(
+        { ...form, profileId: 'desk-profile-1' },
+        owner,
+      );
+
+      expect(firstArg(passportApplication.create).data.profileId).toBeNull();
+      expect(prisma.profile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('does not say whether a named profile id exists', async () => {
+      await expect(
+        service.createApplication(
+          { ...form, profileId: 'no-such-profile' },
+          owner,
+        ),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe('evaluateCost', () => {

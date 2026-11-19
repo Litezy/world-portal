@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
   authenticateAgency,
   registerAgency,
@@ -7,7 +8,7 @@ import {
 } from "../agency/auth";
 
 describe("Agency Auth (Passwordless OTP)", () => {
-  const registeredAgencies: any[] = [];
+  const registeredAgencies: { id: string; email: string }[] = [];
   const deliveredCodes = new Map<string, string>();
 
   beforeEach(() => {
@@ -17,21 +18,21 @@ describe("Agency Auth (Passwordless OTP)", () => {
     // Mock fetch for NestJS backend endpoints
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation(async (url: string, options?: any) => {
+      vi.fn().mockImplementation(async (url: string, options?: RequestInit) => {
         if (url.endsWith("/otp/send")) {
-          const { email } = JSON.parse(options.body);
+          const { email } = JSON.parse(String(options?.body));
           deliveredCodes.set(email, "123456");
           return { ok: true, json: async () => ({ data: { success: true } }) };
         }
         if (url.endsWith("/otp/verify")) {
-          const { email, code } = JSON.parse(options.body);
+          const { email, code } = JSON.parse(String(options?.body));
           const verified = deliveredCodes.get(email) === code;
           if (verified) deliveredCodes.delete(email);
           return { ok: verified, json: async () => ({ data: { verified } }) };
         }
         if (typeof url === "string" && url.includes("/agency")) {
           if (options?.method === "POST") {
-            const body = JSON.parse(options.body);
+            const body = JSON.parse(String(options?.body));
             const newAgency = {
               id: `ag-test-${Date.now()}`,
               name: body.name,
@@ -39,7 +40,9 @@ describe("Agency Auth (Passwordless OTP)", () => {
               phone: body.phone,
               country: body.country,
               countryCode: body.countryCode,
-              users: [{ id: `agu-test-${Date.now()}`, name: body.name, email: body.email }],
+              users: [
+                { id: `agu-test-${Date.now()}`, name: body.name, email: body.email },
+              ],
             };
             registeredAgencies.push(newAgency);
             return {
@@ -50,8 +53,8 @@ describe("Agency Auth (Passwordless OTP)", () => {
 
           if (url.includes("search=")) {
             const searchParam = new URL(url).searchParams.get("search")?.toLowerCase();
-            const matches = registeredAgencies.filter((a) =>
-              a.email.toLowerCase() === searchParam,
+            const matches = registeredAgencies.filter(
+              (a) => a.email.toLowerCase() === searchParam,
             );
             return {
               ok: true,
@@ -59,9 +62,12 @@ describe("Agency Auth (Passwordless OTP)", () => {
             };
           }
 
-          const emailOrId = decodeURIComponent(url.split("/agency/")[1] || "").toLowerCase();
+          const emailOrId = decodeURIComponent(
+            url.split("/agency/")[1] || "",
+          ).toLowerCase();
           const match = registeredAgencies.find(
-            (a) => a.email.toLowerCase() === emailOrId || a.id.toLowerCase() === emailOrId,
+            (a) =>
+              a.email.toLowerCase() === emailOrId || a.id.toLowerCase() === emailOrId,
           );
 
           if (match) {
@@ -98,20 +104,31 @@ describe("Agency Auth (Passwordless OTP)", () => {
 
   it("sends through the backend and verifies the delivered code once", async () => {
     expect((await sendAgencyOtp(" Mailbox@Example.com ")).success).toBe(true);
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/otp/send"), expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ email: "mailbox@example.com", purpose: "AGENCY_AUTH" }),
-      cache: "no-store",
-    }));
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/otp/send"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "mailbox@example.com", purpose: "AGENCY_AUTH" }),
+        cache: "no-store",
+      }),
+    );
     expect(await verifyAgencyOtp("mailbox@example.com", "999999")).toBe(false);
     expect(await verifyAgencyOtp(" Mailbox@Example.com ", "123456")).toBe(true);
     expect(await verifyAgencyOtp("mailbox@example.com", "123456")).toBe(false);
   });
 
-  it.each([503, 200])("does not claim delivery when the backend reports failure (%s)", async (status) => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ data: { success: false } }), { status }));
-    expect(await sendAgencyOtp("failure@example.com")).toMatchObject({ success: false, status: 503 });
-  });
+  it.each([503, 200])(
+    "does not claim delivery when the backend reports failure (%s)",
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { success: false } }), { status }),
+      );
+      expect(await sendAgencyOtp("failure@example.com")).toMatchObject({
+        success: false,
+        status: 503,
+      });
+    },
+  );
 
   it("handles network failure during sending and verification", async () => {
     vi.mocked(fetch).mockRejectedValue(new Error("offline"));
@@ -119,15 +136,11 @@ describe("Agency Auth (Passwordless OTP)", () => {
     expect(await verifyAgencyOtp("offline@example.com", "123456")).toBe(false);
   });
 
-  it("refuses sending OTP for unknown email on login intent", async () => {
-    const res = await sendAgencyOtp("unknown.email@domain.com", "login");
-    expect(res.success).toBe(false);
-    expect(res.status).toBe(404);
-    expect(res.message).toContain("No registered agency matches");
-  });
-
-  it("refuses sending OTP for existing email on signup intent", async () => {
-    const existingEmail = `registered.${Date.now()}@test.com`;
+  // Whether an email has an agency is told only to someone who has proved they
+  // read that mailbox, by entering the code. Asking for a code answers the same
+  // either way, so the form can't be used to test which businesses are listed.
+  it("answers a sign-in code request the same whether or not the agency exists", async () => {
+    const existingEmail = `registered.login.${Date.now()}@test.com`;
     await registerAgency({
       agencyName: "Existing Agency",
       contactName: "Owner",
@@ -138,10 +151,60 @@ describe("Agency Auth (Passwordless OTP)", () => {
       otp: "000000",
     });
 
-    const res = await sendAgencyOtp(existingEmail, "signup");
-    expect(res.success).toBe(false);
-    expect(res.status).toBe(409);
-    expect(res.message).toContain("already listed");
+    const known = await sendAgencyOtp(existingEmail, "login");
+    const unknown = await sendAgencyOtp("unknown.email@domain.com", "login");
+
+    expect(known).toEqual(unknown);
+    expect(known).toEqual({
+      success: true,
+      message: "If an agency is registered with that email, a code is on its way.",
+    });
+    // Only a real account is sent a code.
+    expect(deliveredCodes.has(existingEmail)).toBe(true);
+    expect(deliveredCodes.has("unknown.email@domain.com")).toBe(false);
+  });
+
+  it("answers a signup code request the same whether or not the email is taken", async () => {
+    const takenEmail = `registered.signup.${Date.now()}@test.com`;
+    const freshEmail = `fresh.signup.${Date.now()}@test.com`;
+    const signupWith = (email: string, otp: string) =>
+      registerAgency({
+        agencyName: "Existing Agency",
+        contactName: "Owner",
+        email,
+        phone: "+15550199",
+        countryCode: "US",
+        country: "United States",
+        otp,
+      });
+    await signupWith(takenEmail, "000000");
+
+    const taken = await sendAgencyOtp(takenEmail, "signup");
+    const fresh = await sendAgencyOtp(freshEmail, "signup");
+
+    expect(taken).toEqual({
+      success: true,
+      message: `Verification code sent to ${takenEmail}.`,
+    });
+    expect(fresh).toEqual({
+      success: true,
+      message: `Verification code sent to ${freshEmail}.`,
+    });
+    // The taken email's owner learns the agency is listed only after entering
+    // the code that went to their own mailbox.
+    const again = await signupWith(takenEmail, deliveredCodes.get(takenEmail) ?? "");
+    expect(again.message).toBe(
+      "An agency is already listed with that email. Sign in instead.",
+    );
+  });
+
+  it("does not claim a sign-in code went out when the agency lookup fails", async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("offline"));
+
+    expect(await sendAgencyOtp("owner@example.com", "login")).toMatchObject({
+      success: false,
+      status: 503,
+    });
   });
 
   it("fails authentication with invalid OTP code", async () => {
@@ -186,10 +249,7 @@ describe("Agency Auth (Passwordless OTP)", () => {
       otp: "000000",
     });
 
-    const { user, token, message } = await authenticateAgency(
-      testEmail,
-      "000000",
-    );
+    const { user, token, message } = await authenticateAgency(testEmail, "000000");
 
     expect(message).toBeNull();
     expect(user).not.toBeNull();
@@ -221,6 +281,8 @@ describe("Agency Auth (Passwordless OTP)", () => {
 
     expect(user).toBeNull();
     expect(token).toBeNull();
-    expect(message).toBe("An agency is already listed with that email. Sign in instead.");
+    expect(message).toBe(
+      "An agency is already listed with that email. Sign in instead.",
+    );
   });
 });

@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEmail, IsOptional, IsNumber, Min, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsOptional,
+  IsNumber,
+  Min,
+  IsArray,
+} from 'class-validator';
 
 export class CheckoutPackageItemDto {
   @ApiProperty({ description: 'Item type: VISA, PASSPORT, AGENCY, HIRE' })
@@ -24,11 +32,18 @@ export class CheckoutPackageItemDto {
 }
 
 export class CreateCheckoutPackageDto {
-  @ApiProperty({ description: 'Traveller email' })
+  @ApiPropertyOptional({
+    description:
+      "Ignored. The basket is filed under the signed-in applicant's verified WorldStreet email; still accepted so older clients are not refused.",
+  })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
-  @ApiProperty({ description: 'List of package items', type: [CheckoutPackageItemDto] })
+  @ApiProperty({
+    description: 'List of package items',
+    type: [CheckoutPackageItemDto],
+  })
   @IsArray()
   items: CheckoutPackageItemDto[];
 

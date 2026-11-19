@@ -110,6 +110,13 @@ export type AgencyUser = {
   agencyName: string;
 };
 
+/**
+ * The signed-in agency user as components receive it. `token` and `exp` are
+ * typed `never`, as for `ClientAdminUser`, so a session cannot be passed in
+ * whole; build one with `toClientAgencyUser(session)`.
+ */
+export type ClientAgencyUser = AgencyUser & { token?: never; exp?: never };
+
 export type AgencyServiceOffering = {
   id: string;
   category: AgencyCategory;

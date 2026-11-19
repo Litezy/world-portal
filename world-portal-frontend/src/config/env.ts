@@ -1,8 +1,16 @@
 import { z } from "zod";
 
+import { parseClientIpHeader } from "@/config/client-ip";
+
 const DEV_ADMIN_PASSWORD = "worldportal";
 const DEV_AGENCY_PASSWORD = "worldportal-agency";
 const DEV_SESSION_SECRET = "world-portal-dev-session-secret";
+/** The value .env.example ships, matching the backend's local key. Public. */
+const DEV_SERVICE_AUTH_KEY = "local-dev-service-key-not-for-production";
+
+/** Production minimums. Development keeps the looser schema minimums below. */
+const MIN_PRODUCTION_ADMIN_PASSWORD = 16;
+const MIN_PRODUCTION_SESSION_SECRET = 32;
 
 /**
  * A variable that is *declared* but left blank arrives as `""`, not as absent —
@@ -93,11 +101,41 @@ const serverShape = z.object({
   ADMIN_PASSWORD: z.string().min(8).default(DEV_ADMIN_PASSWORD),
   SESSION_SECRET: z.string().min(16).default(DEV_SESSION_SECRET),
   /**
-   * The agency console (/agency). One shared password against the fixture
-   * agencies — the same stop-gap as ADMIN_PASSWORD, and refused in
-   * production below for the same reason. See src/server/agency/auth.ts.
+   * @deprecated Unused. Agencies sign in with an emailed code
+   * (src/server/agency/auth.ts) and nothing reads this any more, so production
+   * no longer requires it. Still parsed so an old deployment that sets it keeps
+   * booting; remove it once no environment sets it.
    */
   AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
+  /**
+   * Shared with the World Portal API (its SERVICE_AUTH_KEY), sent as
+   * `x-service-key` by this server only — see `src/server/api/service-key.ts`.
+   * The service issues console tokens to holders of it, and answers the agency
+   * portal's and the console helpers' routes only for them. Required in
+   * production (below), where the local development value is refused.
+   */
+  SERVICE_AUTH_KEY: z.string().min(32).optional(),
+  /**
+   * The request header that names the visitor's IP, set by this deployment's
+   * own proxy — see `visitorIpHeaders()` in src/server/api/service-key.ts.
+   * Unset picks a default for the platform. Behind Cloudflare it must be
+   * `cf-connecting-ip`.
+   */
+  CLIENT_IP_HEADER: z
+    .string()
+    .transform((value, ctx) => {
+      const header = parseClientIpHeader(value);
+      if (!header) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "CLIENT_IP_HEADER must be one of x-vercel-forwarded-for, cf-connecting-ip, x-real-ip or x-forwarded-for.",
+        });
+        return z.NEVER;
+      }
+      return header;
+    })
+    .optional(),
   /**
    * The future WorldSpace posts API origin. Optional on purpose: absent
    * means the feed falls back to the curated placeholder posts, which is a
@@ -130,11 +168,11 @@ const serverSchema = serverShape.superRefine((env, ctx) => {
       message: "Set ADMIN_PASSWORD in production — the development default is public.",
     });
   }
-  if (env.AGENCY_PASSWORD === DEV_AGENCY_PASSWORD) {
+  if (env.ADMIN_PASSWORD.length < MIN_PRODUCTION_ADMIN_PASSWORD) {
     ctx.addIssue({
       code: "custom",
-      path: ["AGENCY_PASSWORD"],
-      message: "Set AGENCY_PASSWORD in production — the development default is public.",
+      path: ["ADMIN_PASSWORD"],
+      message: `ADMIN_PASSWORD must be at least ${MIN_PRODUCTION_ADMIN_PASSWORD} characters in production — it is the shared gate to the admin console.`,
     });
   }
   if (env.SESSION_SECRET === DEV_SESSION_SECRET) {
@@ -142,6 +180,28 @@ const serverSchema = serverShape.superRefine((env, ctx) => {
       code: "custom",
       path: ["SESSION_SECRET"],
       message: "Set SESSION_SECRET in production — the development default is public.",
+    });
+  }
+  if (env.SESSION_SECRET.length < MIN_PRODUCTION_SESSION_SECRET) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SESSION_SECRET"],
+      message: `SESSION_SECRET must be at least ${MIN_PRODUCTION_SESSION_SECRET} characters in production — generate one with: openssl rand -base64 32`,
+    });
+  }
+  if (!env.SERVICE_AUTH_KEY) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SERVICE_AUTH_KEY"],
+      message:
+        "Set SERVICE_AUTH_KEY in production (32+ characters, the backend's own value) — without it console sign-in and the agency portal are refused.",
+    });
+  } else if (env.SERVICE_AUTH_KEY === DEV_SERVICE_AUTH_KEY) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SERVICE_AUTH_KEY"],
+      message:
+        "Set a private SERVICE_AUTH_KEY in production — the local development key from .env.example is public.",
     });
   }
 });
@@ -185,10 +245,10 @@ export function serverEnv() {
  * The server settings the applicant side reads — the backend URL, Vivid and
  * WorldSpace — and nothing else.
  *
- * `serverEnv()` refuses to run at all in production while any console
- * password is unset or a dev default, which is right for the consoles and
- * wrong for everyone else: an unset AGENCY_PASSWORD once took down applicant
- * sign-up, "My applications" and Vivid. So the applicant paths validate only
+ * `serverEnv()` refuses to run at all in production while a console setting
+ * is unset, weak or a dev default, which is right for the consoles and wrong
+ * for everyone else: an unset (now deprecated) AGENCY_PASSWORD once took down
+ * applicant sign-up, "My applications" and Vivid. So the applicant paths validate only
  * what they use, and a console misconfiguration stays in the consoles.
  */
 const applicantSchema = serverShape.pick({

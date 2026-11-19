@@ -9,6 +9,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { isSwaggerEnabled } from './common/swagger-enabled';
+import { resolveServiceKey } from './auth/service-key';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { applyTrustProxy } from './common/throttling/trust-proxy';
 
 function formatValidationErrors(
   errors: ValidationError[],
@@ -17,7 +21,9 @@ function formatValidationErrors(
   const result: Record<string, string[]> = {};
 
   for (const error of errors) {
-    const path = parentPath ? `${parentPath}.${error.property}` : error.property;
+    const path = parentPath
+      ? `${parentPath}.${error.property}`
+      : error.property;
 
     if (error.constraints) {
       result[path] = Object.values(error.constraints);
@@ -33,7 +39,16 @@ function formatValidationErrors(
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  // Fail at boot, not later as unexplained 401s, when production is missing
+  // the key the admin console and agency portal servers must present.
+  resolveServiceKey(process.env);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Rate limits count anonymous callers by `req.ip`. TRUST_PROXY says how many
+  // proxies (Traefik, Cloudflare) may set it from X-Forwarded-For; unset, the
+  // header is ignored, because anyone can send it with a made-up address and
+  // trusting it blindly would let them dodge every limit.
+  applyTrustProxy(app, process.env.TRUST_PROXY);
 
   app.enableCors({ origin: true, credentials: true });
 
@@ -70,14 +85,19 @@ async function bootstrap() {
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  const swaggerEnabled = isSwaggerEnabled(process.env);
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}/api`);
   logger.log(
-    `Swagger OpenAPI documentation available at: http://localhost:${port}/api/docs`,
+    swaggerEnabled
+      ? `Swagger OpenAPI documentation available at: http://localhost:${port}/api/docs`
+      : 'Swagger docs are off (production; set ENABLE_SWAGGER=true to serve them)',
   );
 }
 

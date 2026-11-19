@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsOptional,
   IsDateString,
-  IsUrl,
   ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -15,6 +14,7 @@ import {
   BookletType,
   Gender,
 } from '@prisma/client';
+import { IsHttpsUrl } from '../../common/validation/is-https-url';
 
 export class CreatePassportApplicationDto {
   @ApiProperty({
@@ -269,7 +269,7 @@ export class CreatePassportApplicationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   birthCertificateUrl?: string;
 
   @ApiPropertyOptional({
@@ -279,7 +279,7 @@ export class CreatePassportApplicationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   ninDocumentUrl?: string;
 
   @ApiPropertyOptional({
@@ -289,13 +289,18 @@ export class CreatePassportApplicationDto {
   })
   @IsOptional()
   @ValidateIf((o, v) => Boolean(v))
-  @IsUrl()
+  @IsHttpsUrl()
   passportPhotoUrl?: string;
 
+  /**
+   * Ignored: an application is filed under the signed-in applicant and never
+   * linked to a desk profile from the form. Still accepted so a browser on an
+   * older build isn't refused.
+   */
   @ApiPropertyOptional({
-    example: '',
+    deprecated: true,
     description:
-      'Optional profile ID if submitted by an authenticated user/partner',
+      'Ignored: the application is filed under the signed-in applicant.',
     required: false,
   })
   @IsOptional()

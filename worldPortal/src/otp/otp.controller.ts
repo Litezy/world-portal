@@ -20,6 +20,11 @@ export class OtpController {
     status: 200,
     description: 'OTP dispatched successfully.',
   })
+  @ApiResponse({
+    status: 429,
+    description:
+      'This email has been sent its hourly share of codes (OTP_SENDS_PER_EMAIL_PER_HOUR, default 5).',
+  })
   sendOtp(@Body() dto: SendOtpDto) {
     return this.otpService.sendOtp(dto);
   }
@@ -29,7 +34,7 @@ export class OtpController {
   @ApiOperation({
     summary: 'Verify 6-digit Email OTP code',
     description:
-      'Validates the 6-digit OTP code against the registered email address.',
+      'Validates the 6-digit OTP code against the email it was sent to (5 wrong tries invalidate it; 10 wrong tries an hour, across codes, lock the email for the hour). On success returns `lookupToken`, a 30-minute proof of that email for the public status lookups (`x-lookup-token`).',
   })
   @ApiResponse({
     status: 200,
@@ -38,6 +43,11 @@ export class OtpController {
   @ApiResponse({
     status: 400,
     description: 'OTP code is invalid or has expired.',
+  })
+  @ApiResponse({
+    status: 429,
+    description:
+      'Too many wrong codes for this email this hour, across every code it was sent (OTP_FAILURES_PER_EMAIL_PER_HOUR, default 10). Even the right code is refused until the hour rolls past.',
   })
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.otpService.verifyOtp(dto);

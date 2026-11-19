@@ -18,6 +18,7 @@ import { SeedModule } from './seed/seed.module';
 import { NotificationModule } from './notification/notification.module';
 import { ApplicantModule } from './applicant/applicant.module';
 import { MeModule } from './me/me.module';
+import { RateLimitModule } from './common/throttling/rate-limit.module';
 
 @Module({
   imports: [
@@ -25,6 +26,8 @@ import { MeModule } from './me/me.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    // Global rate limits; see src/common/throttling.
+    RateLimitModule,
     PrismaModule,
     AuthModule,
     ProfileModule,
@@ -45,4 +48,4 @@ import { MeModule } from './me/me.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Body,
+  Headers,
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { GetTestTokenDto } from './dto/get-test-token.dto';
+import { isTrustedServiceKey } from './service-key';
 
 @ApiTags('Auth Test Helper')
 @Controller('auth')
@@ -34,13 +36,21 @@ export class AuthController {
     status: 403,
     description: 'Mock authentication helper is disabled in this environment.',
   })
-  getTestToken(@Body() dto: GetTestTokenDto) {
+  getTestToken(
+    @Body() dto: GetTestTokenDto,
+    @Headers('x-service-key') serviceKey?: string,
+  ) {
     const isMockAuthEnabled =
-      this.configService.get<string>('ENABLE_MOCK_AUTH', 'true') === 'true';
+      this.configService.get<string>('ENABLE_MOCK_AUTH', 'false') === 'true';
 
-    if (!isMockAuthEnabled) {
+    const isTrustedService = isTrustedServiceKey(
+      this.configService.get<string>('SERVICE_AUTH_KEY'),
+      serviceKey,
+    );
+
+    if (!isMockAuthEnabled && !isTrustedService) {
       this.logger.warn(
-        'Attempted to call /auth/test-token when ENABLE_MOCK_AUTH=false',
+        'Refused /auth/test-token: mock auth is off and no valid service key was sent',
       );
       throw new ForbiddenException(
         'Mock authentication helper is disabled in this environment',

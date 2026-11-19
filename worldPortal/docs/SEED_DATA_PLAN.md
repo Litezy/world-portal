@@ -22,14 +22,14 @@ Instead of running local CLI scripts, seeding is triggered remotely on-demand vi
 
 ### **Authorization Secret Code**
 > [!IMPORTANT]
-> **Secret Code:** `WORLD_PORTAL_SEED_2026_SECURE`
+> **Secret Code:** the value of `SEED_SECRET_CODE` (no default). The endpoint answers 404 unless `ENABLE_SEED_ENDPOINT=true`; never set that on a database with real applicants.
 > 
 > To trigger the seeding process, pass this exact secret code in the JSON request body.
 
 ### **Request Payload Format**
 ```json
 {
-  "secretCode": "WORLD_PORTAL_SEED_2026_SECURE"
+  "secretCode": "<value of SEED_SECRET_CODE>"
 }
 ```
 

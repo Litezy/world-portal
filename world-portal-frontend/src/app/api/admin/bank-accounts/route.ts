@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+
 import { z } from "zod";
 
 import { backend } from "@/server/api/backend";
-import { requireSession } from "@/server/auth";
+import { requireRole, requireSession } from "@/server/auth";
 import { backendErrorResponse, parseBody } from "@/server/http";
 
 const createBankAccountSchema = z.object({
@@ -17,12 +18,13 @@ const createBankAccountSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+/** Anyone at the desk may read the accounts applicants pay into. */
 export async function GET() {
   const { session, response } = await requireSession();
   if (response) return response;
 
   try {
-    const bankAccounts = await backend<any[]>("/bank-accounts", {
+    const bankAccounts = await backend<unknown[]>("/bank-accounts", {
       token: session.token,
     });
     return NextResponse.json({ data: bankAccounts });
@@ -31,15 +33,22 @@ export async function GET() {
   }
 }
 
+/**
+ * Managers only: an account added here goes into every applicant's payment
+ * instructions, so the console is not the only check on who may add one.
+ */
 export async function POST(request: Request) {
-  const { session, response } = await requireSession();
+  const { session, response } = await requireRole(["MANAGER"]);
   if (response) return response;
 
-  const { data, response: bodyResponse } = await parseBody(request, createBankAccountSchema);
+  const { data, response: bodyResponse } = await parseBody(
+    request,
+    createBankAccountSchema,
+  );
   if (bodyResponse) return bodyResponse;
 
   try {
-    const bankAccount = await backend<any>("/bank-accounts", {
+    const bankAccount = await backend<unknown>("/bank-accounts", {
       method: "POST",
       token: session.token,
       body: JSON.stringify(data),

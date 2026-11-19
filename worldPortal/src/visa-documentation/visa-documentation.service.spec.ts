@@ -196,6 +196,57 @@ describe('VisaDocumentationService', () => {
     });
   });
 
+  /**
+   * The only route that creates an application is the signed-in applicant's.
+   * A `profileId` in their form would link their file to any desk member's
+   * profile (and a 400 for an unknown one told them which ids exist), so it
+   * is ignored, as on hire bookings.
+   */
+  describe('createVisaApplication profileId', () => {
+    const owner = { clerkUserId: 'user_abc', email: 'john.doe@gmail.com' };
+    const form = {
+      firstName: 'John',
+      lastName: 'Doe',
+      email: 'john.doe@gmail.com',
+      targetCountry: 'Canada',
+    };
+
+    beforeEach(() => {
+      mockPrismaService.visaDocumentation.findUnique.mockResolvedValue(null);
+      mockPrismaService.visaDocumentation.create.mockResolvedValue(
+        mockVisaRecord,
+      );
+    });
+
+    it('never links the file to a desk profile the applicant names', async () => {
+      mockPrismaService.profile.findUnique.mockResolvedValue({
+        id: 'desk-profile-1',
+        email: 'partner@example.com',
+      });
+
+      await service.createVisaApplication(
+        { ...form, profileId: 'desk-profile-1' },
+        owner,
+      );
+
+      expect(mockPrismaService.visaDocumentation.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ profileId: null }) as unknown,
+      });
+      expect(mockPrismaService.profile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('does not say whether a named profile id exists', async () => {
+      mockPrismaService.profile.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createVisaApplication(
+          { ...form, profileId: 'no-such-profile' },
+          owner,
+        ),
+      ).resolves.toBeDefined();
+    });
+  });
+
   describe('evaluateVisaCost', () => {
     it('should allocate total cost and update status to EVALUATED', async () => {
       mockPrismaService.visaDocumentation.findFirst.mockResolvedValue(

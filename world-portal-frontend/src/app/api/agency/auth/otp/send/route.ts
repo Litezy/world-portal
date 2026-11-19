@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { sendAgencyOtp } from "@/server/agency/auth";
+import { visitorIpHeaders } from "@/server/api/service-key";
 import { parseBody } from "@/server/http";
 import { agencySendOtpSchema } from "@/validations/agency";
 
@@ -13,7 +14,11 @@ export async function POST(request: Request) {
   const { data, response } = await parseBody(request, agencySendOtpSchema);
   if (response) return response;
 
-  const result = await sendAgencyOtp(data.email, data.intent);
+  const result = await sendAgencyOtp(
+    data.email,
+    data.intent,
+    visitorIpHeaders(request),
+  );
   if (!result.success) {
     return NextResponse.json(
       { message: result.message },

@@ -1,8 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { AgencyService } from './agency.service';
-import { NotFoundException } from '@nestjs/common';
+import { UpdateAgencyListingDto } from './dto/update-agency-listing.dto';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AgencyVerificationStatus, AgencyListingStatus, AgencyStaffStatus, AssignmentStatus } from '@prisma/client';
+import {
+  AgencyVerificationStatus,
+  AgencyListingStatus,
+  AgencyStaffStatus,
+  AssignmentStatus,
+} from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
 describe('AgencyService', () => {
@@ -77,9 +89,14 @@ describe('AgencyService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn().mockResolvedValue(3),
       aggregate: jest.fn().mockResolvedValue({ _sum: { netToAgency: 4500.0 } }),
+    },
+    hireBooking: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     agencyPayout: {
       findMany: jest.fn(),
@@ -134,6 +151,153 @@ describe('AgencyService', () => {
       expect(result).toEqual(mockAgency);
       expect(mockPrismaService.agency.create).toHaveBeenCalled();
     });
+
+    // Agencies sign in with an emailed code. A password nobody uses, set to a
+    // published default, is only a liability; and the hash must never come back.
+    it('creates the owner with no password and never reads one back', async () => {
+      mockPrismaService.agency.findFirst.mockResolvedValue(null);
+      mockPrismaService.agency.findUnique.mockResolvedValue(null);
+
+      await service.createAgency({
+        name: 'Sample Agency',
+        legalName: 'Sample Agency Ltd',
+        countryCode: 'PT',
+        country: 'Portugal',
+        cities: ['Lisbon'],
+        categories: ['security'],
+        summary: 'Sample.',
+        about: 'A sample agency.',
+        email: 'owner@example.com',
+        phone: '+10000000000',
+        yearFounded: 2020,
+        staffCount: 3,
+        languages: ['English'],
+      });
+
+      const [args] = mockPrismaService.agency.create.mock.calls[0] as [
+        {
+          data: { users: { create: Record<string, unknown> } };
+          include: { users: { select?: Record<string, unknown> } };
+        },
+      ];
+      expect(args.data.users.create).not.toHaveProperty('passwordHash');
+      expect(args.include.users.select).toBeDefined();
+      expect(args.include.users.select).not.toHaveProperty('passwordHash');
+    });
+  });
+
+  /**
+   * LIVE, IN_REVIEW and REJECTED are the desk's verdicts, reached through
+   * PATCH /agency/:id/verify. The listing route is how an agency edits its own
+   * listing, so it may draft, submit or pause, and nothing else.
+   */
+  describe('updateAgencyListing status', () => {
+    beforeEach(() => {
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
+      mockPrismaService.agency.update.mockResolvedValue(mockAgency);
+    });
+
+    it.each([
+      AgencyListingStatus.LIVE,
+      AgencyListingStatus.IN_REVIEW,
+      AgencyListingStatus.REJECTED,
+    ])('refuses %s, which only the desk sets', async (listingStatus) => {
+      await expect(
+        service.updateAgencyListing('agency-123', { listingStatus }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.agency.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      AgencyListingStatus.DRAFT,
+      AgencyListingStatus.SUBMITTED,
+      AgencyListingStatus.PAUSED,
+    ])('lets the agency set %s', async (listingStatus) => {
+      await service.updateAgencyListing('agency-123', { listingStatus });
+      const [args] = mockPrismaService.agency.update.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(args.data.listingStatus).toBe(listingStatus);
+    });
+
+    it('still makes a listing LIVE when the desk verifies the agency', async () => {
+      mockPrismaService.agency.findUnique.mockResolvedValue({
+        ...mockAgency,
+        verification: AgencyVerificationStatus.PENDING,
+        listingStatus: AgencyListingStatus.SUBMITTED,
+      });
+
+      await service.updateVerification('agency-123', 'VERIFIED');
+
+      expect(mockPrismaService.agency.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            verification: AgencyVerificationStatus.VERIFIED,
+            listingStatus: AgencyListingStatus.LIVE,
+          },
+        }),
+      );
+    });
+  });
+
+  /**
+   * The agency's email is how it signs in (and how `findAgency` finds it).
+   * The listing route is an autosave the portal calls with the whole form,
+   * so it must never move that identity: changing it needs a verified flow,
+   * which doesn't exist yet.
+   */
+  describe('updateAgencyListing email', () => {
+    beforeEach(() => {
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
+      mockPrismaService.agency.update.mockResolvedValue(mockAgency);
+    });
+
+    it('never changes the sign-in email, whatever the form sends', async () => {
+      await service.updateAgencyListing('agency-123', {
+        email: 'someone-else@example.com',
+        summary: 'Updated summary',
+      });
+
+      const [args] = mockPrismaService.agency.update.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(args.data).not.toHaveProperty('email');
+      expect(args.data.summary).toBe('Updated summary');
+    });
+
+    it("still accepts the field, so the portal's autosave isn't refused", async () => {
+      const errors = await validate(
+        plainToInstance(UpdateAgencyListingDto, {
+          email: 'contact@apexsecurity.ng',
+          summary: 'Updated summary',
+        }),
+        { whitelist: true, forbidNonWhitelisted: true },
+      );
+      expect(errors).toEqual([]);
+    });
+  });
+
+  describe('UpdateAgencyListingDto', () => {
+    const errorsFor = async (listingStatus: string) =>
+      (
+        await validate(
+          plainToInstance(UpdateAgencyListingDto, { listingStatus }),
+        )
+      ).map((error) => error.property);
+
+    it.each(['LIVE', 'IN_REVIEW', 'REJECTED'])(
+      'refuses listingStatus %s before it reaches the service',
+      async (listingStatus) => {
+        expect(await errorsFor(listingStatus)).toContain('listingStatus');
+      },
+    );
+
+    it.each(['DRAFT', 'SUBMITTED', 'PAUSED'])(
+      'accepts listingStatus %s',
+      async (listingStatus) => {
+        expect(await errorsFor(listingStatus)).toEqual([]);
+      },
+    );
   });
 
   describe('getAgencyById', () => {
@@ -214,6 +378,98 @@ describe('AgencyService', () => {
         verification: AgencyVerificationStatus.VERIFIED,
         listingStatus: AgencyListingStatus.LIVE,
       });
+    });
+  });
+  /**
+   * Completing a job releases its staff, tells the traveller it is done and
+   * credits the agency's pending payout. Only a job that is actually under
+   * way may get there: a requested one has nobody on it, and a completed or
+   * cancelled one must not be credited (or announced) again.
+   */
+  describe('completeAssignment', () => {
+    const assignment = {
+      id: 'as-1',
+      reference: 'HIRE-REF-1',
+      agencyId: 'agency-123',
+      assignedStaffIds: ['stf-123'],
+      travellerEmail: 'traveller@example.com',
+      netToAgency: 127.5,
+    };
+
+    beforeEach(() => {
+      mockPrismaService.agency.findFirst.mockResolvedValue(mockAgency);
+      mockPrismaService.agencyAssignment.updateMany.mockResolvedValue({
+        count: 1,
+      });
+      mockPrismaService.agencyAssignment.findUniqueOrThrow.mockResolvedValue({
+        ...assignment,
+        status: AssignmentStatus.COMPLETED,
+      });
+    });
+
+    it.each([AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS])(
+      'completes an %s job, only while it is still under way',
+      async (status) => {
+        mockPrismaService.agencyAssignment.findFirst.mockResolvedValue({
+          ...assignment,
+          status,
+        });
+
+        const result = await service.completeAssignment('agency-123', 'as-1');
+
+        expect(
+          mockPrismaService.agencyAssignment.updateMany,
+        ).toHaveBeenCalledWith({
+          where: {
+            id: 'as-1',
+            status: {
+              in: [AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS],
+            },
+          },
+          data: { status: AssignmentStatus.COMPLETED },
+        });
+        expect(result.status).toBe(AssignmentStatus.COMPLETED);
+        expect(mockPrismaService.agencyStaff.updateMany).toHaveBeenCalled();
+        expect(mockNotificationService.create).toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      AssignmentStatus.REQUESTED,
+      AssignmentStatus.COMPLETED,
+      AssignmentStatus.CANCELLED,
+    ])('refuses to complete a %s job with 409', async (status) => {
+      mockPrismaService.agencyAssignment.findFirst.mockResolvedValue({
+        ...assignment,
+        status,
+      });
+
+      await expect(
+        service.completeAssignment('agency-123', 'as-1'),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrismaService.agencyAssignment.update).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.agencyAssignment.updateMany,
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.agencyStaff.updateMany).not.toHaveBeenCalled();
+      expect(mockNotificationService.create).not.toHaveBeenCalled();
+    });
+
+    it('lets only one of two racing completes credit the job', async () => {
+      mockPrismaService.agencyAssignment.findFirst.mockResolvedValue({
+        ...assignment,
+        status: AssignmentStatus.ASSIGNED,
+      });
+      // Another request completed it between the read and the update.
+      mockPrismaService.agencyAssignment.updateMany.mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        service.completeAssignment('agency-123', 'as-1'),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrismaService.agencyStaff.updateMany).not.toHaveBeenCalled();
+      expect(mockNotificationService.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,5 +1,6 @@
 import {
   Injectable,
+  NotFoundException,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
@@ -22,12 +23,11 @@ import {
   Gender,
   Prisma,
 } from '@prisma/client';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
-  private readonly DEFAULT_SECRET_CODE = 'WORLD_PORTAL_SEED_2026_SECURE';
   private readonly DEFAULT_PASSWORD = 'Password@2';
 
   constructor(private readonly prisma: PrismaService) {}
@@ -36,14 +36,27 @@ export class SeedService {
     return createHash('sha256').update(password).digest('hex');
   }
 
+  private codesMatch(given: unknown, expected: string): boolean {
+    if (typeof given !== 'string') return false;
+    const digest = (value: string) => createHash('sha256').update(value).digest();
+    return timingSafeEqual(digest(given), digest(expected));
+  }
+
   /**
    * Remote database seeding triggered via REST API with secret code authorization
    */
   async runSeed(dto: RunSeedDto) {
-    const requiredCode = process.env.SEED_SECRET_CODE || this.DEFAULT_SECRET_CODE;
+    // Off unless a deploy opts in. It writes a manager and active bank
+    // accounts, so it must never run against a real database by accident.
+    if (process.env.ENABLE_SEED_ENDPOINT !== 'true') {
+      this.logger.warn('Refused POST /seed: ENABLE_SEED_ENDPOINT is not true');
+      throw new NotFoundException();
+    }
 
-    if (dto.secretCode !== requiredCode) {
-      this.logger.warn(`Unauthorized seeding attempt with code=${dto.secretCode}`);
+    // No built-in code: the old default was in the public repo and the docs.
+    const requiredCode = process.env.SEED_SECRET_CODE;
+    if (!requiredCode || !this.codesMatch(dto.secretCode, requiredCode)) {
+      this.logger.warn('Unauthorized seeding attempt');
       throw new UnauthorizedException('Invalid seeding secret code');
     }
 

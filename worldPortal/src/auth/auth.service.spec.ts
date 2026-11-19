@@ -42,4 +42,17 @@ describe('AuthService', () => {
     expect(typeof result.accessToken).toBe('string');
     expect(result.user.externalAuthId).toBe('external-auth-manager-001');
   });
+
+  // The console keeps a signed-in desk for up to 7 days and carries this
+  // token for all of it. The guard now enforces `exp`, so a shorter token
+  // would sign staff out mid-session.
+  it('issues tokens that last 7 days, as long as the longest console session', () => {
+    const result = service.generateTestToken({ email: 'staff@example.com' });
+    const { iat, exp } = JSON.parse(
+      Buffer.from(result.accessToken.split('.')[1], 'base64url').toString(),
+    ) as { iat: number; exp: number };
+
+    expect(exp - iat).toBe(7 * 24 * 60 * 60);
+    expect(result.expiresIn).toBe('7d');
+  });
 });

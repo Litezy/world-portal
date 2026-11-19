@@ -19,28 +19,30 @@ import type {
   AgencyListingStatus,
   AgencyOverview,
   AgencyPayout,
+  AgencyServiceOffering,
   AgencyStaff,
   AgencyUser,
   AgencyVerificationStatus,
 } from "@/features/agency/types";
 import { slugify } from "@/lib/utils";
+import { serviceKeyHeaders } from "@/server/api/service-key";
 import { paginate } from "@/server/http";
 import type { ListParams, Paginated } from "@/types";
 
 /**
- * The one seam between the agency console and whatever eventually serves it.
+ * The one seam between the agency console and the World Portal service's
+ * `/agency` routes.
  *
- * **There is no agency API on the World Portal service.** Every screen under
- * `/agency` goes through the route handlers, and the route handlers come here,
- * for exactly the reason `src/server/worldspace/client.ts` exists: when a real
- * service lands, this file is replaced wholesale and nothing above it changes.
- * Do not let a component, a hook or a page reach into
- * `src/features/agency/fixtures.ts` directly — that is the shortcut that turns
- * one seam into twenty.
+ * Every screen under `/agency` goes through the route handlers, and the route
+ * handlers come here; `credentials()` below decides whether a call goes with
+ * the service key or a desk member's token. Do not let a component, a hook or
+ * a page reach into `src/features/agency/fixtures.ts` directly — that is the
+ * shortcut that turns one seam into twenty.
  *
- * **Mutations are in memory and per process.** Assigning staff, uploading a
- * document, adding a person or submitting a listing writes to the module-level
- * `db` below and nowhere else. That means:
+ * **When the service refuses or is unreachable, most mutations fall back to
+ * memory.** Assigning staff, uploading a document, adding a person or
+ * submitting a listing then writes to the module-level `db` below and nowhere
+ * else, and still reports success. That means:
  *
  * - a `next dev` restart reverts everything to the fixtures;
  * - on serverless, two requests can land on two instances and disagree;
@@ -147,20 +149,57 @@ function matches(needle: string, ...fields: (string | null | undefined)[]) {
   return fields.some((field) => field?.toLowerCase().includes(needle));
 }
 
+/**
+ * An assignment as it arrives: the API's rows are flat (`travellerName`,
+ * `destinationCity`, upper-case enums, decimal strings), the fixtures nested.
+ */
+type RawAssignment = Partial<
+  Omit<
+    AgencyAssignment,
+    | "traveller"
+    | "destination"
+    | "category"
+    | "status"
+    | "gross"
+    | "platformFee"
+    | "netToAgency"
+  >
+> & {
+  traveller?: Partial<AgencyAssignment["traveller"]>;
+  destination?: Partial<AgencyAssignment["destination"]>;
+  category?: string;
+  status?: string;
+  gross?: number | string | null;
+  platformFee?: number | string | null;
+  netToAgency?: number | string | null;
+  travellerName?: string;
+  travellerEmail?: string | null;
+  travellerPhone?: string | null;
+  partySize?: number;
+  destinationCity?: string;
+  destinationCountry?: string;
+  destinationCountryCode?: string;
+};
+
 function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
   if (!assignment) return assignment;
-  const raw = assignment as any;
+  const raw: RawAssignment = assignment;
 
   const travellerName = raw.travellerName || raw.traveller?.name || "Applicant";
   const travellerEmail = raw.travellerEmail ?? raw.traveller?.email ?? null;
   const travellerPhone = raw.travellerPhone ?? raw.traveller?.phone ?? null;
   const partySize = raw.partySize ?? raw.traveller?.partySize ?? 1;
 
-  const destinationCity = raw.destinationCity || raw.destination?.city || "Destination City";
-  const destinationCountry = raw.destinationCountry || raw.destination?.country || "Destination Country";
-  const destinationCountryCode = raw.destinationCountryCode || raw.destination?.countryCode || "US";
+  const destinationCity =
+    raw.destinationCity || raw.destination?.city || "Destination City";
+  const destinationCountry =
+    raw.destinationCountry || raw.destination?.country || "Destination Country";
+  const destinationCountryCode =
+    raw.destinationCountryCode || raw.destination?.countryCode || "US";
 
-  const assignedStaffIds = Array.isArray(raw.assignedStaffIds) ? raw.assignedStaffIds : [];
+  const assignedStaffIds = Array.isArray(raw.assignedStaffIds)
+    ? raw.assignedStaffIds
+    : [];
   const hasStaff = assignedStaffIds.length > 0;
 
   return {
@@ -168,7 +207,7 @@ function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
     id: raw.id || `asg-${Date.now()}`,
     reference: raw.reference || `HIRE-${Date.now()}`,
     agencyId: raw.agencyId || "",
-    category: (raw.category?.toLowerCase() || "freelancer") as any,
+    category: (raw.category?.toLowerCase() || "freelancer") as AgencyCategory,
     offeringId: raw.offeringId || "",
     offeringTitle: raw.offeringTitle || "Service Package",
     traveller: {
@@ -184,14 +223,20 @@ function withContactRule(assignment: AgencyAssignment): AgencyAssignment {
     },
     startsAt: raw.startsAt || new Date().toISOString(),
     endsAt: raw.endsAt || new Date().toISOString(),
-    status: (raw.status?.toLowerCase() || "requested") as any,
+    status: (raw.status?.toLowerCase() || "requested") as AgencyAssignment["status"],
     assignedStaffIds,
     staffRequired: raw.staffRequired || 1,
     notes: raw.notes || null,
     gross: raw.gross !== undefined && raw.gross !== null ? Number(raw.gross) : 150,
     currency: raw.currency || "USD",
-    platformFee: raw.platformFee !== undefined && raw.platformFee !== null ? Number(raw.platformFee) : 22.5,
-    netToAgency: raw.netToAgency !== undefined && raw.netToAgency !== null ? Number(raw.netToAgency) : 127.5,
+    platformFee:
+      raw.platformFee !== undefined && raw.platformFee !== null
+        ? Number(raw.platformFee)
+        : 22.5,
+    netToAgency:
+      raw.netToAgency !== undefined && raw.netToAgency !== null
+        ? Number(raw.netToAgency)
+        : 127.5,
     createdAt: raw.createdAt || new Date().toISOString(),
   };
 }
@@ -209,32 +254,79 @@ const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://localhost:4000/ap
  */
 const LOCAL_FALLBACK = process.env.NODE_ENV !== "production";
 
-function normalizeAgency(raw: any): Agency {
-  if (!raw || typeof raw !== "object") return raw;
-  const agency = raw.data ?? raw;
-  if (!agency || typeof agency !== "object" || !agency.id) return agency;
+/** The admin console asking as the signed-in desk member. */
+export type DeskCaller = { token: string };
+
+/**
+ * Who this server asks the API as. The API answers no one else on /agency.
+ *
+ * - With a desk member, it is the admin console: the member's own token goes,
+ *   so the API checks that member's role.
+ * - Without one, it is this server acting for the signed-in agency (whose id
+ *   comes from the session cookie and nowhere else), for a signed-out /hire
+ *   visitor, or for sign-in itself: it sends the service key.
+ *
+ * Never both, and a desk call never falls back to the key: verifying an agency
+ * and ruling on its documents must be a desk member's decision.
+ */
+function credentials(desk?: DeskCaller): Record<string, string> {
+  return desk ? { Authorization: `Bearer ${desk.token}` } : serviceKeyHeaders();
+}
+
+/** An agency as the API sends it: upper-case enums and decimal strings. */
+type ApiAgency = Omit<
+  Agency,
+  "verification" | "listingStatus" | "documents" | "offerings"
+> & {
+  verification?: string;
+  listingStatus?: string;
+  documents?: (Omit<AgencyDocument, "kind" | "status"> & {
+    kind?: string;
+    status?: string;
+  })[];
+  offerings?: (Omit<AgencyServiceOffering, "price"> & {
+    price?: number | string | null;
+  })[];
+};
+
+function normalizeAgency(raw: ApiAgency | { data?: ApiAgency }): Agency {
+  if (!raw || typeof raw !== "object") return raw as Agency;
+  const agency = ("data" in raw ? raw.data : undefined) ?? (raw as ApiAgency);
+  if (!agency || typeof agency !== "object" || !agency.id) return agency as Agency;
 
   return {
     ...agency,
-    verification: (agency.verification?.toLowerCase() ?? "unverified") as AgencyVerificationStatus,
-    listingStatus: (agency.listingStatus?.toLowerCase() ?? "draft") as AgencyListingStatus,
-    documents: (agency.documents || []).map((doc: any) => ({
+    verification: (agency.verification?.toLowerCase() ??
+      "unverified") as AgencyVerificationStatus,
+    listingStatus: (agency.listingStatus?.toLowerCase() ??
+      "draft") as AgencyListingStatus,
+    documents: (agency.documents || []).map((doc) => ({
       ...doc,
       kind: (doc.kind?.toLowerCase() ?? doc.kind) as AgencyDocumentKind,
       status: (doc.status?.toLowerCase() ?? "missing") as AgencyDocumentStatus,
     })),
-    offerings: (agency.offerings || []).map((offering: any) => ({
+    offerings: (agency.offerings || []).map((offering) => ({
       ...offering,
-      price: offering.price !== null && offering.price !== undefined ? Number(offering.price) : null,
+      price:
+        offering.price !== null && offering.price !== undefined
+          ? Number(offering.price)
+          : null,
     })),
   };
 }
 
-export async function getAgency(agencyId: string): Promise<Agency | null> {
+export async function getAgency(
+  agencyId: string,
+  desk?: DeskCaller,
+): Promise<Agency | null> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}`,
+      {
+        headers: credentials(desk),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const agency = normalizeAgency(json);
@@ -247,17 +339,30 @@ export async function getAgency(agencyId: string): Promise<Agency | null> {
   return local ? clone(local) : null;
 }
 
-export async function listAgencies(params: ListParams = {}): Promise<Paginated<Agency>> {
+/**
+ * Every agency, filtered here. The admin console passes its desk member; the
+ * public /hire listing passes none and must map the rows to listing fields
+ * before anything reaches the browser.
+ */
+export async function listAgencies(
+  params: ListParams = {},
+  desk?: DeskCaller,
+): Promise<Paginated<Agency>> {
   let backendRows: Agency[] = [];
   let fetchedFromBackend = false;
   try {
     const res = await fetch(`${BACKEND_API_URL}/agency?limit=100`, {
+      headers: credentials(desk),
       cache: "no-store",
     });
     if (res.ok) {
       const json = await res.json();
       const payload = json.data ?? json;
-      const rawRows = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+      const rawRows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
       backendRows = rawRows.map(normalizeAgency);
       fetchedFromBackend = true;
     }
@@ -281,49 +386,62 @@ export async function listAgencies(params: ListParams = {}): Promise<Paginated<A
   const merged = Array.from(mergedMap.values());
   const needle = needleOf(params);
   const status = statusOf(params);
-  const verificationRaw = (params as any)?.verification?.trim();
-  const verification = verificationRaw && verificationRaw !== "undefined" && verificationRaw !== "ALL" ? verificationRaw : null;
+  const verificationRaw = params?.verification?.trim();
+  const verification =
+    verificationRaw && verificationRaw !== "undefined" && verificationRaw !== "ALL"
+      ? verificationRaw
+      : null;
 
   const filtered = merged
     .filter((agency) => !status || agency.listingStatus === status)
     .filter(
       (agency) =>
-        !verification || agency.verification?.toLowerCase() === verification.toLowerCase(),
+        !verification ||
+        agency.verification?.toLowerCase() === verification.toLowerCase(),
     )
     .filter(
       (agency) =>
         !needle ||
-        matches(needle, agency.name, agency.legalName, agency.country, agency.registrationNumber),
+        matches(
+          needle,
+          agency.name,
+          agency.legalName,
+          agency.country,
+          agency.registrationNumber,
+        ),
     )
     .sort((a, b) => {
-      const timeA = new Date((a as any).updatedAt || (a as any).createdAt || 0).getTime();
-      const timeB = new Date((b as any).updatedAt || (b as any).createdAt || 0).getTime();
-      return timeB - timeA;
+      // The API's rows carry `updatedAt`; the fixtures only `createdAt`.
+      const when = (agency: Agency & { updatedAt?: string }) =>
+        new Date(agency.updatedAt || agency.createdAt || 0).getTime();
+      return when(b) - when(a);
     });
 
   return paginate(filtered, params?.page, params?.perPage);
 }
 
+/** A desk decision: the API takes it from a desk member's token only. */
 export async function updateAgencyVerification(
   agencyId: string,
   verification: string,
+  desk: DeskCaller,
 ): Promise<Agency | null> {
   const vLower = verification.toLowerCase();
   const verificationStatus: AgencyVerificationStatus =
     vLower === "verified"
       ? "verified"
       : vLower === "pending"
-      ? "pending"
-      : vLower === "suspended" || vLower === "rejected"
-      ? "suspended"
-      : "unverified";
+        ? "pending"
+        : vLower === "suspended" || vLower === "rejected"
+          ? "suspended"
+          : "unverified";
 
   const listingStatus: AgencyListingStatus =
     verificationStatus === "verified"
       ? "live"
       : verificationStatus === "suspended"
-      ? "rejected"
-      : "submitted";
+        ? "rejected"
+        : "submitted";
 
   const applyLocally = (agency: Agency) => {
     agency.verification = verificationStatus;
@@ -342,12 +460,15 @@ export async function updateAgencyVerification(
   // "Verification updated" during an outage although nothing was saved.
   let res: Response | null = null;
   try {
-    res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/verify`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ verification }),
-      cache: "no-store",
-    });
+    res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/verify`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...credentials(desk) },
+        body: JSON.stringify({ verification }),
+        cache: "no-store",
+      },
+    );
   } catch (error) {
     if (!LOCAL_FALLBACK) throw error;
   }
@@ -373,25 +494,30 @@ export async function updateAgencyVerification(
   return clone(local);
 }
 
+/** A desk decision: the API takes it from a desk member's token only. */
 export async function updateAgencyDocumentStatus(
   agencyId: string,
   docId: string,
   status: string,
-  note?: string,
+  note: string | undefined,
+  desk: DeskCaller,
 ): Promise<Agency | null> {
   const sLower = status.toLowerCase();
   const docStatus: AgencyDocumentStatus =
     sLower === "approved" || sLower === "verified"
       ? "approved"
       : sLower === "rejected"
-      ? "rejected"
-      : sLower === "in_review"
-      ? "in_review"
-      : "uploaded";
+        ? "rejected"
+        : sLower === "in_review"
+          ? "in_review"
+          : "uploaded";
 
   const agency = agencyRecord(agencyId);
   if (agency && agency.documents) {
-    const doc = agency.documents.find((d: any) => d.id === docId || d.kind === docId);
+    // The API's documents carry an id; the fixtures are keyed by kind.
+    const doc = agency.documents.find(
+      (d: AgencyDocument & { id?: string }) => d.id === docId || d.kind === docId,
+    );
     if (doc) {
       doc.status = docStatus;
       if (note !== undefined) doc.note = note;
@@ -399,21 +525,24 @@ export async function updateAgencyDocumentStatus(
   }
 
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/documents/${docId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: docStatus.toUpperCase(), note }),
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/documents/${encodeURIComponent(docId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...credentials(desk) },
+        body: JSON.stringify({ status: docStatus.toUpperCase(), note }),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
-      const updatedAgency = await getAgency(agencyId);
+      const updatedAgency = await getAgency(agencyId, desk);
       if (updatedAgency) return updatedAgency;
     }
   } catch {
     // Fallback to local store
   }
 
-  const updatedAgency = await getAgency(agencyId);
+  const updatedAgency = await getAgency(agencyId, desk);
   if (updatedAgency) return updatedAgency;
 
   return agency ? clone(agency) : null;
@@ -424,19 +553,19 @@ function currencyOf(agency: Agency, assignments: AgencyAssignment[]) {
   return agency.offerings[0]?.currency ?? assignments[0]?.currency ?? "NGN";
 }
 
-function isExpired(document: AgencyDocument, at: Date) {
-  return document.expiresAt !== undefined && new Date(document.expiresAt) < at;
-}
-
 /**
  * Everything on the dashboard is derived here and nothing is stored, so a
  * figure can never drift from the rows it is meant to summarise.
  */
 export async function getOverview(agencyId: string): Promise<AgencyOverview> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/overview`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/overview`,
+      {
+        headers: credentials(),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       return json.data ?? json;
@@ -450,23 +579,40 @@ export async function getOverview(agencyId: string): Promise<AgencyOverview> {
   const staff = staffOf(agencyId);
   const payouts = payoutsOf(agencyId);
 
-  const activeAssignments = assignments.filter((a) => a.status === "in_progress" || a.status === "assigned" || a.status === "requested");
+  const activeAssignments = assignments.filter(
+    (a) =>
+      a.status === "in_progress" || a.status === "assigned" || a.status === "requested",
+  );
 
   return {
     openAssignments: activeAssignments.length,
     staffOnDuty: staff.length,
     staffTotal: staff.length,
     completedThisMonth: assignments.filter((a) => a.status === "completed").length,
-    earnedThisMonth: payouts.reduce((sum, p) => sum + (p.status === "paid" ? p.net : 0), 0),
-    pendingPayout: payouts.reduce((sum, p) => sum + (p.status === "pending" ? p.net : 0), 0),
+    earnedThisMonth: payouts.reduce(
+      (sum, p) => sum + (p.status === "paid" ? p.net : 0),
+      0,
+    ),
+    pendingPayout: payouts.reduce(
+      (sum, p) => sum + (p.status === "pending" ? p.net : 0),
+      0,
+    ),
     currency: agency ? currencyOf(agency, assignments) : "USD",
-    outstandingDocuments: agency ? agency.documents.filter((d) => d.status === "missing" || d.status === "rejected").length : 0,
+    outstandingDocuments: agency
+      ? agency.documents.filter(
+          (d) => d.status === "missing" || d.status === "rejected",
+        ).length
+      : 0,
     verification: agency?.verification ?? "unverified",
     listingStatus: agency?.listingStatus ?? "draft",
   };
 }
 
-/** What the listing wizard may change. Verification and money are not ours. */
+/**
+ * What the listing wizard may change. Verification and money are not ours, and
+ * neither is `email`: it is the sign-in email, which only a verified flow may
+ * change (there isn't one yet).
+ */
 export type ListingPatch = Partial<
   Pick<
     Agency,
@@ -480,7 +626,6 @@ export type ListingPatch = Partial<
     | "summary"
     | "about"
     | "logoUrl"
-    | "email"
     | "phone"
     | "website"
     | "yearFounded"
@@ -506,7 +651,15 @@ function reconcileDocuments(
   );
 }
 
-export async function updateListing(agencyId: string, patch: ListingPatch): Promise<Agency | null> {
+export async function updateListing(
+  agencyId: string,
+  listingPatch: ListingPatch,
+): Promise<Agency | null> {
+  // Dropped even if a caller slips one past the type: the sign-in email is
+  // never changed by a listing save, here or on the service.
+  const { email: _email, ...patch } = listingPatch as ListingPatch & {
+    email?: unknown;
+  };
   const local = agencyRecord(agencyId);
   if (local) {
     Object.assign(local, patch);
@@ -516,12 +669,15 @@ export async function updateListing(agencyId: string, patch: ListingPatch): Prom
   }
 
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/listing`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/listing`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        body: JSON.stringify(patch),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       return normalizeAgency(json);
@@ -547,12 +703,20 @@ export async function setDocument(
 ): Promise<Agency | null> {
   try {
     const backendKind = kind.toUpperCase();
-    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/documents`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: backendKind, fileName: file.fileName, fileUrl: file.fileUrl, expiresAt: file.expiresAt }),
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/documents`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        body: JSON.stringify({
+          kind: backendKind,
+          fileName: file.fileName,
+          fileUrl: file.fileUrl,
+          expiresAt: file.expiresAt,
+        }),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const updatedAgency = await getAgency(agencyId);
       if (updatedAgency) return updatedAgency;
@@ -621,12 +785,15 @@ export async function submitListing(agencyId: string): Promise<{
   message: string | null;
 }> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/listing`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingStatus: "submitted", verification: "pending" }),
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/listing`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        body: JSON.stringify({ listingStatus: "submitted", verification: "pending" }),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const updatedAgency = json.data ?? json;
@@ -670,11 +837,19 @@ export async function listAssignments(
   params: ListParams = {},
 ): Promise<Paginated<AgencyAssignment>> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments`, { cache: "no-store" });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/assignments`,
+      {
+        headers: credentials(),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const payload = json.data ?? json;
-      const rows: AgencyAssignment[] = Array.isArray(payload) ? payload : (payload.data || []);
+      const rows: AgencyAssignment[] = Array.isArray(payload)
+        ? payload
+        : payload.data || [];
       const needle = needleOf(params);
       const status = statusOf(params);
 
@@ -725,19 +900,25 @@ export async function listAssignments(
   return paginate(rows, params?.page, params?.perPage);
 }
 
-export async function getAssignment(agencyId: string, id: string): Promise<AgencyAssignment | null> {
+export async function getAssignment(
+  agencyId: string,
+  id: string,
+): Promise<AgencyAssignment | null> {
   try {
     const paginated = await listAssignments(agencyId, { perPage: 100 });
-    const match = paginated.data.find((record) => record.id === id || record.reference === id);
+    const match = paginated.data.find(
+      (record) => record.id === id || record.reference === id,
+    );
     if (match) return withContactRule(clone(match));
   } catch {
     // Fallback to local store
   }
 
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
+  const assignment = assignmentsOf(agencyId).find(
+    (record) => record.id === id || record.reference === id,
+  );
   return assignment ? withContactRule(clone(assignment)) : null;
 }
-
 
 /**
  * Puts the agency's own people against a booking.
@@ -752,12 +933,17 @@ export async function assignStaff(
   staffIds: string[],
 ): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${assignmentId}/assign`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignedStaffIds: staffIds }),
-      cache: "no-store",
-    });
+    // The assignment id comes from the browser: escaped, so it can only ever
+    // name an assignment under the session's own agency.
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/assignments/${encodeURIComponent(assignmentId)}/assign`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        body: JSON.stringify({ assignedStaffIds: staffIds }),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const updated = json.data ?? json;
@@ -841,11 +1027,15 @@ export async function completeAssignment(
   id: string,
 ): Promise<{ assignment: AgencyAssignment | null; message: string | null }> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/assignments/${id}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
+    // Escaped for the same reason as in assignStaff(): the id is the browser's.
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/assignments/${encodeURIComponent(id)}/complete`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const updated = json.data ?? json;
@@ -855,7 +1045,9 @@ export async function completeAssignment(
     // Fallback to local store
   }
 
-  const assignment = assignmentsOf(agencyId).find((record) => record.id === id || record.reference === id);
+  const assignment = assignmentsOf(agencyId).find(
+    (record) => record.id === id || record.reference === id,
+  );
   if (!assignment) {
     return { assignment: null, message: "We could not find that assignment." };
   }
@@ -891,11 +1083,17 @@ export async function listStaff(
 ): Promise<Paginated<AgencyStaff>> {
   let backendRows: AgencyStaff[] = [];
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, { cache: "no-store" });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/staff`,
+      {
+        headers: credentials(),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const payload = json.data ?? json;
-      backendRows = Array.isArray(payload) ? payload : (payload.data || []);
+      backendRows = Array.isArray(payload) ? payload : payload.data || [];
     }
   } catch {
     // Ignore backend fetch errors
@@ -917,7 +1115,8 @@ export async function listStaff(
     .filter((member) => !status || member.status === status)
     .filter(
       (member) =>
-        !needle || matches(needle, member.name, member.role, ...(member.languages || [])),
+        !needle ||
+        matches(needle, member.name, member.role, ...(member.languages || [])),
     )
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(clone);
@@ -941,14 +1140,20 @@ export type NewStaffInput = {
  * Adds someone to the books. They start `available` and unrated — a rating is
  * something travellers give, not something an agency types in about itself.
  */
-export async function addStaff(agencyId: string, input: NewStaffInput): Promise<AgencyStaff> {
+export async function addStaff(
+  agencyId: string,
+  input: NewStaffInput,
+): Promise<AgencyStaff> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/staff`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/staff`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...credentials() },
+        body: JSON.stringify(input),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const backendMember = json.data ?? json;
@@ -988,11 +1193,19 @@ export async function listPayouts(
   params: ListParams = {},
 ): Promise<Paginated<AgencyPayout>> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/agency/${agencyId}/payouts`, { cache: "no-store" });
+    const res = await fetch(
+      `${BACKEND_API_URL}/agency/${encodeURIComponent(agencyId)}/payouts`,
+      {
+        headers: credentials(),
+        cache: "no-store",
+      },
+    );
     if (res.ok) {
       const json = await res.json();
       const payload = json.data ?? json;
-      const rows: AgencyPayout[] = Array.isArray(payload) ? payload : (payload.data || []);
+      const rows: AgencyPayout[] = Array.isArray(payload)
+        ? payload
+        : payload.data || [];
       const needle = needleOf(params);
       const status = statusOf(params);
       const filtered = rows
@@ -1001,7 +1214,9 @@ export async function listPayouts(
           (payout) =>
             !needle || matches(needle, payout.reference, payout.destinationAccount),
         )
-        .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())
+        .sort(
+          (a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime(),
+        )
         .map(clone);
 
       return paginate(filtered, params?.page, params?.perPage);

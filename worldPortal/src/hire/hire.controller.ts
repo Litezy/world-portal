@@ -19,13 +19,27 @@ import {
 import { HireService } from './hire.service';
 import { QueryProfessionalsDto } from './dto/query-professionals.dto';
 import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
+import { UserRole } from '@prisma/client';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { ServiceOrDeskGuard } from '../auth/guards/service-or-desk.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import {
   ApplicantPrincipal,
   CurrentApplicant,
 } from '../auth/decorators/current-applicant.decorator';
 import { ApplicantService } from '../applicant/applicant.service';
 
+/**
+ * - **Directory reads** (`ServiceOrDeskGuard`): no signed-out page calls these.
+ *   The public /hire listing is built by the website's server, which sends
+ *   SERVICE_AUTH_KEY; desk staff (MANAGER, STAFF) get in with their own token.
+ * - **Desk decisions** (`ExternalAuthGuard` + `RolesGuard`): verifying a
+ *   professional, and the admin list that includes unverified ones. A desk
+ *   token only; the service key does not unlock them.
+ * - **Booking** (`ClerkAuthGuard`): the signed-in WorldStreet applicant.
+ */
 @ApiTags('Hire & Professionals')
 @Controller('hire')
 export class HireController {
@@ -37,26 +51,47 @@ export class HireController {
   ) {}
 
   @Get('professionals')
-  @ApiOperation({ summary: 'Browse professionals directory with filtering' })
+  @UseGuards(ServiceOrDeskGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Browse verified professionals (website server or desk staff)',
+  })
   async findProfessionals(@Query() query: QueryProfessionalsDto) {
     return this.hireService.findProfessionals(query);
   }
 
   @Get('professionals/admin')
-  @ApiOperation({ summary: 'List all professionals for admin management' })
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List all professionals for admin management (desk staff only)',
+  })
   async findAllProfessionalsAdmin(@Query() query: QueryProfessionalsDto) {
     return this.hireService.findAllProfessionalsAdmin(query);
   }
 
   @Get('professionals/:id')
-  @ApiOperation({ summary: 'Get single professional profile by ID or slug' })
+  @UseGuards(ServiceOrDeskGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Get one professional by ID or slug (website server or desk staff)',
+  })
   @ApiParam({ name: 'id', description: 'Professional ID or Slug' })
   async getProfessional(@Param('id') id: string) {
     return this.hireService.getProfessionalById(id);
   }
 
   @Patch('professionals/:id/verify')
-  @ApiOperation({ summary: 'Toggle professional verification status' })
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Toggle professional verification status (desk staff only)',
+  })
   @ApiParam({ name: 'id', description: 'Professional ID' })
   async toggleVerification(
     @Param('id') id: string,
@@ -71,7 +106,10 @@ export class HireController {
   @ApiOperation({
     summary: 'Submit a hire booking request (signed-in WorldStreet applicant)',
   })
-  @ApiResponse({ status: 201, description: 'Hire booking created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Hire booking created successfully',
+  })
   @ApiResponse({ status: 401, description: 'No valid WorldStreet session.' })
   async createBooking(
     @Body() dto: CreateHireBookingDto,

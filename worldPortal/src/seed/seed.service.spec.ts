@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SeedService } from './seed.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 
 describe('SeedService', () => {
   let service: SeedService;
@@ -35,16 +35,54 @@ describe('SeedService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should throw UnauthorizedException if secret code is invalid', async () => {
-    await expect(service.runSeed({ secretCode: 'INVALID_CODE' })).rejects.toThrow(
-      UnauthorizedException,
-    );
-  });
+  // The seed writes demo agencies, applications, a manager and two *active*
+  // bank accounts that applicants are shown as places to pay. It must never
+  // be reachable on a real database by accident.
+  describe('access', () => {
+    const saved = { ...process.env };
+    const CODE = 'a-long-configured-seed-code-for-tests';
 
-  it('should execute seed successfully when correct secret code is provided', async () => {
-    const res = await service.runSeed({ secretCode: 'WORLD_PORTAL_SEED_2026_SECURE' });
-    expect(res.success).toBe(true);
-    expect(res.defaultPassword).toBe('Password@2');
-    expect(mockPrismaService.profile.upsert).toHaveBeenCalled();
+    afterEach(() => {
+      process.env = { ...saved };
+    });
+
+    it('is switched off unless ENABLE_SEED_ENDPOINT=true, even with the right code', async () => {
+      delete process.env.ENABLE_SEED_ENDPOINT;
+      process.env.SEED_SECRET_CODE = CODE;
+
+      await expect(service.runSeed({ secretCode: CODE })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrismaService.profile.upsert).not.toHaveBeenCalled();
+    });
+
+    it('no longer accepts the built-in code when SEED_SECRET_CODE is not set', async () => {
+      process.env.ENABLE_SEED_ENDPOINT = 'true';
+      delete process.env.SEED_SECRET_CODE;
+
+      await expect(
+        service.runSeed({ secretCode: 'WORLD_PORTAL_SEED_2026_SECURE' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockPrismaService.profile.upsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a wrong code', async () => {
+      process.env.ENABLE_SEED_ENDPOINT = 'true';
+      process.env.SEED_SECRET_CODE = CODE;
+
+      await expect(service.runSeed({ secretCode: 'INVALID_CODE' })).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('runs when switched on and given the configured code', async () => {
+      process.env.ENABLE_SEED_ENDPOINT = 'true';
+      process.env.SEED_SECRET_CODE = CODE;
+
+      const res = await service.runSeed({ secretCode: CODE });
+      expect(res.success).toBe(true);
+      expect(res.defaultPassword).toBe('Password@2');
+      expect(mockPrismaService.profile.upsert).toHaveBeenCalled();
+    });
   });
 });

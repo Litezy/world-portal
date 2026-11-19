@@ -2,6 +2,15 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+
+/** A page size between 1 and MAX_LIMIT; anything unusable is the default. */
+function clampLimit(limit: number | undefined): number {
+  if (!limit || !Number.isFinite(limit) || limit < 1) return DEFAULT_LIMIT;
+  return Math.min(Math.floor(limit), MAX_LIMIT);
+}
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -32,7 +41,7 @@ export class NotificationService {
     options: { unreadOnly?: boolean; limit?: number } = {},
   ) {
     const cleanId = recipientId.trim().toLowerCase();
-    const limit = options.limit || 50;
+    const limit = clampLimit(options.limit);
 
     const [data, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
@@ -57,9 +66,14 @@ export class NotificationService {
     };
   }
 
-  async markAsRead(id: string) {
-    const existing = await this.prisma.notification.findUnique({
-      where: { id },
+  /**
+   * Marks one notification read, but only if it belongs to `recipientId` (the
+   * caller's own recipient, from their session). Someone else's notification
+   * is a 404, exactly like one that does not exist.
+   */
+  async markAsRead(id: string, recipientId: string) {
+    const existing = await this.prisma.notification.findFirst({
+      where: { id, recipientId: recipientId.trim().toLowerCase() },
     });
 
     if (!existing) {
@@ -82,7 +96,9 @@ export class NotificationService {
       data: { isRead: true },
     });
 
-    this.logger.log(`Marked ${result.count} notifications as read for recipient=${cleanId}`);
+    this.logger.log(
+      `Marked ${result.count} notifications as read for recipient=${cleanId}`,
+    );
     return { count: result.count };
   }
 }

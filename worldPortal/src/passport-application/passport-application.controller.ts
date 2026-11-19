@@ -26,6 +26,7 @@ import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ExternalAuthGuard } from '../auth/guards/external-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { DeskTokenOrEmailGuard } from '../auth/guards/desk-token-or-email.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import {
@@ -90,8 +91,11 @@ export class PassportApplicationController {
   }
 
   @Get(':id')
+  @UseGuards(DeskTokenOrEmailGuard)
   @ApiOperation({
     summary: 'Get detailed passport application by ID or applicationNo',
+    description:
+      'Applicants (no token) must pass the email on the application; desk staff send their Bearer token instead.',
   })
   @ApiParam({
     name: 'id',

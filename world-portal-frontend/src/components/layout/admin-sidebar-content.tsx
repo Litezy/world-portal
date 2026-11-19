@@ -10,7 +10,7 @@ import { AdminNav } from "@/components/layout/admin-nav";
 import { Button } from "@/components/ui/button";
 import { adminBrand } from "@/content/admin";
 import { useLogout } from "@/features/auth/api/use-logout";
-import type { AdminUser } from "@/types";
+import type { ClientAdminUser } from "@/types";
 
 /** Opens the search palette (it lives in the top bar) from anywhere. */
 export const OPEN_ADMIN_SEARCH = "admin:open-search";
@@ -31,7 +31,7 @@ export function AdminSidebarContent({
   onNavigate,
   onClose,
 }: {
-  user: AdminUser;
+  user: ClientAdminUser;
   onNavigate?: () => void;
   onClose?: () => void;
 }) {

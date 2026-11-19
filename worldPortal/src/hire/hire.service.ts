@@ -1,13 +1,39 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import {
+  AgencyServiceOffering,
+  AgencyVerificationStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { QueryProfessionalsDto } from './dto/query-professionals.dto';
 import { CreateHireBookingDto } from './dto/create-hire-booking.dto';
 import { ApplicationOwner } from '../applicant/applicant.service';
+
+/** How /hire names an agency it lists: `agency-<agency id or slug>`. */
+const AGENCY_PREFIX = 'agency-';
+const HOUR_MS = 3_600_000;
+
+const round2 = (amount: number) => Math.round(amount * 100) / 100;
+
+type AgencyWithOfferings = Prisma.AgencyGetPayload<{
+  include: { offerings: true };
+}>;
+
+/** A professional the applicant may book, and the server's price for it. */
+type Bookable = {
+  professionalId: string;
+  totalAmount: number;
+  currency: string;
+  /** Set when the booking is with an agency, which then gets an assignment. */
+  agency: AgencyWithOfferings | null;
+  offering: AgencyServiceOffering | null;
+};
 
 @Injectable()
 export class HireService {
@@ -26,7 +52,7 @@ export class HireService {
     const limit = dto.limit || 20;
     const skip = (page - 1) * limit;
 
-    const where: any = { isVerified: true };
+    const where: Prisma.ProfessionalProfileWhereInput = { isVerified: true };
     if (dto.category) {
       where.category = dto.category;
     }
@@ -76,137 +102,78 @@ export class HireService {
   }
 
   /**
-   * Create a hire booking request for a professional tied to an applicant profile / email
+   * Places a hire booking for `owner`, the signed-in WorldStreet applicant.
+   *
+   * Nothing that decides money or ownership is taken from the request:
+   * - the professional must already exist and be verified; an unknown one is
+   *   a 404, and none is ever made up from the request;
+   * - the amount and currency are the professional's own price, so the
+   *   request's `totalAmount` and `currency` are ignored;
+   * - the booking is filed under `owner` and their verified email. A request
+   *   `profileId` is ignored, and a visa application is attached only if it is
+   *   the applicant's own (404 otherwise).
    */
-  /**
-   * `owner` is the signed-in WorldStreet applicant: the booking is filed
-   * under their account, and their verified email is where updates go.
-   */
-  async createBooking(dto: CreateHireBookingDto, owner?: ApplicationOwner) {
-    if (owner) {
-      dto = { ...dto, travellerEmail: owner.email };
+  async createBooking(dto: CreateHireBookingDto, owner: ApplicationOwner) {
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+    if (
+      Number.isNaN(startsAt.getTime()) ||
+      Number.isNaN(endsAt.getTime()) ||
+      endsAt <= startsAt
+    ) {
+      throw new BadRequestException(
+        'A booking needs a start and an end, and must end after it starts.',
+      );
     }
+
+    const bookable = await this.resolveBookable(
+      dto.professionalId,
+      startsAt,
+      endsAt,
+    );
+    const visaDocumentationId = dto.visaDocumentationId
+      ? await this.ownVisaApplication(dto.visaDocumentationId, owner)
+      : null;
+
+    const { professionalId, totalAmount, currency, agency, offering } =
+      bookable;
     const reference = `HIRE-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const normalizedEmail = owner.email.toLowerCase().trim();
 
-    // Resolve profileId if email matches an existing applicant Profile
-    let resolvedProfileId = dto.profileId;
-    const normalizedEmail = dto.travellerEmail
-      ? dto.travellerEmail.toLowerCase().trim()
-      : 'applicant@example.com';
-
-    if (!resolvedProfileId && dto.travellerEmail) {
-      const existingProfile = await this.prisma.profile.findUnique({
-        where: { email: normalizedEmail },
-      });
-      if (existingProfile) {
-        resolvedProfileId = existingProfile.id;
-      }
-    }
-
-    // Resolve professionalId & matched agency
-    let resolvedProId = dto.professionalId;
-    const cleanSlug = resolvedProId.toLowerCase().trim();
-    const rawAgencyId = cleanSlug.replace(/^agency-/, '');
-
-    const matchedAgency = await this.prisma.agency.findFirst({
-      where: { OR: [{ id: rawAgencyId }, { slug: rawAgencyId }, { id: cleanSlug }] },
-      include: { offerings: true },
-    }).catch(() => null);
-
-    const existingPro = await this.prisma.professionalProfile.findFirst({
-      where: { OR: [{ id: resolvedProId }, { slug: resolvedProId }] },
+    // A desk Profile with the applicant's verified email, if one exists.
+    const existingProfile = await this.prisma.profile.findUnique({
+      where: { email: normalizedEmail },
     });
-
-    if (existingPro) {
-      resolvedProId = existingPro.id;
-    } else if (typeof this.prisma.professionalProfile?.create === 'function') {
-      let agencyName = '';
-      let agencyBio = '';
-      let avatarUrl: string | undefined = undefined;
-
-      if (matchedAgency) {
-        agencyName = matchedAgency.name;
-        agencyBio = matchedAgency.about || matchedAgency.summary || `Verified agency listing for ${matchedAgency.name}.`;
-        avatarUrl = matchedAgency.logoUrl || undefined;
-      } else {
-        agencyName = cleanSlug
-          .replace(/^agency-/, '')
-          .replace(/[-_]/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-        agencyBio = `Verified destination specialist available for booking in ${dto.destinationCity || 'destination city'}.`;
-      }
-
-      const category = cleanSlug.includes('driver')
-        ? 'driver'
-        : cleanSlug.includes('security')
-          ? 'security'
-          : cleanSlug.includes('guide')
-            ? 'tour_guide'
-            : cleanSlug.includes('interpreter')
-              ? 'interpreter'
-              : 'driver';
-
-      try {
-        const createdPro = await this.prisma.professionalProfile.create({
-          data: {
-            id: resolvedProId,
-            slug: cleanSlug,
-            name: agencyName,
-            title: `${category.replace('_', ' ').toUpperCase()} Specialist`,
-            category,
-            bio: agencyBio,
-            avatarUrl: avatarUrl || null,
-            countryCode: matchedAgency?.countryCode || 'US',
-            country: matchedAgency?.country || 'Destination Service',
-            hourlyRate: 75.0,
-            isVerified: true,
-          },
-        });
-        resolvedProId = createdPro.id;
-      } catch {
-        try {
-          const updatedPro = await this.prisma.professionalProfile.update({
-            where: { id: resolvedProId },
-            data: {
-              name: agencyName,
-              bio: agencyBio,
-              avatarUrl: avatarUrl || null,
-            },
-          });
-          resolvedProId = updatedPro.id;
-        } catch {
-          const fallbackPro = await this.prisma.professionalProfile.findFirst();
-          if (fallbackPro) {
-            resolvedProId = fallbackPro.id;
-          }
-        }
-      }
-    }
+    const resolvedProfileId = existingProfile?.id ?? null;
 
     const booking = await this.prisma.hireBooking.create({
       data: {
         reference,
-        professionalId: resolvedProId,
-        profileId: resolvedProfileId || null,
-        clerkUserId: owner?.clerkUserId ?? null,
-        visaDocumentationId: dto.visaDocumentationId || null,
+        professionalId,
+        profileId: resolvedProfileId,
+        clerkUserId: owner.clerkUserId,
+        visaDocumentationId,
         travellerName: dto.travellerName || 'Applicant',
         travellerEmail: normalizedEmail,
         travellerPhone: dto.travellerPhone || null,
         destinationCity: dto.destinationCity,
-        startsAt: new Date(dto.startsAt),
-        endsAt: new Date(dto.endsAt),
-        totalAmount: dto.totalAmount,
-        currency: dto.currency || 'USD',
+        startsAt,
+        endsAt,
+        totalAmount,
+        currency,
         status: 'REQUESTED',
       },
     });
 
-    if (matchedAgency) {
-      const grossAmount = Number(dto.totalAmount) || 150;
-      const commissionRate = matchedAgency.commissionRate ? Number(matchedAgency.commissionRate) : 0.15;
-      const platformFee = grossAmount * commissionRate;
-      const netToAgency = grossAmount - platformFee;
+    if (agency && offering) {
+      const grossAmount = totalAmount;
+      const commissionRate = agency.commissionRate
+        ? Number(agency.commissionRate)
+        : 0.15;
+      // In cents, so the fee and the agency's share always add up to the gross.
+      const platformFee = round2(grossAmount * commissionRate);
+      const netToAgency = round2(grossAmount - platformFee);
+      const matchedAgency = agency;
 
       try {
         await this.prisma.agencyAssignment.upsert({
@@ -216,54 +183,191 @@ export class HireService {
             reference,
             agencyId: matchedAgency.id,
             category: matchedAgency.categories?.[0] || 'freelancer',
-            offeringId: matchedAgency.offerings?.[0]?.id || `offering-${matchedAgency.id}`,
-            offeringTitle: matchedAgency.offerings?.[0]?.title || `${matchedAgency.name} Service Package`,
+            offeringId: offering.id,
+            offeringTitle: offering.title,
             travellerName: dto.travellerName || 'Applicant',
             travellerEmail: normalizedEmail,
             travellerPhone: dto.travellerPhone || null,
             partySize: 1,
-            destinationCity: dto.destinationCity || matchedAgency.cities?.[0] || 'Destination City',
+            destinationCity:
+              dto.destinationCity ||
+              matchedAgency.cities?.[0] ||
+              'Destination City',
             destinationCountry: matchedAgency.country || 'Destination Country',
             destinationCountryCode: matchedAgency.countryCode || 'US',
-            startsAt: new Date(dto.startsAt),
-            endsAt: new Date(dto.endsAt),
+            startsAt,
+            endsAt,
             status: 'REQUESTED',
             assignedStaffIds: [],
             staffRequired: 1,
             notes: dto.notes || null,
             gross: grossAmount,
-            currency: dto.currency || 'USD',
+            currency,
             platformFee,
             netToAgency,
           },
         });
-        this.logger.log(`Created matching AgencyAssignment ref=${reference} agencyId=${matchedAgency.id}`);
+        this.logger.log(
+          `Created matching AgencyAssignment ref=${reference} agencyId=${matchedAgency.id}`,
+        );
 
-        await this.notificationService.create({
-          recipientId: matchedAgency.id,
-          recipientType: 'AGENCY',
-          title: 'New Booking Request',
-          message: `New booking request #${reference} for ${dto.destinationCity || 'your service'}. Staff assignment required.`,
-          type: 'BOOKING_REQUESTED',
-          metadata: { reference, totalAmount: dto.totalAmount, currency: dto.currency || 'USD' },
-        }).catch(() => null);
-      } catch (err: any) {
-        this.logger.warn(`Could not create matching AgencyAssignment ref=${reference}: ${err?.message || err}`);
+        await this.notificationService
+          .create({
+            recipientId: matchedAgency.id,
+            recipientType: 'AGENCY',
+            title: 'New Booking Request',
+            message: `New booking request #${reference} for ${dto.destinationCity || 'your service'}. Staff assignment required.`,
+            type: 'BOOKING_REQUESTED',
+            metadata: { reference, totalAmount, currency },
+          })
+          .catch(() => null);
+      } catch (err: unknown) {
+        const reason = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `Could not create matching AgencyAssignment ref=${reference}: ${reason}`,
+        );
       }
     }
 
     // Notify applicant that booking request has been submitted
-    await this.notificationService.create({
-      recipientId: normalizedEmail,
-      recipientType: 'APPLICANT',
-      title: 'Booking Placed',
-      message: `Your booking request #${reference} has been placed. We have notified the agency to assign your specialist.`,
-      type: 'BOOKING_REQUESTED',
-      metadata: { reference, totalAmount: dto.totalAmount, currency: dto.currency || 'USD' },
-    }).catch(() => null);
+    await this.notificationService
+      .create({
+        recipientId: normalizedEmail,
+        recipientType: 'APPLICANT',
+        title: 'Booking Placed',
+        message: `Your booking request #${reference} has been placed. We have notified the agency to assign your specialist.`,
+        type: 'BOOKING_REQUESTED',
+        metadata: { reference, totalAmount, currency },
+      })
+      .catch(() => null);
 
-    this.logger.log(`Created hire booking ref=${reference} profileId=${resolvedProfileId ?? 'GUEST'} pro=${resolvedProId}`);
+    this.logger.log(
+      `Created hire booking ref=${reference} clerkUserId=${owner.clerkUserId} pro=${professionalId} total=${currency} ${totalAmount}`,
+    );
     return booking;
+  }
+
+  /**
+   * What `professionalId` names, and what booking it costs.
+   *
+   * - `agency-<id or slug>`: an agency listed on /hire. The desk must have
+   *   verified it. It costs its first offering's price, the price /hire shows,
+   *   and an offering priced on request can't be booked online.
+   * - otherwise a professional's id or slug. It must be verified, and costs its
+   *   hourly rate for the hours booked (at least one).
+   */
+  private async resolveBookable(
+    professionalId: string,
+    startsAt: Date,
+    endsAt: Date,
+  ): Promise<Bookable> {
+    const key = professionalId.trim();
+    const notFound = () =>
+      new NotFoundException(
+        `No bookable professional matches "${professionalId}".`,
+      );
+
+    if (key.startsWith(AGENCY_PREFIX)) {
+      const agencyKey = key.slice(AGENCY_PREFIX.length);
+      const agency = await this.prisma.agency.findFirst({
+        where: { OR: [{ id: agencyKey }, { slug: agencyKey }] },
+        include: { offerings: true },
+      });
+      if (
+        !agency ||
+        agency.verification !== AgencyVerificationStatus.VERIFIED
+      ) {
+        throw notFound();
+      }
+
+      const offering = agency.offerings[0];
+      const price =
+        offering && offering.price !== null ? Number(offering.price) : NaN;
+      if (!offering || !(price > 0)) {
+        throw new BadRequestException(
+          `${agency.name} prices its services on request, so it can't be booked online yet.`,
+        );
+      }
+      const currency = offering.currency || 'USD';
+      const profile = await this.agencyBookingProfile(agency, price, currency);
+      return {
+        professionalId: profile.id,
+        totalAmount: round2(price),
+        currency,
+        agency,
+        offering,
+      };
+    }
+
+    const pro = await this.prisma.professionalProfile.findFirst({
+      where: { OR: [{ id: key }, { slug: key }] },
+    });
+    if (!pro || !pro.isVerified) throw notFound();
+
+    const hours = Math.max(
+      1,
+      Math.ceil((endsAt.getTime() - startsAt.getTime()) / HOUR_MS),
+    );
+    return {
+      professionalId: pro.id,
+      totalAmount: round2(Number(pro.hourlyRate) * hours),
+      currency: pro.currency || 'USD',
+      agency: null,
+      offering: null,
+    };
+  }
+
+  /**
+   * A HireBooking belongs to a ProfessionalProfile, so an agency is booked
+   * through a profile of its own, `agency-<agency id>`. It is written once,
+   * from the agency's own record and nothing in the request, and only for an
+   * agency the desk has verified (`resolveBookable` checks).
+   */
+  private agencyBookingProfile(
+    agency: AgencyWithOfferings,
+    price: number,
+    currency: string,
+  ) {
+    const id = `${AGENCY_PREFIX}${agency.id}`;
+    return this.prisma.professionalProfile.upsert({
+      where: { id },
+      update: {},
+      create: {
+        id,
+        slug: id,
+        name: agency.name,
+        title: agency.summary || agency.name,
+        category: agency.categories?.[0] || 'freelancer',
+        bio:
+          agency.about ||
+          agency.summary ||
+          `Verified agency listing for ${agency.name}.`,
+        avatarUrl: agency.logoUrl || null,
+        countryCode: agency.countryCode,
+        country: agency.country,
+        hourlyRate: price,
+        currency,
+        languages: agency.languages ?? [],
+        isVerified: true,
+      },
+    });
+  }
+
+  /** The applicant's own visa application, or a 404: never somebody else's. */
+  private async ownVisaApplication(
+    id: string,
+    owner: ApplicationOwner,
+  ): Promise<string> {
+    const visa = await this.prisma.visaDocumentation.findFirst({
+      where: { id, clerkUserId: owner.clerkUserId },
+      select: { id: true },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'None of your visa applications matches that id.',
+      );
+    }
+    return visa.id;
   }
 
   /**
@@ -289,71 +393,136 @@ export class HireService {
     });
 
     for (const b of bookings) {
-      if (b.professional && (b.professional.name.startsWith('Agency ') || b.professional.name.includes('-'))) {
+      if (
+        b.professional &&
+        (b.professional.name.startsWith('Agency ') ||
+          b.professional.name.includes('-'))
+      ) {
         const rawAgencyId = b.professional.slug.replace(/^agency-/, '');
-        const matchedAgency = await this.prisma.agency.findFirst({
-          where: { OR: [{ id: rawAgencyId }, { slug: rawAgencyId }, { id: b.professional.slug }] },
-        }).catch(() => null);
+        const matchedAgency = await this.prisma.agency
+          .findFirst({
+            where: {
+              OR: [
+                { id: rawAgencyId },
+                { slug: rawAgencyId },
+                { id: b.professional.slug },
+              ],
+            },
+          })
+          .catch(() => null);
 
         if (matchedAgency) {
           b.professional.name = matchedAgency.name;
-          b.professional.bio = matchedAgency.about || matchedAgency.summary || b.professional.bio;
+          b.professional.bio =
+            matchedAgency.about || matchedAgency.summary || b.professional.bio;
           if (matchedAgency.logoUrl) {
             b.professional.avatarUrl = matchedAgency.logoUrl;
           }
-          this.prisma.professionalProfile.update({
-            where: { id: b.professional.id },
-            data: {
-              name: matchedAgency.name,
-              bio: matchedAgency.about || matchedAgency.summary || b.professional.bio,
-              avatarUrl: matchedAgency.logoUrl || null,
-            },
-          }).catch(() => null);
+          this.prisma.professionalProfile
+            .update({
+              where: { id: b.professional.id },
+              data: {
+                name: matchedAgency.name,
+                bio:
+                  matchedAgency.about ||
+                  matchedAgency.summary ||
+                  b.professional.bio,
+                avatarUrl: matchedAgency.logoUrl || null,
+              },
+            })
+            .catch(() => null);
         }
       }
 
       // Check corresponding agency assignment to sync status and assigned staff
-      const assignment = await this.prisma.agencyAssignment.findUnique({
-        where: { reference: b.reference },
-      }).catch(() => null);
+      const assignment = await this.prisma.agencyAssignment
+        .findUnique({
+          where: { reference: b.reference },
+        })
+        .catch(() => null);
 
-      let matchedAgencyInfo: any = null;
+      let matchedAgencyInfo: object | null = null;
+      /** What the applicant's bookings page reads on top of the row. */
+      const enriched = b as typeof b & {
+        assignedStaff?: object[];
+        agency?: object;
+      };
 
       if (assignment) {
         const sUpper = (assignment.status || '').toUpperCase();
-        if (sUpper === 'ASSIGNED' || (assignment.assignedStaffIds && assignment.assignedStaffIds.length > 0)) {
+        if (
+          sUpper === 'ASSIGNED' ||
+          (assignment.assignedStaffIds &&
+            assignment.assignedStaffIds.length > 0)
+        ) {
           b.status = 'CONFIRMED';
-          this.prisma.hireBooking.update({
-            where: { id: b.id },
-            data: { status: 'CONFIRMED' },
-          }).catch(() => null);
+          this.prisma.hireBooking
+            .update({
+              where: { id: b.id },
+              data: { status: 'CONFIRMED' },
+            })
+            .catch(() => null);
         } else if (sUpper === 'COMPLETED') {
           b.status = 'COMPLETED';
-          this.prisma.hireBooking.update({
-            where: { id: b.id },
-            data: { status: 'COMPLETED' },
-          }).catch(() => null);
+          this.prisma.hireBooking
+            .update({
+              where: { id: b.id },
+              data: { status: 'COMPLETED' },
+            })
+            .catch(() => null);
         }
 
-        if (assignment.assignedStaffIds && assignment.assignedStaffIds.length > 0) {
-          const staffMembers = await this.prisma.agencyStaff.findMany({
-            where: { id: { in: assignment.assignedStaffIds } },
-            select: {
-              id: true,
-              name: true,
-              role: true,
-              category: true,
-              photoUrl: true,
-              phone: true,
-              experienceYears: true,
-            },
-          }).catch(() => []);
-          (b as any).assignedStaff = staffMembers;
+        if (
+          assignment.assignedStaffIds &&
+          assignment.assignedStaffIds.length > 0
+        ) {
+          const staffMembers = await this.prisma.agencyStaff
+            .findMany({
+              where: { id: { in: assignment.assignedStaffIds } },
+              select: {
+                id: true,
+                name: true,
+                role: true,
+                category: true,
+                photoUrl: true,
+                phone: true,
+                experienceYears: true,
+              },
+            })
+            .catch(() => []);
+          enriched.assignedStaff = staffMembers;
         }
 
         if (assignment.agencyId) {
-          matchedAgencyInfo = await this.prisma.agency.findUnique({
-            where: { id: assignment.agencyId },
+          matchedAgencyInfo = await this.prisma.agency
+            .findUnique({
+              where: { id: assignment.agencyId },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                website: true,
+                logoUrl: true,
+                country: true,
+                cities: true,
+              },
+            })
+            .catch(() => null);
+        }
+      }
+
+      if (!matchedAgencyInfo && b.professional) {
+        const rawAgencyId = b.professional.slug.replace(/^agency-/, '');
+        matchedAgencyInfo = await this.prisma.agency
+          .findFirst({
+            where: {
+              OR: [
+                { id: rawAgencyId },
+                { slug: rawAgencyId },
+                { id: b.professional.slug },
+              ],
+            },
             select: {
               id: true,
               name: true,
@@ -364,29 +533,12 @@ export class HireService {
               country: true,
               cities: true,
             },
-          }).catch(() => null);
-        }
-      }
-
-      if (!matchedAgencyInfo && b.professional) {
-        const rawAgencyId = b.professional.slug.replace(/^agency-/, '');
-        matchedAgencyInfo = await this.prisma.agency.findFirst({
-          where: { OR: [{ id: rawAgencyId }, { slug: rawAgencyId }, { id: b.professional.slug }] },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            website: true,
-            logoUrl: true,
-            country: true,
-            cities: true,
-          },
-        }).catch(() => null);
+          })
+          .catch(() => null);
       }
 
       if (matchedAgencyInfo) {
-        (b as any).agency = matchedAgencyInfo;
+        enriched.agency = matchedAgencyInfo;
       }
     }
 

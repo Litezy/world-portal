@@ -109,6 +109,15 @@ export type AdminUser = {
   avatar?: string;
 };
 
+/**
+ * The signed-in console user as components receive it. The session cookie
+ * also carries the World Portal access token, and whatever a client component
+ * is handed is serialized into the page, so `token` and `exp` are typed
+ * `never`: passing the session itself does not compile. Build one with
+ * `toClientUser(session)` from `src/server/auth/client-user.ts`.
+ */
+export type ClientAdminUser = AdminUser & { token?: never; exp?: never };
+
 export type Applicant = {
   name: string;
   email: string;
