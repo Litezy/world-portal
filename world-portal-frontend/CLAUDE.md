@@ -82,8 +82,12 @@ statusCode: 422, message: "Validation failed", errors: { field: [...] } }`.
 
 Documents upload one at a time to `POST /upload` (field name `file`, 10MB,
 PDF/JPG/PNG/WEBP) _before_ submission; the returned `url` goes into the matching
-`*Url` field. `GET /visa-documentation/:id` is deliberately public — never add
-an auth header to it.
+`*Url` field. `GET /visa-documentation/:id` (and `/passport-application/:id`) is
+the public status lookup: without a token the service **requires `?email=`**
+and matches it (400 without one, 404 on a mismatch), because references are only
+4 random digits. Never add an auth header to the applicant-side call — a header
+makes the service treat the caller as desk staff and demand a valid staff token.
+The console's BFF calls it with the session token instead.
 
 ## Applicants sign in with WorldStreet
 
@@ -174,7 +178,10 @@ same two-tone headings — a console, not a second design language.
 - **The session is an HMAC-signed cookie** (`src/server/auth/session.ts`),
   `httpOnly` + `sameSite=lax`, verified with `timingSafeEqual`. It also carries
   the service's access token. `authenticate()` exchanges the email for a token
-  and then proves the account exists and is active via `/profiles/me`.
+  and then proves the account exists and is active via `/profiles/me`. The
+  token request carries `x-service-key` (`SERVICE_AUTH_KEY`, the same value as
+  the backend's): with mock auth off, the service issues tokens to nobody else.
+  The service verifies every token's signature and its 7-day expiry.
 - **`ADMIN_PASSWORD` and `SESSION_SECRET` have dev defaults that
   `src/config/env.ts` refuses in production.** Deploying without setting them
   fails the build rather than shipping a public password.

@@ -9,6 +9,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { isSwaggerEnabled } from './common/swagger-enabled';
 
 function formatValidationErrors(
   errors: ValidationError[],
@@ -70,14 +71,19 @@ async function bootstrap() {
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  const swaggerEnabled = isSwaggerEnabled(process.env);
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}/api`);
   logger.log(
-    `Swagger OpenAPI documentation available at: http://localhost:${port}/api/docs`,
+    swaggerEnabled
+      ? `Swagger OpenAPI documentation available at: http://localhost:${port}/api/docs`
+      : 'Swagger docs are off (production; set ENABLE_SWAGGER=true to serve them)',
   );
 }
 

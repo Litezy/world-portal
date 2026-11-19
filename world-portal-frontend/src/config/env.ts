@@ -99,6 +99,14 @@ const serverShape = z.object({
    */
   AGENCY_PASSWORD: z.string().min(8).default(DEV_AGENCY_PASSWORD),
   /**
+   * Shared with the World Portal API (its SERVICE_AUTH_KEY). Sent only on the
+   * console's token request, after the password check, so the service issues
+   * console tokens to this server and nobody else. Unset is fine locally,
+   * where the service runs with ENABLE_MOCK_AUTH=true; without it in
+   * production, console sign-in is refused by the service.
+   */
+  SERVICE_AUTH_KEY: z.string().min(32).optional(),
+  /**
    * The future WorldSpace posts API origin. Optional on purpose: absent
    * means the feed falls back to the curated placeholder posts, which is a
    * supported state, not a misconfiguration. Server-side only so any key the

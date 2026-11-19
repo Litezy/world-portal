@@ -66,9 +66,15 @@ export class PaymentController {
     );
   }
 
+  // Nothing here checks with a payment provider that money arrived, so this
+  // stays a desk action (like bank-transfer/confirm) until a signed provider
+  // webhook replaces it. Open, it let anyone mark their own visa as paid.
   @Post('confirm')
+  @ApiBearerAuth()
+  @UseGuards(ExternalAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.STAFF)
   @ApiOperation({
-    summary: 'Confirm payment transaction (Direct Service Injection)',
+    summary: 'Confirm payment transaction (Manager / Staff)',
     description:
       'Confirms payment and immediately invokes VisaDocumentationService directly in code to advance visa application status to UNDER_REVIEW',
   })

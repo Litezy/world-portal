@@ -15,7 +15,7 @@ export class SeedController {
   @ApiOperation({
     summary: 'Trigger presentation database seed execution',
     description:
-      'Populates the database with rich presentation demo data (agencies, staff, professionals, visa/passport applications, bank accounts). Requires authorization secret code WORLD_PORTAL_SEED_2026_SECURE.',
+      'Populates the database with rich presentation demo data (agencies, staff, professionals, visa/passport applications, bank accounts). Off unless ENABLE_SEED_ENDPOINT=true; requires the code set in SEED_SECRET_CODE (there is no default).',
   })
   @ApiResponse({
     status: 200,
